@@ -222,7 +222,7 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
 
       setMsg("Finalising MP4…");setProgress(90)
       const data=await ffmpeg.readFile(finalInput)
-const blob=new Blob([data as Uint8Array],{type:"video/mp4"})
+const blob=new Blob([new Uint8Array(data as unknown as ArrayBuffer)],{type:"video/mp4"})
       const url=URL.createObjectURL(blob)
       const a=document.createElement("a");a.href=url;a.download=`adforge-ad-${Date.now()}.mp4`;a.click()
       setTimeout(()=>URL.revokeObjectURL(url),15000)
