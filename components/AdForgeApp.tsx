@@ -154,10 +154,9 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
         setMsg(`Processing… ${Math.round(p*100)}%`)
       })
 
-      const baseURL="https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm"
       await ffmpeg.load({
-        coreURL:await toBlobURL(`${baseURL}/ffmpeg-core.js`,"text/javascript"),
-        wasmURL:await toBlobURL(`${baseURL}/ffmpeg-core.wasm`,"application/wasm"),
+        coreURL:await toBlobURL("/ffmpeg-core.js","text/javascript"),
+        wasmURL:await toBlobURL("/ffmpeg-core.wasm","application/wasm"),
       })
 
       setProgress(10);setMsg("Fetching clips from Mux…")
