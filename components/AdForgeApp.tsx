@@ -145,8 +145,8 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     setExporting(true);setDone(false);setProgress(0);setMsg("Loading FFmpeg…")
     try{
       // Load FFmpeg from CDN
-      const {FFmpeg}=await import("https://esm.sh/@ffmpeg/ffmpeg@0.12.10" as any)
-      const {fetchFile,toBlobURL}=await import("https://esm.sh/@ffmpeg/util@0.12.1" as any)
+      const {FFmpeg}=await import("@ffmpeg/ffmpeg")
+      const {fetchFile,toBlobURL}=await import("@ffmpeg/util")
 
       const ffmpeg=new FFmpeg()
       ffmpeg.on("progress",({progress:p}:any)=>{
