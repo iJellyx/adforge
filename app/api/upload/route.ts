@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
         playback_policy: ['public'],
         passthrough: item.id,
       },
-      cors_origin: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+      cors_origin: '*',
     })
 
     console.log('Mux upload created:', upload.url)
