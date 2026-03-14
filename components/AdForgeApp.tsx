@@ -531,7 +531,8 @@ function ScriptTable({ sections, onChange, libraryItems, readOnly, brandName, pr
           matchedIds={sections[pickerIdx]?.matchedClipIds||[]}
           libraryItems={libraryItems}
           sectionLabel={sections[pickerIdx]?.type||""}
-          onSelect={id => updM(pickerIdx,{selectedClipId:id,autoSelected:false})}
+          onSelect={(id: string) => updM(pickerIdx,{selectedClipId:id,autoSelected:false})}
+
           onClose={() => setPickerIdx(null)}/>
       )}
       <table style={{ width:"100%",borderCollapse:"collapse",tableLayout:"fixed" }}>
