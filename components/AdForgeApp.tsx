@@ -662,15 +662,32 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
   )
 }
 
-// ── Script Table ──────────────────────────────────────────────────────────
+// ── Script Table (Horizontal Timeline) ───────────────────────────────────
 function ScriptTable({ sections, onChange, libraryItems, readOnly, brandName, productName }: any) {
   const [pickerIdx, setPickerIdx] = useState<number|null>(null)
   const [fillingIdx, setFillingIdx] = useState<number|null>(null)
-  function upd(idx: number, key: string, val: any) { onChange(sections.map((s:any,i:number) => i===idx?{...s,[key]:val}:s)) }
+  const [mutedClips, setMutedClips] = useState<Record<number,boolean>>({})
+  const [allMuted, setAllMuted] = useState(false)
+  const [playingIdx, setPlayingIdx] = useState<number|null>(null)
+  const vidRefs = useRef<Record<number, HTMLVideoElement|null>>({})
+
   function updM(idx: number, obj: any) { onChange(sections.map((s:any,i:number) => i===idx?{...s,...obj}:s)) }
+  function upd(idx: number, key: string, val: any) { onChange(sections.map((s:any,i:number) => i===idx?{...s,[key]:val}:s)) }
   function addRow() { onChange([...sections,{id:Date.now(),type:"BODY",spokenWords:"",visualDirection:"",matchedClipIds:[],selectedClipId:null,autoSelected:false}]) }
   function removeRow(idx: number) { onChange(sections.filter((_:any,i:number) => i!==idx)) }
   function move(idx: number, dir: number) { const a=[...sections],t=idx+dir; if(t<0||t>=a.length)return; [a[idx],a[t]]=[a[t],a[idx]]; onChange(a) }
+
+  function toggleMuteAll() {
+    const next = !allMuted
+    setAllMuted(next)
+    const m: Record<number,boolean> = {}
+    sections.forEach((_:any,i:number) => { m[i] = next })
+    setMutedClips(m)
+  }
+  function toggleMuteClip(idx: number) {
+    setMutedClips(prev => ({...prev,[idx]:!prev[idx]}))
+  }
+
   async function autofillRow(idx: number) {
     const row = sections[idx]; setFillingIdx(idx)
     try {
@@ -682,9 +699,10 @@ function ScriptTable({ sections, onChange, libraryItems, readOnly, brandName, pr
     } catch(e) { console.error(e) }
     setFillingIdx(null)
   }
+
   return (
     <div>
-      {pickerIdx!==null && (
+      {pickerIdx !== null && (
         <ClipPickerModal
           currentId={sections[pickerIdx]?.selectedClipId}
           matchedIds={sections[pickerIdx]?.matchedClipIds||[]}
@@ -693,76 +711,163 @@ function ScriptTable({ sections, onChange, libraryItems, readOnly, brandName, pr
           onSelect={(id: string) => updM(pickerIdx,{selectedClipId:id,autoSelected:false})}
           onClose={() => setPickerIdx(null)}/>
       )}
-      <table style={{ width:"100%",borderCollapse:"collapse",tableLayout:"fixed" }}>
-        <thead><tr style={{ background:C.surface,borderBottom:"2px solid "+C.border }}>
-          <th style={{ width:"11%",padding:"10px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1 }}>Section</th>
-          <th style={{ width:"33%",padding:"10px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1 }}>🎤 Spoken Words</th>
-          <th style={{ width:"28%",padding:"10px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1 }}>🎬 Visual Direction</th>
-          <th style={{ width:"24%",padding:"10px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1 }}>📎 Clip</th>
-          {!readOnly && <th style={{ width:"4%" }}/>}
-        </tr></thead>
-        <tbody>
-          {sections.map((row:any, idx:number) => {
+
+      {/* Global controls */}
+      <div style={{ display:"flex",alignItems:"center",gap:12,padding:"10px 16px",background:C.surface,borderBottom:"1px solid "+C.border }}>
+        <span style={{ fontSize:12,color:C.muted,fontWeight:600 }}>{sections.length} sections</span>
+        <div style={{ flex:1 }}/>
+        <button onClick={toggleMuteAll} style={{ background:allMuted?"#ef444422":C.accentSoft,border:"1px solid "+(allMuted?"#ef444466":C.accent+"44"),color:allMuted?"#ef4444":C.accent,borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600 }}>
+          {allMuted ? "🔇 All Muted" : "🔊 Mute All Clips"}
+        </button>
+      </div>
+
+      {/* Horizontal scroll timeline */}
+      <div style={{ overflowX:"auto",paddingBottom:8 }}>
+        <div style={{ display:"flex",gap:0,minWidth:"max-content" }}>
+          {sections.map((row: any, idx: number) => {
             const sc = secColor(row.type)
             const selectedClip = row.selectedClipId ? libraryItems.find((i:Item) => i.id===row.selectedClipId) : null
-            const isFilling = fillingIdx===idx
+            const alternatives = (row.matchedClipIds||[])
+              .filter((id:string) => id !== row.selectedClipId)
+              .slice(0,3)
+              .map((id:string) => libraryItems.find((i:Item) => i.id===id))
+              .filter(Boolean)
+            const isMuted = mutedClips[idx] || false
+            const isFilling = fillingIdx === idx
+
             return (
-              <tr key={row.id||idx} style={{ borderBottom:"1px solid "+C.border,verticalAlign:"top" }}>
-                <td style={{ padding:10,background:C.card }}>
+              <div key={row.id||idx} style={{ display:"flex",flexDirection:"column",width:240,flexShrink:0,borderRight:"1px solid "+C.border }}>
+                {/* Section header */}
+                <div style={{ background:sc.bg,borderBottom:"1px solid "+sc.bd,padding:"8px 12px",display:"flex",alignItems:"center",gap:6 }}>
                   {readOnly
-                    ? <div style={{ background:sc.bg,color:sc.color,border:"1px solid "+sc.bd,padding:"5px 8px",borderRadius:7,fontSize:10,fontWeight:800,textAlign:"center" }}>{row.type}</div>
-                    : <select value={row.type} onChange={e => upd(idx,"type",e.target.value)} style={{ background:sc.bg,color:sc.color,border:"1px solid "+sc.bd,borderRadius:7,padding:"5px 6px",fontSize:10,fontWeight:800,outline:"none",cursor:"pointer",width:"100%" }}>{SEC_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select>}
-                  {row.durationEstimate && <div style={{ fontSize:9,color:C.muted,marginTop:4,textAlign:"center" }}>{row.durationEstimate}</div>}
+                    ? <span style={{ background:sc.bg,color:sc.color,fontSize:10,fontWeight:800,border:"1px solid "+sc.bd,padding:"2px 8px",borderRadius:5 }}>{row.type}</span>
+                    : <select value={row.type} onChange={e => upd(idx,"type",e.target.value)} style={{ background:"transparent",color:sc.color,border:"none",fontSize:10,fontWeight:800,outline:"none",cursor:"pointer" }}>
+                        {SEC_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                      </select>
+                  }
+                  {row.durationEstimate && <span style={{ fontSize:9,color:C.muted,marginLeft:"auto" }}>{row.durationEstimate}</span>}
                   {!readOnly && (
-                    <div style={{ display:"flex",gap:3,marginTop:6,justifyContent:"center" }}>
-                      <button onClick={() => move(idx,-1)} style={{ background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:10 }}>↑</button>
-                      <button onClick={() => move(idx,1)} style={{ background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:10 }}>↓</button>
-                      <button onClick={() => autofillRow(idx)} disabled={!!isFilling} style={{ background:isFilling?C.border:C.accentSoft,border:"1px solid "+(isFilling?C.border:C.accent+"44"),color:isFilling?C.muted:C.accent,borderRadius:4,padding:"2px 5px",cursor:isFilling?"not-allowed":"pointer",fontSize:10,fontWeight:700 }}>{isFilling?"⏳":"✨"}</button>
+                    <div style={{ display:"flex",gap:3,marginLeft:"auto" }}>
+                      <button onClick={() => move(idx,-1)} title="Move left" style={{ background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,padding:"1px 3px" }}>←</button>
+                      <button onClick={() => move(idx,1)} title="Move right" style={{ background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,padding:"1px 3px" }}>→</button>
+                      <button onClick={() => autofillRow(idx)} title="AI fill" disabled={!!isFilling} style={{ background:"none",border:"none",color:isFilling?C.muted:C.accent,cursor:"pointer",fontSize:11,padding:"1px 3px" }}>{isFilling?"⏳":"✨"}</button>
+                      <button onClick={() => removeRow(idx)} title="Remove" style={{ background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:"1px 3px" }}>×</button>
                     </div>
                   )}
-                </td>
-                <td style={{ padding:12,background:C.bg,borderLeft:"1px solid "+C.border }}>
-                  {isFilling ? <div style={{ color:C.muted,fontSize:13,fontStyle:"italic",padding:8 }}>AI writing…</div>
-                  : readOnly ? <div style={{ fontSize:14,lineHeight:1.8,whiteSpace:"pre-wrap" }}>{row.spokenWords}</div>
-                  : <textarea value={row.spokenWords||""} onChange={e=>upd(idx,"spokenWords",e.target.value)} placeholder="What the creator says on camera..." style={{ width:"100%",background:"transparent",border:"none",resize:"none",color:C.text,fontSize:14,lineHeight:1.8,outline:"none",fontFamily:"inherit",minHeight:100,boxSizing:"border-box" }}/>}
-                </td>
-                <td style={{ padding:12,background:C.surface,borderLeft:"1px solid "+C.border }}>
-                  {isFilling ? <div style={{ color:C.muted,fontSize:13,fontStyle:"italic",padding:8 }}>AI writing…</div>
-                  : readOnly ? <div style={{ fontSize:13,lineHeight:1.65,color:C.muted,whiteSpace:"pre-wrap" }}>{row.visualDirection}</div>
-                  : <textarea value={row.visualDirection||""} onChange={e=>upd(idx,"visualDirection",e.target.value)} placeholder="What's on screen..." style={{ width:"100%",background:"transparent",border:"none",resize:"none",color:C.muted,fontSize:13,lineHeight:1.65,outline:"none",fontFamily:"inherit",minHeight:100,boxSizing:"border-box" }}/>}
-                </td>
-                <td style={{ padding:10,background:C.card,borderLeft:"1px solid "+C.border,verticalAlign:"top" }}>
-                  {selectedClip ? (
+                </div>
+
+                {/* Main clip — 9:16 */}
+                <div style={{ background:C.bg,padding:10 }}>
+                  <div style={{ position:"relative",width:"100%",paddingTop:"177.78%",background:"#111",borderRadius:10,overflow:"hidden",marginBottom:8 }}>
+                    {selectedClip?.mux_playback_id ? (
+                      <div style={{ position:"absolute",inset:0 }}>
+                        <MuxPlayer
+                          playbackId={selectedClip.mux_playback_id}
+                          startTime={selectedClip.start_seconds||0}
+                          streamType="on-demand"
+                          accentColor={C.accent}
+                          muted={isMuted}
+                          style={{ width:"100%",height:"100%" }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6 }}>
+                        <div style={{ fontSize:24 }}>🎬</div>
+                        <div style={{ fontSize:10,color:C.muted,textAlign:"center",padding:"0 8px" }}>
+                          {selectedClip ? "Processing…" : "No clip assigned"}
+                        </div>
+                        {!readOnly && (
+                          <button onClick={() => setPickerIdx(idx)} style={{ background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600 }}>+ Pick Clip</button>
+                        )}
+                      </div>
+                    )}
+                    {/* Mute toggle */}
+                    {selectedClip && (
+                      <button onClick={() => toggleMuteClip(idx)}
+                        style={{ position:"absolute",bottom:8,left:8,background:"#000a",border:"none",color:"#fff",borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:11 }}>
+                        {isMuted ? "🔇" : "🔊"}
+                      </button>
+                    )}
+                    {/* AI badge */}
+                    {row.autoSelected && selectedClip && (
+                      <div style={{ position:"absolute",top:6,left:6,background:C.green,color:"#000",fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4 }}>✦ AI</div>
+                    )}
+                  </div>
+
+                  {selectedClip && (
+                    <div style={{ fontSize:10,color:C.text,fontWeight:600,lineHeight:1.3,marginBottom:6,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any }}>
+                      {selectedClip.title}
+                    </div>
+                  )}
+
+                  {!readOnly && selectedClip && (
+                    <button onClick={() => setPickerIdx(idx)} style={{ width:"100%",background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8 }}>⇄ Swap Clip</button>
+                  )}
+                  {!readOnly && !selectedClip && row.matchedClipIds?.length > 0 && (
+                    <button onClick={() => setPickerIdx(idx)} style={{ width:"100%",background:C.yellow+"22",border:"1px solid "+C.yellow+"44",color:C.yellow,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8 }}>+ Pick Clip ({row.matchedClipIds.length} matched)</button>
+                  )}
+
+                  {/* 3 alternative clips */}
+                  {alternatives.length > 0 && (
                     <div>
-                      {row.autoSelected && <div style={{ background:"#22c55e15",border:"1px solid #22c55e33",borderRadius:6,padding:"3px 8px",fontSize:9,color:C.green,fontWeight:700,marginBottom:6 }}>✦ AI Pick</div>}
-                      {selectedClip.mux_playback_id
-                        ? <img src={muxThumb(selectedClip.mux_playback_id, selectedClip.thumbnail_time||selectedClip.start_seconds||0)} alt="" style={{ width:"100%",aspectRatio:"9/16",objectFit:"cover",borderRadius:8,marginBottom:6,display:"block" }}/>
-                        : <div style={{ width:"100%",paddingTop:"56%",background:"#111",borderRadius:8,position:"relative",marginBottom:6 }}><div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center" }}>🎬</div></div>}
-                      <div style={{ fontSize:10,color:C.text,fontWeight:600,lineHeight:1.3,marginBottom:6,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any }}>{selectedClip.title}</div>
-                      {!readOnly && <button onClick={() => setPickerIdx(idx)} style={{ width:"100%",background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:7,padding:"6px",cursor:"pointer",fontSize:11,fontWeight:600 }}>⇄ Change</button>}
-                    </div>
-                  ) : (
-                    <div style={{ textAlign:"center",padding:"16px 8px" }}>
-                      <div style={{ color:C.muted,fontSize:11,marginBottom:8 }}>{(row.matchedClipIds||[]).length>0?"Clips matched":"No clip"}</div>
-                      {!readOnly && <button onClick={() => setPickerIdx(idx)} style={{ background:(row.matchedClipIds||[]).length>0?C.yellow+"22":C.surface,border:"1px solid "+((row.matchedClipIds||[]).length>0?C.yellow+"44":C.border),color:(row.matchedClipIds||[]).length>0?C.yellow:C.muted,borderRadius:7,padding:"7px 10px",cursor:"pointer",fontSize:11,fontWeight:600,width:"100%" }}>+ Pick Clip</button>}
+                      <div style={{ fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:5 }}>Alternatives</div>
+                      <div style={{ display:"flex",gap:5 }}>
+                        {alternatives.map((alt: Item) => (
+                          <div key={alt.id} title={alt.title}
+                            onClick={() => !readOnly && updM(idx,{selectedClipId:alt.id,autoSelected:false})}
+                            style={{ flex:1,position:"relative",paddingTop:"177.78%",background:"#111",borderRadius:6,overflow:"hidden",cursor:readOnly?"default":"pointer",border:"2px solid "+(alt.id===row.selectedClipId?C.accent:C.border) }}>
+                            {alt.mux_playback_id
+                              ? <img src={muxThumb(alt.mux_playback_id, alt.thumbnail_time||alt.start_seconds||0)} alt="" style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover" }}/>
+                              : <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14 }}>🎬</div>
+                            }
+                            {!readOnly && <div style={{ position:"absolute",inset:0,background:"#0006",display:"flex",alignItems:"center",justifyContent:"center",opacity:0 }}
+                              onMouseEnter={e=>(e.currentTarget as any).style.opacity="1"}
+                              onMouseLeave={e=>(e.currentTarget as any).style.opacity="0"}>
+                              <span style={{ color:"#fff",fontSize:10,fontWeight:700 }}>Use</span>
+                            </div>}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
-                </td>
-                {!readOnly && <td style={{ padding:6,background:C.card,textAlign:"center",verticalAlign:"top",borderLeft:"1px solid "+C.border }}><button onClick={() => removeRow(idx)} style={{ background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16,padding:"4px 6px" }}>×</button></td>}
-              </tr>
+                </div>
+
+                {/* Script text */}
+                <div style={{ padding:"10px 12px",background:C.surface,borderTop:"1px solid "+C.border,flex:1 }}>
+                  {isFilling ? (
+                    <div style={{ color:C.muted,fontSize:12,fontStyle:"italic" }}>AI writing…</div>
+                  ) : readOnly ? (
+                    <>
+                      <div style={{ fontSize:13,lineHeight:1.7,marginBottom:6,whiteSpace:"pre-wrap" }}>{row.spokenWords}</div>
+                      {row.visualDirection && <div style={{ fontSize:11,color:C.muted,fontStyle:"italic",lineHeight:1.5 }}>{row.visualDirection}</div>}
+                    </>
+                  ) : (
+                    <>
+                      <textarea value={row.spokenWords||""} onChange={e=>upd(idx,"spokenWords",e.target.value)}
+                        placeholder="Spoken words…"
+                        style={{ width:"100%",background:"transparent",border:"none",resize:"none",color:C.text,fontSize:12,lineHeight:1.7,outline:"none",fontFamily:"inherit",minHeight:70,boxSizing:"border-box",marginBottom:4 }}/>
+                      <textarea value={row.visualDirection||""} onChange={e=>upd(idx,"visualDirection",e.target.value)}
+                        placeholder="Visual direction…"
+                        style={{ width:"100%",background:"transparent",border:"none",resize:"none",color:C.muted,fontSize:11,lineHeight:1.5,outline:"none",fontFamily:"inherit",minHeight:40,boxSizing:"border-box" }}/>
+                    </>
+                  )}
+                </div>
+              </div>
             )
           })}
-        </tbody>
-      </table>
-      {!readOnly && (
-        <div style={{ borderTop:"1px solid "+C.border,padding:"8px 16px",background:C.surface,borderRadius:"0 0 12px 12px",display:"flex",alignItems:"center",gap:8 }}>
-          <button onClick={addRow} style={{ background:"none",border:"1px dashed "+C.border,color:C.muted,padding:"7px 16px",cursor:"pointer",fontSize:13,borderRadius:8 }}>+ Add Row</button>
-          <span style={{ fontSize:11,color:C.muted,fontStyle:"italic" }}>Use ✨ to AI-fill any row</span>
+
+          {/* Add section button */}
+          {!readOnly && (
+            <div style={{ width:60,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",padding:12 }}>
+              <button onClick={addRow} style={{ background:"none",border:"2px dashed "+C.border,color:C.muted,borderRadius:10,width:44,height:44,cursor:"pointer",fontSize:22,display:"flex",alignItems:"center",justifyContent:"center" }}>+</button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
+
 
 // ── Clip Picker Modal ─────────────────────────────────────────────────────
 function ClipPickerModal({ currentId, matchedIds, libraryItems, sectionLabel, onSelect, onClose }: any) {
@@ -791,6 +896,112 @@ function ClipPickerModal({ currentId, matchedIds, libraryItems, sectionLabel, on
           </div>
         </div>}
         {fl(matched).length===0&&fl(others).length===0 && <div style={{ textAlign:"center",padding:40,color:C.muted }}>No clips found.</div>}
+      </div>
+    </div>
+  )
+}
+
+// ── Stitched Preview ──────────────────────────────────────────────────────
+function StitchedPreview({ sections, libraryItems }: any) {
+  const [clipIdx, setClipIdx] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const vidRef = useRef<HTMLVideoElement>(null)
+
+  const clips = sections.map((s: any) => {
+    const item = s.selectedClipId ? libraryItems.find((i: Item) => i.id === s.selectedClipId) : null
+    if (!item?.mux_playback_id) return null
+    return { item, start: item.start_seconds||0, end: item.end_seconds, label: s.type, spoken: s.spokenWords||"" }
+  }).filter(Boolean)
+
+  const cur = clips[clipIdx]
+
+  useEffect(() => {
+    const v = vidRef.current
+    if (!v || !cur) return
+    v.src = `https://stream.mux.com/${cur.item.mux_playback_id}.m3u8`
+    function seek() { v!.currentTime = cur!.start }
+    if (v.readyState >= 1) seek()
+    else v.addEventListener("loadedmetadata", seek, { once: true })
+    if (playing) v.play().catch(()=>{})
+  }, [clipIdx])
+
+  function onTimeUpdate() {
+    const v = vidRef.current
+    if (!v || !cur?.end) return
+    if (v.currentTime >= cur.end) {
+      if (clipIdx < clips.length - 1) setClipIdx(i => i + 1)
+      else { v.pause(); setPlaying(false); setClipIdx(0) }
+    }
+  }
+
+  function toggle() {
+    const v = vidRef.current; if (!v) return
+    if (playing) { v.pause(); setPlaying(false) }
+    else { v.play(); setPlaying(true) }
+  }
+
+  if (clips.length === 0) return (
+    <div style={{ background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:32,textAlign:"center",color:C.muted }}>
+      <div style={{ fontSize:28,marginBottom:8 }}>🎬</div>
+      <div style={{ fontSize:13 }}>Assign clips to sections above to preview the full ad</div>
+    </div>
+  )
+
+  const sc = secColor(cur?.label)
+
+  return (
+    <div style={{ background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden" }}>
+      <div style={{ padding:"12px 16px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10 }}>
+        <div style={{ fontWeight:700,fontSize:14 }}>🎬 Full Ad Preview</div>
+        <span style={{ fontSize:12,color:C.muted }}>{clips.length} clips · {clipIdx+1} playing</span>
+        <div style={{ flex:1 }}/>
+        <span style={{ background:sc?.bg,color:sc?.color,border:"1px solid "+sc?.bd,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5 }}>{cur?.label}</span>
+      </div>
+
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 280px",gap:0 }}>
+        {/* Main player */}
+        <div style={{ position:"relative",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:360 }}>
+          <video ref={vidRef} playsInline preload="metadata"
+            style={{ maxHeight:500,maxWidth:"100%",display:"block",cursor:"pointer" }}
+            onTimeUpdate={onTimeUpdate}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onClick={toggle}/>
+          {!playing && (
+            <div onClick={toggle} style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer" }}>
+              <div style={{ width:56,height:56,borderRadius:"50%",background:"#000a",border:"2px solid #fff4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20 }}>▶</div>
+            </div>
+          )}
+        </div>
+
+        {/* Clip strip */}
+        <div style={{ borderLeft:"1px solid "+C.border,overflowY:"auto",maxHeight:500 }}>
+          <div style={{ padding:"8px 10px",borderBottom:"1px solid "+C.border,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1 }}>Timeline</div>
+          {clips.map((clip: any, i: number) => {
+            const sc2 = secColor(clip.label)
+            const active = i === clipIdx
+            return (
+              <div key={i} onClick={() => { setClipIdx(i); if(playing && vidRef.current) vidRef.current.play().catch(()=>{}) }}
+                style={{ display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent" }}>
+                <div style={{ width:36,position:"relative",paddingTop:"64px",flexShrink:0,borderRadius:5,overflow:"hidden",background:"#111",border:"1px solid "+(active?C.accent:C.border) }}>
+                  {clip.item.mux_playback_id && <img src={muxThumb(clip.item.mux_playback_id, clip.item.thumbnail_time||0)} alt="" style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover" }}/>}
+                </div>
+                <div style={{ flex:1,minWidth:0 }}>
+                  <div style={{ background:sc2.bg,color:sc2.color,fontSize:8,fontWeight:800,padding:"1px 5px",borderRadius:3,display:"inline-block",marginBottom:3 }}>{clip.label}</div>
+                  <div style={{ fontSize:10,color:active?C.text:C.muted,lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any }}>{clip.spoken || clip.item.title}</div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div style={{ padding:"10px 16px",borderTop:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10 }}>
+        <button onClick={() => setClipIdx(i => Math.max(0,i-1))} disabled={clipIdx===0} style={{ background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12 }}>‹ Prev</button>
+        <button onClick={toggle} style={{ background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 20px",cursor:"pointer",fontSize:13,fontWeight:600 }}>{playing?"⏸ Pause":"▶ Play All"}</button>
+        <button onClick={() => setClipIdx(i => Math.min(clips.length-1,i+1))} disabled={clipIdx===clips.length-1} style={{ background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12 }}>Next ›</button>
+        <span style={{ fontSize:11,color:C.muted,marginLeft:"auto" }}>Section {clipIdx+1} of {clips.length}</span>
       </div>
     </div>
   )
@@ -949,12 +1160,14 @@ function ScriptsTab({ scripts, items, brand, products, onSaveScripts }: any) {
           </div>
         </div>
         {autoCount>0 && <div style={{ background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:13,color:"#4ade80" }}>✦ AI auto-selected {autoCount} clip{autoCount!==1?"s":""} — click "Change" to swap any.</div>}
-        <Card style={{ padding:0,overflow:"hidden" }}>
+        <Card style={{ padding:0,overflow:"hidden",marginBottom:20 }}>
           <ScriptTable sections={sections} onChange={setSections} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName}/>
         </Card>
+        <StitchedPreview sections={sections} libraryItems={items}/>
       </div>
     )
   }
+
 
   if (view==="detail" && selected) {
     const m=selected.metadata||{},stg=STAGES.find(s=>s.value===m.awarenessStage),stgC=STAGE_COLORS[m.awarenessStage]||C.accent
@@ -978,9 +1191,10 @@ function ScriptsTab({ scripts, items, brand, products, onSaveScripts }: any) {
             <Btn onClick={()=>handleDelete(selected.id!)} style={{ background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433" }}>Delete</Btn>
           </div>
         </div>
-        <Card style={{ padding:0,overflow:"hidden" }}>
+              <Card style={{ padding:0,overflow:"hidden",marginBottom:20 }}>
           <ScriptTable sections={disp} onChange={setSections} libraryItems={items} readOnly={false} brandName={brand.name} productName={selected.product_name}/>
         </Card>
+        <StitchedPreview sections={disp} libraryItems={items}/>
       </div>
     )
   }
