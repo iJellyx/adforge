@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import MuxPlayer from "@mux/mux-player-react"
 import { createClient } from '@/lib/supabase/client'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -34,25 +35,51 @@ const FORM_CTYPES = ["UGC","Talking Head","Founder Story","Mashup","Testimonial"
 const SORTS = ["Newest first","Oldest first","A → Z","Z → A"]
 const DEFAULT_BRAND: BrandProfile = { name:"",website:"",description:"",voice:"",target_customer:"",reviews:"",additional_info:"",customer_avatars:[] }
 const DEFAULT_PRODUCT: Product = { name:"",description:"",benefits:"",target_customer:"",claims:"",ingredients:"",differentiators:"",reviews:"",notes:"",price:"",url:"" }
+const CONTENT_CATEGORIES = ["UGC","Testimonial","Product Demo","Tutorial","Founder Clip","Behind the Scenes","High Production","Talking Head","Other"]
+const DURATION_RANGES = ["Under 5s","5–15s","15–30s","30–60s","Over 60s"]
+const AD_POTENTIALS = ["High","Medium","Low"]
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function muxThumb(playbackId: string, time = 0) {
   return `https://image.mux.com/${playbackId}/thumbnail.jpg?time=${time}&width=400`
-}
-function muxStream(playbackId: string) {
-  return `https://stream.mux.com/${playbackId}.m3u8`
 }
 function fmt(s?: number) {
   if (!s && s !== 0) return "0:00"
   return `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,"0")}`
 }
 function typeColor(t?: string) {
-  const m: Record<string,any> = { "UGC":{bg:"#7c3aed22",color:"#a78bfa"},"Founder Clip":{bg:"#0891b222",color:"#38bdf8"},"Tutorial":{bg:"#15803d22",color:"#4ade80"},"Behind the Scenes":{bg:"#92400e22",color:"#fbbf24"},"High Production":{bg:"#be185d22",color:"#f472b6"},"Testimonial":{bg:"#0369a122",color:"#7dd3fc"},"Product Demo":{bg:"#065f4622",color:"#34d399"},"Clip":{bg:"#92400e22",color:"#fb923c"} }
+  const m: Record<string,any> = {
+    "UGC":{bg:"#7c3aed22",color:"#a78bfa"},
+    "Founder Clip":{bg:"#0891b222",color:"#38bdf8"},
+    "Tutorial":{bg:"#15803d22",color:"#4ade80"},
+    "Behind the Scenes":{bg:"#92400e22",color:"#fbbf24"},
+    "High Production":{bg:"#be185d22",color:"#f472b6"},
+    "Testimonial":{bg:"#0369a122",color:"#7dd3fc"},
+    "Product Demo":{bg:"#065f4622",color:"#34d399"},
+    "Clip":{bg:"#92400e22",color:"#fb923c"},
+    "Talking Head":{bg:"#7c3aed22",color:"#c4b5fd"},
+  }
   return m[t||""] || {bg:"#6c63ff22",color:"#a5b4fc"}
 }
 function secColor(t?: string) {
-  const m: Record<string,any> = { "HOOK":{bg:"#ef444418",color:"#f87171",bd:"#ef444430"},"PROBLEM":{bg:"#f59e0b18",color:"#fbbf24",bd:"#f59e0b30"},"AGITATE":{bg:"#f9731618",color:"#fb923c",bd:"#f9731630"},"SOLUTION":{bg:"#22c55e18",color:"#4ade80",bd:"#22c55e30"},"SOCIAL PROOF":{bg:"#3b82f618",color:"#60a5fa",bd:"#3b82f630"},"CTA":{bg:"#6c63ff18",color:"#a5b4fc",bd:"#6c63ff30"},"BODY":{bg:"#92400e18",color:"#fbbf24",bd:"#92400e30"} }
+  const m: Record<string,any> = {
+    "HOOK":{bg:"#ef444418",color:"#f87171",bd:"#ef444430"},
+    "PROBLEM":{bg:"#f59e0b18",color:"#fbbf24",bd:"#f59e0b30"},
+    "AGITATE":{bg:"#f9731618",color:"#fb923c",bd:"#f9731630"},
+    "SOLUTION":{bg:"#22c55e18",color:"#4ade80",bd:"#22c55e30"},
+    "SOCIAL PROOF":{bg:"#3b82f618",color:"#60a5fa",bd:"#3b82f630"},
+    "CTA":{bg:"#6c63ff18",color:"#a5b4fc",bd:"#6c63ff30"},
+    "BODY":{bg:"#92400e18",color:"#fbbf24",bd:"#92400e30"},
+  }
   return m[t||""] || {bg:"#ffffff0e",color:C.muted,bd:"#ffffff18"}
+}
+function getDurationRange(secs?: number): string {
+  if (!secs) return ""
+  if (secs < 5) return "Under 5s"
+  if (secs < 15) return "5–15s"
+  if (secs < 30) return "15–30s"
+  if (secs < 60) return "30–60s"
+  return "Over 60s"
 }
 async function callClaude(messages: any[], maxTokens = 1500) {
   const res = await fetch('/api/claude', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({messages,maxTokens}) })
@@ -83,7 +110,58 @@ function Input({ value, onChange, placeholder, type, textarea, rows, onKeyDown, 
   return <input value={value} onChange={onChange} placeholder={placeholder} type={type||"text"} style={s}/>
 }
 
-// ── Mux Video Card ────────────────────────────────────────────────────────
+// ── MultiSelect Filter ────────────────────────────────────────────────────
+function MultiSelect({ label, options, selected, onChange }: any) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const sel: string[] = selected || []
+
+  useEffect(() => {
+    function h(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener("mousedown", h)
+    return () => document.removeEventListener("mousedown", h)
+  }, [])
+
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <button onClick={() => setOpen(!open)} style={{
+        background:sel.length>0?C.accentSoft:C.surface,
+        border:"1px solid "+(sel.length>0?C.accent:C.border),
+        borderRadius:8,padding:"6px 11px",
+        color:sel.length>0?C.accent:C.muted,
+        fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:6,
+        whiteSpace:"nowrap",fontWeight:sel.length>0?600:400
+      }}>
+        {label}
+        {sel.length>0 && <span style={{ background:C.accent,color:"#fff",borderRadius:99,fontSize:9,padding:"1px 5px",fontWeight:700 }}>{sel.length}</span>}
+        <span style={{ fontSize:8,opacity:0.5 }}>{open?"▲":"▼"}</span>
+      </button>
+      {open && (
+        <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:6,zIndex:200,minWidth:170,maxHeight:220,overflowY:"auto",boxShadow:"0 8px 24px #0008" }}>
+          {options.map((opt: string) => {
+            const active = sel.includes(opt)
+            return (
+              <div key={opt} onClick={() => onChange(active ? sel.filter(x=>x!==opt) : [...sel,opt])}
+                style={{ display:"flex",alignItems:"center",gap:8,padding:"7px 9px",borderRadius:7,cursor:"pointer",background:active?C.accentSoft:"transparent",color:active?C.accent:C.text,fontSize:13 }}>
+                <div style={{ width:14,height:14,borderRadius:3,border:"2px solid "+(active?C.accent:C.border),background:active?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                  {active && <span style={{ color:"#fff",fontSize:8,fontWeight:900 }}>✓</span>}
+                </div>
+                {opt}
+              </div>
+            )
+          })}
+          {sel.length>0 && (
+            <div onClick={() => onChange([])} style={{ borderTop:"1px solid "+C.border,marginTop:4,padding:"6px 9px",textAlign:"center",fontSize:11,color:C.muted,cursor:"pointer" }}>
+              Clear
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── VideoCard ─────────────────────────────────────────────────────────────
 function VideoCard({ item, onClick, selectMode, isSelected, onToggleSelect, compact, highlight }: any) {
   const [hover, setHover] = useState(false)
   const chipLabel = item.type === "clip" ? (item.analysis?.use_case || "Clip") : (item.analysis?.content_type || "Untagged")
@@ -101,7 +179,7 @@ function VideoCard({ item, onClick, selectMode, isSelected, onToggleSelect, comp
       onMouseLeave={() => setHover(false)}
       onMouseOver={e => (e.currentTarget as any).style.borderColor = highlight ? C.green : C.accent}
       onMouseOut={e => (e.currentTarget as any).style.borderColor = isSelected ? C.accent : highlight ? C.green : C.border}
-      style={{ background:C.card,border:"2px solid "+(isSelected?C.accent:highlight?C.green:C.border),borderRadius:compact?8:12,overflow:"hidden",cursor:"pointer",display:"flex",flexDirection:"column",position:"relative" }}>
+      style={{ background:C.card,border:"2px solid "+(isSelected?C.accent:highlight?C.green:C.border),borderRadius:compact?8:12,overflow:"hidden",cursor:"pointer",display:"flex",flexDirection:"column",position:"relative",transition:"border-color 0.15s" }}>
       {selectMode && (
         <div style={{ position:"absolute",top:6,right:6,zIndex:10,width:20,height:20,borderRadius:5,background:isSelected?C.accent:"#000a",border:"2px solid "+(isSelected?"#fff":"#fff5"),display:"flex",alignItems:"center",justifyContent:"center" }}>
           {isSelected && <span style={{ color:"#fff",fontSize:11,fontWeight:800 }}>✓</span>}
@@ -137,57 +215,43 @@ function VideoCard({ item, onClick, selectMode, isSelected, onToggleSelect, comp
 }
 
 // ── Mux Video Player ──────────────────────────────────────────────────────
-function MuxClipPlayer({ item, maxH, style: extraStyle }: any) {
-  const vidRef = useRef<HTMLVideoElement>(null)
-  const barRef = useRef<HTMLDivElement>(null)
-  const [playing, setPlaying] = useState(false)
-  const [ct, setCt] = useState(item?.start_seconds || 0)
-  const start = item?.start_seconds || 0
-  const end = item?.end_seconds
-  const dur = end ? end - start : item?.duration_seconds || 0
-  const src = item?.mux_playback_id ? muxStream(item.mux_playback_id) : null
-
-  useEffect(() => {
-    const v = vidRef.current
-    if (!v || !src) return
-    function seek() { v!.currentTime = start }
-    if (v.readyState >= 1) seek()
-    else v.addEventListener("loadedmetadata", seek, { once: true })
-  }, [src, start])
-
-  function onTimeUpdate() {
-    const v = vidRef.current; if (!v) return
-    if (end && v.currentTime >= end) { v.pause(); v.currentTime = start; setPlaying(false) }
-    setCt(v.currentTime)
-  }
-  function scrub(e: React.MouseEvent) {
-    const v = vidRef.current, b = barRef.current; if (!v||!b) return
-    const r = b.getBoundingClientRect()
-    v.currentTime = start + Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)) * ((end||v.duration||start+1)-start)
-  }
-  function toggle() { const v = vidRef.current; if (!v) return; if (playing) v.pause(); else v.play() }
-  const prog = dur > 0 ? Math.max(0, Math.min(1, (ct - start) / dur)) : 0
-
-  if (!src) return (
-    <div style={{ background:"#111",borderRadius:12,padding:24,textAlign:"center",color:C.muted,marginBottom:8 }}>
-      <div style={{ fontSize:24,marginBottom:4 }}>🎬</div>
-      <div style={{ fontSize:11 }}>{item?.mux_status==="pending"?"Processing video…":"No video available"}</div>
+function MuxClipPlayer({ item }: any) {
+  if (!item?.mux_playback_id) return (
+    <div style={{ background:"#111",borderRadius:12,padding:32,textAlign:"center",color:C.muted,marginBottom:16 }}>
+      <div style={{ fontSize:32,marginBottom:8 }}>🎬</div>
+      <div style={{ fontSize:13 }}>{item?.mux_status==="pending"||item?.mux_status==="analysing" ? "Video is still processing…" : "No video available"}</div>
     </div>
   )
   return (
-    <div style={{ background:"#000",borderRadius:12,overflow:"hidden",...extraStyle }}>
-      <video ref={vidRef} src={src} playsInline preload="metadata"
-        style={{ width:"100%",display:"block",maxHeight:maxH||460,cursor:"pointer" }}
-        onTimeUpdate={onTimeUpdate} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onClick={toggle}/>
-      <div style={{ padding:"8px 12px",background:"#0d0d0d" }}>
-        <div ref={barRef} onClick={scrub} style={{ height:4,background:C.border,borderRadius:4,cursor:"pointer",marginBottom:7,position:"relative" }}>
-          <div style={{ height:"100%",width:(prog*100)+"%",background:C.accent,borderRadius:4 }}/>
-          <div style={{ position:"absolute",top:"50%",left:(prog*100)+"%",transform:"translate(-50%,-50%)",width:10,height:10,borderRadius:"50%",background:"#fff" }}/>
-        </div>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-          <Btn onClick={toggle} style={{ background:C.accent,color:"#fff",padding:"4px 12px",fontSize:11 }}>{playing?"⏸":"▶"}</Btn>
-          <span style={{ fontSize:10,color:C.muted,fontFamily:"monospace" }}>{fmt(Math.max(0,ct-start))} / {fmt(dur)}</span>
-        </div>
+    <div style={{ borderRadius:12,overflow:"hidden",marginBottom:16,background:"#000" }}>
+      <MuxPlayer
+        playbackId={item.mux_playback_id}
+        startTime={item.start_seconds||0}
+        streamType="on-demand"
+        accentColor={C.accent}
+        style={{ width:"100%",aspectRatio:"9/16",maxHeight:500,display:"block" }}
+      />
+    </div>
+  )
+}
+
+// ── TagEditor ─────────────────────────────────────────────────────────────
+function TagEditor({ tags, onUpdate }: { tags: string[], onUpdate: (t:string[]) => void }) {
+  const [newTag, setNewTag] = useState("")
+  function addTag() { const t=newTag.trim(); if(!t||tags.includes(t)){setNewTag("");return;} onUpdate([...tags,t]); setNewTag("") }
+  return (
+    <div>
+      <div style={{ display:"flex",flexWrap:"wrap",gap:6,marginBottom:10,minHeight:26 }}>
+        {tags.length===0 && <span style={{ fontSize:12,color:C.muted,fontStyle:"italic" }}>No tags yet</span>}
+        {tags.map((t,i) => (
+          <span key={i} style={{ background:"#22c55e18",color:"#4ade80",padding:"3px 9px",borderRadius:99,fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:5,border:"1px solid #22c55e33" }}>
+            {t}<span onClick={() => onUpdate(tags.filter(x=>x!==t))} style={{ cursor:"pointer",fontSize:13,opacity:0.7 }}>×</span>
+          </span>
+        ))}
+      </div>
+      <div style={{ display:"flex",gap:8 }}>
+        <Input value={newTag} onChange={(e:any) => setNewTag(e.target.value)} onKeyDown={(e:any) => { if(e.key==="Enter"){e.preventDefault();addTag()} }} placeholder="Type tag + Enter"/>
+        <Btn onClick={addTag} style={{ background:C.accent,color:"#fff",flexShrink:0,padding:"9px 14px" }}>Add</Btn>
       </div>
     </div>
   )
@@ -204,6 +268,15 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [deleting, setDeleting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [categoryOpen, setCategoryOpen] = useState<Record<string,boolean>>({})
+
+  // Filter states
+  const [filterCtypes, setFilterCtypes] = useState<string[]>([])
+  const [filterCreators, setFilterCreators] = useState<string[]>([])
+  const [filterAges, setFilterAges] = useState<string[]>([])
+  const [filterGenders, setFilterGenders] = useState<string[]>([])
+  const [filterAdPotential, setFilterAdPotential] = useState<string[]>([])
+  const [filterDuration, setFilterDuration] = useState<string[]>([])
 
   // Upload state
   const [uploading, setUploading] = useState(false)
@@ -212,19 +285,21 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
   const [uploadForm, setUploadForm] = useState({ title:"",creator:"",creatorAge:"",creatorGender:"",description:"",transcript:"" })
   const [uploadFile, setUploadFile] = useState<File|null>(null)
   const [dragOver, setDragOver] = useState(false)
-  const [pollingId, setPollingId] = useState<string|null>(null)
 
   function setUF(k: string, v: string) { setUploadForm(x => ({...x,[k]:v})) }
+
+  const allCreators = [...new Set(items.map(i=>i.creator).filter(Boolean))] as string[]
+  const activeFilterCount = filterCtypes.length+filterCreators.length+filterAges.length+filterGenders.length+filterAdPotential.length+filterDuration.length
+
+  function clearFilters() {
+    setFilterCtypes([]); setFilterCreators([]); setFilterAges([])
+    setFilterGenders([]); setFilterAdPotential([]); setFilterDuration([])
+  }
 
   function handleFile(file: File|null) {
     if (!file || !file.type.startsWith("video/")) return
     setUploadFile(file)
     const name = file.name.replace(/\.[^/.]+$/,"").replace(/[_-]+/g," ")
-    // Auto-detect duration
-    const v = document.createElement("video")
-    v.preload = "metadata"
-    v.onloadedmetadata = () => setUF("title", uploadForm.title || name)
-    v.src = URL.createObjectURL(file)
     if (!uploadForm.title) setUF("title", name)
   }
 
@@ -232,23 +307,17 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
     if (!uploadFile || !uploadForm.title.trim()) return
     setUploading(true); setUploadProgress(5); setUploadMsg("Creating record…")
     try {
-      // Get upload URL from our API
       const res = await fetch("/api/upload", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
+        method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ filename: uploadFile.name, contentType: uploadFile.type, metadata: uploadForm })
       })
       const { itemId, uploadUrl, error } = await res.json()
       if (error) throw new Error(error)
 
-      setUploadProgress(10); setUploadMsg("Uploading to Mux…")
-
-      // Upload file directly to Mux with progress
+      setUploadProgress(10); setUploadMsg("Uploading video…")
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
-        xhr.upload.onprogress = e => {
-          if (e.lengthComputable) setUploadProgress(10 + Math.round((e.loaded/e.total)*70))
-        }
+        xhr.upload.onprogress = e => { if (e.lengthComputable) setUploadProgress(10 + Math.round((e.loaded/e.total)*70)) }
         xhr.onload = () => resolve()
         xhr.onerror = () => reject(new Error("Upload failed"))
         xhr.open("PUT", uploadUrl)
@@ -256,43 +325,33 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
         xhr.send(uploadFile)
       })
 
-      setUploadProgress(85); setUploadMsg("Mux processing + Claude analysing… (1–3 mins)")
-      setPollingId(itemId)
-
-      // Poll until ready
+      setUploadProgress(85); setUploadMsg("Processing + AI analysis… (1–3 mins)")
       let attempts = 0
       while (attempts < 60) {
         await new Promise(r => setTimeout(r, 5000))
         const sr = await fetch(`/api/items/${itemId}/status`)
         const status = await sr.json()
-        if (status.mux_status === "ready" && status.analysis) {
-          setUploadProgress(100); setUploadMsg("Done! ✓")
-          break
-        }
+        if (status.mux_status === "ready") { setUploadProgress(100); setUploadMsg("Done! ✓"); break }
         if (status.mux_status === "errored") throw new Error("Video processing failed")
         attempts++
       }
-
       onRefresh()
       setView("grid")
       setUploadFile(null)
       setUploadForm({ title:"",creator:"",creatorAge:"",creatorGender:"",description:"",transcript:"" })
-    } catch(e: any) {
-      alert("Upload failed: " + e.message)
-    }
-    setUploading(false); setPollingId(null)
+    } catch(e: any) { alert("Upload failed: " + e.message) }
+    setUploading(false)
   }
 
   async function handleDelete(id: string) {
     const item = items.find(i => i.id === id)
     const idsToDelete = [id, ...(item?.clip_ids || [])]
     await supabase.from("items").delete().in("id", idsToDelete)
-    onRefresh()
-    setSelected(null)
-    setView("grid")
+    onRefresh(); setSelected(null); setView("grid")
   }
 
   async function bulkDelete() {
+    if (!window.confirm(`Delete ${selectedIds.length} item(s)? This cannot be undone.`)) return
     setDeleting(true)
     const gone = new Set(selectedIds)
     selectedIds.forEach(id => { const item = items.find(i => i.id === id); (item?.clip_ids||[]).forEach(cid => gone.add(cid)) })
@@ -319,6 +378,16 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
   const filtered = sortItems(items.filter(item => {
     if (filter==="Originals" && item.type!=="original") return false
     if (filter==="Clips" && item.type!=="clip") return false
+    if (filterCtypes.length>0) {
+      const ct = item.analysis?.content_type
+      const isClip = item.type==="clip"
+      if (!filterCtypes.some(f => f===ct || (f==="Clip"&&isClip))) return false
+    }
+    if (filterCreators.length>0 && !filterCreators.includes(item.creator||"")) return false
+    if (filterAges.length>0 && !filterAges.includes(item.creator_age||"")) return false
+    if (filterGenders.length>0 && !filterGenders.includes(item.creator_gender||"")) return false
+    if (filterAdPotential.length>0 && !filterAdPotential.includes(item.analysis?.ad_potential||"")) return false
+    if (filterDuration.length>0 && !filterDuration.includes(getDurationRange(item.duration_seconds))) return false
     if (!search.trim()) return true
     const q = search.toLowerCase()
     const a = item.analysis||{}
@@ -332,13 +401,12 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
       <STitle size={22}>Add New Content</STitle>
       <div style={{ color:C.muted,fontSize:14,marginBottom:20 }}>Upload a video — Claude will analyse, tag, and create clips automatically.</div>
 
-      {/* Drop zone */}
       <div
         onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]) }}
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onClick={() => { if (!uploadFile) fileRef.current?.click() }}
-        style={{ border:"2px dashed "+(dragOver?C.accent:C.border),borderRadius:14,padding:"24px 20px",textAlign:"center",cursor:uploadFile?"default":"pointer",background:dragOver?C.accentSoft:C.surface,marginBottom:20 }}>
+        style={{ border:"2px dashed "+(dragOver?C.accent:C.border),borderRadius:14,padding:"28px 20px",textAlign:"center",cursor:uploadFile?"default":"pointer",background:dragOver?C.accentSoft:C.surface,marginBottom:20,transition:"all 0.2s" }}>
         <input ref={fileRef} type="file" accept="video/*" style={{ display:"none" }} onChange={e => { handleFile(e.target.files?.[0]||null); e.target.value="" }}/>
         {uploadFile ? (
           <div>
@@ -356,7 +424,6 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
         )}
       </div>
 
-      {/* Form */}
       <div style={{ marginBottom:14 }}><Label>Title *</Label><Input value={uploadForm.title} onChange={(e:any) => setUF("title",e.target.value)} placeholder="e.g. Sarah UGC Serum Review"/></div>
       <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:14 }}>
         <div><Label>Creator</Label><Input value={uploadForm.creator} onChange={(e:any) => setUF("creator",e.target.value)} placeholder="e.g. Sarah"/></div>
@@ -372,9 +439,9 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
         </div>
       </div>
       <div style={{ marginBottom:14 }}><Label>Description (optional)</Label><Input textarea value={uploadForm.description} onChange={(e:any) => setUF("description",e.target.value)} placeholder="What's on screen?" rows={2}/></div>
-      <div style={{ marginBottom:20 }}><Label>Transcript (optional — greatly improves analysis)</Label><Input textarea value={uploadForm.transcript} onChange={(e:any) => setUF("transcript",e.target.value)} placeholder="Paste what the creator says…" rows={4}/></div>
+      <div style={{ marginBottom:8 }}><Label>Transcript (optional — greatly improves analysis & clipping)</Label><Input textarea value={uploadForm.transcript} onChange={(e:any) => setUF("transcript",e.target.value)} placeholder="Paste what the creator says…" rows={4}/></div>
+      <div style={{ background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"8px 12px",fontSize:11,color:C.accent,marginBottom:20 }}>💡 Adding a transcript significantly improves AI tagging and clip quality</div>
 
-      {/* Progress */}
       {uploading && (
         <div style={{ marginBottom:16 }}>
           <div style={{ height:6,background:C.border,borderRadius:4,marginBottom:8,overflow:"hidden" }}>
@@ -397,21 +464,25 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
     const adPotColor = a.ad_potential==="High"?C.green:a.ad_potential==="Medium"?C.yellow:C.red
     return (
       <div style={{ maxWidth:860,margin:"0 auto",padding:28 }}>
-        <button onClick={() => setView("grid")} style={{ background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14 }}>← Back to Library</button>
+        <button onClick={() => { setSelected(null); setView("grid") }} style={{ background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14,display:"flex",alignItems:"center",gap:6 }}>← Back to Library</button>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:16 }}>
           <div>
             <Chip label={selected.type==="clip"?"CLIP":(a.content_type||"Untagged")} color={selected.type==="clip"?typeColor("Clip"):undefined}/>
             <div style={{ fontWeight:800,fontSize:22,marginTop:8,marginBottom:4 }}>{selected.title}</div>
             <div style={{ color:C.muted,fontSize:13,display:"flex",gap:12,flexWrap:"wrap" }}>
-              {selected.duration_seconds && <span>{fmt(selected.duration_seconds)}</span>}
-              {selected.creator && <span>👤 {selected.creator}{selected.creator_age?` · ${selected.creator_age}`:""}</span>}
+              {selected.duration_seconds && <span>⏱ {fmt(selected.duration_seconds)}</span>}
+              {selected.creator && <span>👤 {selected.creator}{selected.creator_age?` · ${selected.creator_age}`:""}{selected.creator_gender?` · ${selected.creator_gender}`:""}</span>}
               {selected.created_at && <span>Added {new Date(selected.created_at).toLocaleDateString()}</span>}
             </div>
           </div>
           <Btn onClick={() => handleDelete(selected.id)} style={{ background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",flexShrink:0 }}>Delete</Btn>
         </div>
+
         <MuxClipPlayer item={selected}/>
+
         {a.summary && <Card style={{ marginBottom:12 }}><Label>Summary</Label><p style={{ margin:0,lineHeight:1.7,fontSize:14 }}>{a.summary}</p></Card>}
+        {a.missing_info && <div style={{ background:"#f59e0b11",border:"1px solid #f59e0b33",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#fbbf24" }}>💡 <strong>Improve tagging:</strong> {a.missing_info}</div>}
+
         {selected.type!=="clip" && (
           <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12 }}>
             {[{l:"Tone",v:a.tone},{l:"Ad Potential",v:a.ad_potential,c:adPotColor},{l:"Confidence",v:a.confidence}].map(s => (
@@ -422,12 +493,15 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
             ))}
           </div>
         )}
+
         <Card style={{ marginBottom:12 }}>
           <div style={{ fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:12 }}>Scene Tags</div>
           <TagEditor tags={a.scene_tags||[]} onUpdate={t => updateTags(selected.id, t)}/>
         </Card>
+
         {a.key_quotes?.length > 0 && <Card style={{ marginBottom:12 }}><Label>Key Quotes</Label>{a.key_quotes.map((q:string,i:number) => <div key={i} style={{ borderLeft:"3px solid "+C.accent,paddingLeft:12,marginBottom:8,fontSize:14,fontStyle:"italic" }}>"{q}"</div>)}</Card>}
         {a.ad_notes && <Card style={{ background:adPotColor+"18",border:"1px solid "+adPotColor+"44",marginBottom:12 }}><div style={{ fontWeight:700,fontSize:11,color:adPotColor,marginBottom:6 }}>📢 AD USAGE</div><div style={{ fontSize:14,lineHeight:1.6 }}>{a.ad_notes}</div></Card>}
+
         {clips.length > 0 && (
           <div style={{ marginTop:24 }}>
             <STitle>✂️ Auto-Generated Clips ({clips.length})</STitle>
@@ -441,64 +515,149 @@ function LibraryTab({ items, onRefresh, view, setView }: { items: Item[], onRefr
   }
 
   // ── Grid view ──
+
+  // Group originals by content type for category sections
+  const originals = items.filter(i => i.type==="original")
+  const categoryGroups: Record<string,Item[]> = {}
+  CONTENT_CATEGORIES.forEach(cat => {
+    const group = originals.filter(i => i.analysis?.content_type===cat)
+    if (group.length > 0) categoryGroups[cat] = group
+  })
+  const uncategorised = originals.filter(i => !i.analysis?.content_type || !CONTENT_CATEGORIES.includes(i.analysis.content_type))
+  if (uncategorised.length > 0) categoryGroups["Uncategorised"] = uncategorised
+
+  const hasActiveFilters = activeFilterCount > 0 || search.trim() || filter !== "All"
+
   return (
     <div style={{ padding:20 }}>
-      <div style={{ display:"flex",gap:10,marginBottom:12,flexWrap:"wrap" }}>
-        <input placeholder="Search titles, creators, tags…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex:1,minWidth:180,background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none" }}/>
-        <select value={sortIdx} onChange={e => setSortIdx(Number(e.target.value))} style={{ background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 12px",color:C.text,fontSize:13,outline:"none",cursor:"pointer" }}>
+      {/* Search + sort + actions row */}
+      <div style={{ display:"flex",gap:10,marginBottom:12,flexWrap:"wrap",alignItems:"center" }}>
+        <input placeholder="Search titles, creators, tags…" value={search} onChange={e => setSearch(e.target.value)}
+          style={{ flex:1,minWidth:180,background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none" }}/>
+        <select value={sortIdx} onChange={e => setSortIdx(Number(e.target.value))}
+          style={{ background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 12px",color:C.text,fontSize:13,outline:"none",cursor:"pointer" }}>
           {SORTS.map((s,i) => <option key={i} value={i}>{s}</option>)}
         </select>
-        {!selectMode && <Btn onClick={() => setSelectMode(true)} style={{ background:"none",border:"1px solid "+C.border,color:C.muted }}>Select</Btn>}
-        {selectMode && <>
-          <Btn onClick={bulkDelete} disabled={selectedIds.length===0||deleting} style={{ background:selectedIds.length>0?"#ef444433":C.border,color:selectedIds.length>0?"#ef4444":C.muted,border:"1px solid "+(selectedIds.length>0?"#ef444466":C.border) }}>Delete ({selectedIds.length})</Btn>
-          <Btn onClick={() => { setSelectMode(false); setSelectedIds([]) }} style={{ background:"none",border:"1px solid "+C.border,color:C.muted }}>Cancel</Btn>
-        </>}
+        {!selectMode && <Btn onClick={() => setSelectMode(true)} style={{ background:"none",border:"1px solid "+C.border,color:C.muted,padding:"9px 14px" }}>Select</Btn>}
+        {selectMode && (
+          <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+            <Btn onClick={() => setSelectedIds(filtered.map(i=>i.id))} style={{ background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",padding:"9px 14px" }}>
+              Select All ({filtered.length})
+            </Btn>
+            <Btn onClick={bulkDelete} disabled={selectedIds.length===0||deleting}
+              style={{ background:selectedIds.length>0?"#ef444433":C.border,color:selectedIds.length>0?"#ef4444":C.muted,border:"1px solid "+(selectedIds.length>0?"#ef444466":C.border) }}>
+              Delete ({selectedIds.length})
+            </Btn>
+            <Btn onClick={() => { setSelectMode(false); setSelectedIds([]) }} style={{ background:"none",border:"1px solid "+C.border,color:C.muted }}>Cancel</Btn>
+          </div>
+        )}
       </div>
-      <div style={{ display:"flex",gap:6,marginBottom:16 }}>
-        {["All","Originals","Clips"].map(f => (
-          <button key={f} onClick={() => setFilter(f)} style={{ background:filter===f?C.accent:C.surface,color:filter===f?"#fff":C.muted,border:"1px solid "+(filter===f?C.accent:C.border),borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer" }}>{f}</button>
-        ))}
-      </div>
-      {filtered.length === 0 ? (
-        <div style={{ textAlign:"center",padding:"80px 20px",color:C.muted }}>
-          <div style={{ fontSize:44,marginBottom:14 }}>🎬</div>
-          <div style={{ fontSize:17,fontWeight:600,color:C.text,marginBottom:6 }}>{items.length===0?"Your library is empty":"No results"}</div>
-          <div style={{ fontSize:13,color:C.muted,marginBottom:20 }}>{items.length===0?"Upload your first video to get started.":"Try adjusting your search."}</div>
-          {items.length===0 && <Btn onClick={() => setView("add")} style={{ background:C.accent,color:"#fff" }}>+ Add First Content</Btn>}
-        </div>
-      ) : (
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:14 }}>
-          {filtered.map(item => (
-            <VideoCard key={item.id} item={item}
-              onClick={() => { setSelected(item); setView("detail") }}
-              selectMode={selectMode}
-              isSelected={selectedIds.includes(item.id)}
-              onToggleSelect={() => setSelectedIds(prev => prev.includes(item.id) ? prev.filter(x=>x!==item.id) : [...prev,item.id])}/>
+
+      {/* Filter bar */}
+      <div style={{ display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center" }}>
+        <div style={{ display:"flex",gap:5 }}>
+          {["All","Originals","Clips"].map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={{ background:filter===f?C.accent:C.surface,color:filter===f?"#fff":C.muted,border:"1px solid "+(filter===f?C.accent:C.border),borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer" }}>{f}</button>
           ))}
         </div>
-      )}
-    </div>
-  )
-}
+        <div style={{ width:1,height:20,background:C.border,flexShrink:0 }}/>
+        <MultiSelect label="Content Type" options={CONTENT_CATEGORIES} selected={filterCtypes} onChange={setFilterCtypes}/>
+        {allCreators.length>0 && <MultiSelect label="Creator" options={allCreators} selected={filterCreators} onChange={setFilterCreators}/>}
+        <MultiSelect label="Age" options={AGE_RANGES} selected={filterAges} onChange={setFilterAges}/>
+        <MultiSelect label="Gender" options={GENDERS} selected={filterGenders} onChange={setFilterGenders}/>
+        <MultiSelect label="Ad Potential" options={AD_POTENTIALS} selected={filterAdPotential} onChange={setFilterAdPotential}/>
+        <MultiSelect label="Duration" options={DURATION_RANGES} selected={filterDuration} onChange={setFilterDuration}/>
+        {activeFilterCount>0 && (
+          <button onClick={clearFilters} style={{ background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline" }}>
+            Clear all filters ({activeFilterCount})
+          </button>
+        )}
+      </div>
 
-// ── TagEditor ─────────────────────────────────────────────────────────────
-function TagEditor({ tags, onUpdate }: { tags: string[], onUpdate: (t:string[]) => void }) {
-  const [newTag, setNewTag] = useState("")
-  function addTag() { const t=newTag.trim(); if(!t||tags.includes(t)){setNewTag("");return;} onUpdate([...tags,t]); setNewTag("") }
-  return (
-    <div>
-      <div style={{ display:"flex",flexWrap:"wrap",gap:6,marginBottom:10,minHeight:26 }}>
-        {tags.length===0 && <span style={{ fontSize:12,color:C.muted,fontStyle:"italic" }}>No tags yet</span>}
-        {tags.map((t,i) => (
-          <span key={i} style={{ background:"#22c55e18",color:"#4ade80",padding:"3px 9px",borderRadius:99,fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:5,border:"1px solid #22c55e33" }}>
-            {t}<span onClick={() => onUpdate(tags.filter(x=>x!==t))} style={{ cursor:"pointer",fontSize:13,opacity:0.7 }}>×</span>
-          </span>
-        ))}
-      </div>
-      <div style={{ display:"flex",gap:8 }}>
-        <Input value={newTag} onChange={(e:any) => setNewTag(e.target.value)} onKeyDown={(e:any) => { if(e.key==="Enter"){e.preventDefault();addTag()} }} placeholder="Type tag + Enter"/>
-        <Btn onClick={addTag} style={{ background:C.accent,color:"#fff",flexShrink:0,padding:"9px 14px" }}>Add</Btn>
-      </div>
+      {/* Category sections — only show when not filtering */}
+      {!hasActiveFilters && Object.keys(categoryGroups).length > 0 && (
+        <div style={{ marginBottom:32 }}>
+          <div style={{ fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:16 }}>📂 Browse by Category</div>
+          {Object.entries(categoryGroups).map(([cat, catItems]) => {
+            const isOpen = categoryOpen[cat] !== false // default open
+            const tc = typeColor(cat)
+            return (
+              <div key={cat} style={{ marginBottom:12,border:"1px solid "+C.border,borderRadius:12,overflow:"hidden" }}>
+                <div
+                  onClick={() => setCategoryOpen(x => ({...x,[cat]:!isOpen}))}
+                  style={{ background:C.card,padding:"12px 16px",display:"flex",alignItems:"center",gap:10,cursor:"pointer" }}
+                >
+                  <span style={{ background:tc.bg,color:tc.color,padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:700,border:"1px solid #fff1" }}>{cat}</span>
+                  <span style={{ fontSize:13,color:C.muted }}>{catItems.length} video{catItems.length!==1?"s":""}</span>
+                  <span style={{ marginLeft:"auto",fontSize:11,color:C.muted }}>{isOpen?"▲":"▼"}</span>
+                </div>
+                {isOpen && (
+                  <div style={{ padding:14,background:C.bg }}>
+                    <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:12 }}>
+                      {catItems.map(item => (
+                        <VideoCard key={item.id} item={item}
+                          onClick={() => { setSelected(item); setView("detail") }}
+                          selectMode={selectMode}
+                          isSelected={selectedIds.includes(item.id)}
+                          onToggleSelect={() => setSelectedIds(prev => prev.includes(item.id) ? prev.filter(x=>x!==item.id) : [...prev,item.id])}/>
+                      ))}
+                    </div>
+                    {/* Nested clips for this category */}
+                    {catItems.some(i => i.clip_ids?.length) && (
+                      <div style={{ marginTop:16,borderTop:"1px solid "+C.border,paddingTop:14 }}>
+                        <div style={{ fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:10 }}>✂️ Clips from {cat}</div>
+                        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:10 }}>
+                          {catItems.flatMap(i => i.clip_ids||[]).map(clipId => {
+                            const clip = items.find(i=>i.id===clipId)
+                            if (!clip) return null
+                            return <VideoCard key={clip.id} item={clip}
+                              onClick={() => { setSelected(clip); setView("detail") }}
+                              selectMode={selectMode}
+                              isSelected={selectedIds.includes(clip.id)}
+                              onToggleSelect={() => setSelectedIds(prev => prev.includes(clip.id) ? prev.filter(x=>x!==clip.id) : [...prev,clip.id])}/>
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          <div style={{ borderTop:"1px solid "+C.border,paddingTop:20,marginTop:8 }}>
+            <div style={{ fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:16 }}>📋 All Content</div>
+          </div>
+        </div>
+      )}
+
+      {/* Main grid */}
+      {filtered.length === 0 ? (
+        <div style={{ textAlign:"center",padding:"60px 20px",color:C.muted }}>
+          <div style={{ fontSize:44,marginBottom:14 }}>🎬</div>
+          <div style={{ fontSize:17,fontWeight:600,color:C.text,marginBottom:6 }}>{items.length===0?"Your library is empty":"No results"}</div>
+          <div style={{ fontSize:13,color:C.muted,marginBottom:20 }}>{items.length===0?"Upload your first video to get started.":"Try adjusting your search or filters."}</div>
+          {items.length===0 && <Btn onClick={() => setView("add")} style={{ background:C.accent,color:"#fff" }}>+ Add First Content</Btn>}
+          {activeFilterCount>0 && <Btn onClick={clearFilters} style={{ background:C.surface,color:C.muted,border:"1px solid "+C.border }}>Clear Filters</Btn>}
+        </div>
+      ) : (
+        <>
+          {hasActiveFilters && (
+            <div style={{ fontSize:12,color:C.muted,marginBottom:12 }}>
+              Showing {filtered.length} result{filtered.length!==1?"s":""}
+              {selectMode && filtered.length>0 && <button onClick={() => setSelectedIds(filtered.map(i=>i.id))} style={{ background:"none",border:"none",color:C.accent,fontSize:12,cursor:"pointer",marginLeft:8,textDecoration:"underline" }}>Select all {filtered.length}</button>}
+            </div>
+          )}
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:14 }}>
+            {filtered.map(item => (
+              <VideoCard key={item.id} item={item}
+                onClick={() => { setSelected(item); setView("detail") }}
+                selectMode={selectMode}
+                isSelected={selectedIds.includes(item.id)}
+                onToggleSelect={() => setSelectedIds(prev => prev.includes(item.id) ? prev.filter(x=>x!==item.id) : [...prev,item.id])}/>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -532,7 +691,6 @@ function ScriptTable({ sections, onChange, libraryItems, readOnly, brandName, pr
           libraryItems={libraryItems}
           sectionLabel={sections[pickerIdx]?.type||""}
           onSelect={(id: string) => updM(pickerIdx,{selectedClipId:id,autoSelected:false})}
-
           onClose={() => setPickerIdx(null)}/>
       )}
       <table style={{ width:"100%",borderCollapse:"collapse",tableLayout:"fixed" }}>
@@ -599,7 +757,7 @@ function ScriptTable({ sections, onChange, libraryItems, readOnly, brandName, pr
       {!readOnly && (
         <div style={{ borderTop:"1px solid "+C.border,padding:"8px 16px",background:C.surface,borderRadius:"0 0 12px 12px",display:"flex",alignItems:"center",gap:8 }}>
           <button onClick={addRow} style={{ background:"none",border:"1px dashed "+C.border,color:C.muted,padding:"7px 16px",cursor:"pointer",fontSize:13,borderRadius:8 }}>+ Add Row</button>
-          <span style={{ fontSize:11,color:C.muted,fontStyle:"italic" }}>Use ✨ in the section column to AI-fill any row</span>
+          <span style={{ fontSize:11,color:C.muted,fontStyle:"italic" }}>Use ✨ to AI-fill any row</span>
         </div>
       )}
     </div>
@@ -669,7 +827,7 @@ function ScriptsTab({ scripts, items, brand, products, onSaveScripts }: any) {
   async function matchClips(secs: any[], libItems: Item[]) {
     const libSummary = libItems.map(item => `ID:${item.id}|title:${item.title}|creator:${item.creator||""}|tags:${(item.analysis?.scene_tags||[]).join(",")}|use:${item.analysis?.use_case||""}`).join("\n")
     const scriptDesc = secs.map((s:any,i:number) => `Section ${i} [${s.type}]: spoken="${(s.spokenWords||"").substring(0,80)}"`).join("\n")
-    const prompt = `Match script sections to video clips. Return ONLY valid JSON array:\n\nSCRIPT:\n${scriptDesc}\n\nLIBRARY (use exact IDs):\n${libSummary}\n\nReturn: [{"section":0,"clip_ids":["uuid1"],"best_id":"uuid1"},…]`
+    const prompt = `Match script sections to video clips. Return ONLY valid JSON array:\n\nSCRIPT:\n${scriptDesc}\n\nLIBRARY:\n${libSummary}\n\nReturn: [{"section":0,"clip_ids":["uuid1"],"best_id":"uuid1"},…]`
     try {
       const raw = await callClaude([{role:"user",content:prompt}],700)
       const matches = JSON.parse(raw.replace(/```json|```/g,"").trim())
@@ -948,7 +1106,6 @@ export default function AdForgeApp() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Realtime: update items when Mux webhook fires
   useEffect(() => {
     const channel = supabase.channel("items-changes")
       .on("postgres_changes", { event:"*", schema:"public", table:"items" }, () => loadData())
@@ -963,14 +1120,13 @@ export default function AdForgeApp() {
 
   const tabBtn = (id: string, label: string) => {
     const active = tab === id
-    return <button style={{ padding:"10px 20px",background:"none",border:"none",borderBottom:"2px solid "+(active?C.accent:"transparent"),color:active?C.text:C.muted,fontWeight:active?700:500,fontSize:14,cursor:"pointer" }} onClick={()=>setTab(id)}>{label}</button>
+    return <button style={{ padding:"10px 20px",background:"none",border:"none",borderBottom:"2px solid "+(active?C.accent:"transparent"),color:active?C.text:C.muted,fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s" }} onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}}>{label}</button>
   }
 
   if (loading) return <div style={{ background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"system-ui" }}>Loading…</div>
 
   return (
     <div style={{ background:C.bg,minHeight:"100vh",fontFamily:"'Inter',system-ui,sans-serif",color:C.text }}>
-      {/* Header */}
       <div style={{ background:C.surface,borderBottom:"1px solid "+C.border,position:"sticky",top:0,zIndex:50 }}>
         <div style={{ padding:"0 20px",display:"flex",alignItems:"center" }}>
           <div style={{ fontWeight:800,fontSize:16,color:C.accent,marginRight:24,padding:"14px 0",letterSpacing:"-0.5px" }}>AdForge</div>
@@ -985,16 +1141,9 @@ export default function AdForgeApp() {
         </div>
       </div>
 
-      {/* Content */}
-      {tab==="library" && (
-        <LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView}/>
-      )}
-      {tab==="scripts" && (
-        <ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts}/>
-      )}
-      {tab==="brand" && (
-        <BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>
-      )}
+      {tab==="library" && <LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView}/>}
+      {tab==="scripts" && <ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts}/>}
+      {tab==="brand" && <BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
     </div>
   )
 }
