@@ -16,7 +16,8 @@ type Script = { id: string; product_name?: string; metadata?: any; sections?: an
 type BrandProfile = { id?: string; name: string; website: string; description: string; voice: string; target_customer: string; reviews: string; additional_info: string; customer_avatars: CustomerAvatar[] }
 type CustomerAvatar = { id: string; name: string; age: string; gender: string; description: string; pains: string; desires: string; objections: string }
 type Product = { id?: string; name: string; description: string; benefits: string; target_customer: string; claims: string; ingredients: string; differentiators: string; reviews: string; notes: string; price: string; url: string }
-type ForgedAd = { id: string; title: string; status: 'draft'|'complete'; mode?: 'script'|'broll'; script_id?: string; sections?: any[]; voiceover_url?: string; voiceover_voice?: string; music_url?: string; music_name?: string; render_id?: string; render_url?: string; render_status?: string; metadata?: any; created_at?: string; updated_at?: string }
+type ForgedAd = { id: string; title: string; status: 'draft'|'complete'; mode?: 'script'|'broll'; script_id?: string; sections?: any[]; voiceover_url?: string; voiceover_voice?: string; music_url?: string; music_name?: string; render_id?: string; render_url?: string; render_status?: string; notes?: string; star_rating?: number; metadata?: any; created_at?: string; updated_at?: string }
+
 
 const C = { bg:"#0a0a0f",surface:"#13131a",card:"#1a1a24",border:"#2a2a3a",accent:"#6c63ff",accentSoft:"#6c63ff22",text:"#f0f0f5",muted:"#7a7a9a",green:"#22c55e",yellow:"#f59e0b",red:"#ef4444" }
 const GENDERS = ["Male","Female","Non-binary","Other"]
@@ -1240,36 +1241,226 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
 
 
 // ── Forged Ads Tab ────────────────────────────────────────────────────────
+function ForgedAdCard({ad,items,onOpen,onRefresh}:{ad:ForgedAd,items:Item[],onOpen:()=>void,onRefresh:()=>void}){
+  const supabase=createClient()
+  const [hovered,setHovered]=useState(false)
+  const [thumbIdx,setThumbIdx]=useState(0)
+  const [downloading,setDownloading]=useState(false)
+  const [rating,setRating]=useState(ad.star_rating||0)
+  const [hoverRating,setHoverRating]=useState(0)
+  const intervalRef=useRef<any>(null)
+
+  const clips=(ad.sections||[]).map((s:any)=>{
+    const item=s.selectedClipId?items.find((i:Item)=>i.id===s.selectedClipId):null
+    return item?.mux_playback_id?item:null
+  }).filter(Boolean)
+
+  const firstClip=clips[0]
+  const thumbUrl=firstClip?.mux_playback_id?muxThumb(firstClip.mux_playback_id,firstClip.thumbnail_time||0):null
+
+  useEffect(()=>{
+    if(hovered&&clips.length>1){
+      intervalRef.current=setInterval(()=>setThumbIdx(i=>(i+1)%clips.length),800)
+    } else {
+      clearInterval(intervalRef.current);setThumbIdx(0)
+    }
+    return()=>clearInterval(intervalRef.current)
+  },[hovered,clips.length])
+
+  const currentThumb=clips[thumbIdx]?.mux_playback_id?muxThumb(clips[thumbIdx].mux_playback_id,clips[thumbIdx].thumbnail_time||0):thumbUrl
+
+  const renderStatus=(ad as any).render_status||"pending"
+  const renderBadge=renderStatus==="ready"?{bg:"#22c55e22",color:C.green,label:"✓ Ready"}:renderStatus==="rendering"?{bg:"#f59e0b22",color:C.yellow,label:"⏳ Rendering"}:renderStatus==="failed"?{bg:"#ef444422",color:"#ef4444",label:"❌ Failed"}:{bg:"#ffffff11",color:C.muted,label:"Not rendered"}
+
+  async function quickDownload(e:React.MouseEvent){
+    e.stopPropagation()
+    if(!(ad as any).render_url){onOpen();return}
+    setDownloading(true)
+    try{
+      const res=await fetch((ad as any).render_url)
+      const blob=await res.blob()
+      const url=URL.createObjectURL(blob)
+      const a=document.createElement("a");a.href=url;a.download=`${ad.title||"ad"}.mp4`;a.click()
+      setTimeout(()=>URL.revokeObjectURL(url),15000)
+    }catch(e){onOpen()}
+    setDownloading(false)
+  }
+
+  async function saveRating(r:number){
+    setRating(r)
+    await supabase.from("forged_ads").update({star_rating:r}).eq("id",ad.id)
+  }
+
+  const stage=STAGES.find(s=>s.value===ad.metadata?.awarenessStage)
+  const stageColor=STAGE_COLORS[ad.metadata?.awarenessStage||""]||C.accent
+
+  return<div
+    onMouseEnter={()=>setHovered(true)}
+    onMouseLeave={()=>setHovered(false)}
+    style={{background:C.card,border:"1px solid "+(hovered?C.accent:C.border),borderRadius:14,overflow:"hidden",cursor:"pointer",transition:"border-color 0.2s,transform 0.2s",transform:hovered?"translateY(-2px)":"none",display:"flex",flexDirection:"column"}}
+  >
+    {/* Thumbnail */}
+    <div onClick={onOpen} style={{position:"relative",paddingTop:"177.78%",background:"#111",overflow:"hidden",flexShrink:0}}>
+      {currentThumb&&<img src={currentThumb} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",transition:"opacity 0.3s"}}/>}
+      
+      {/* Overlay on hover */}
+      {hovered&&<div style={{position:"absolute",inset:0,background:"#00000055",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{width:48,height:48,borderRadius:"50%",background:"#000a",border:"2px solid #fff6",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>▶</div>
+      </div>}
+
+      {/* Clip strip indicator */}
+      {clips.length>1&&hovered&&<div style={{position:"absolute",bottom:8,left:8,right:8,display:"flex",gap:3,justifyContent:"center"}}>
+        {clips.map((_:any,i:number)=><div key={i} style={{height:2,flex:1,borderRadius:2,background:i===thumbIdx?"#fff":"#ffffff44",transition:"background 0.3s"}}/>)}
+      </div>}
+
+      {/* Render status badge */}
+      <div style={{position:"absolute",top:8,left:8,background:renderBadge.bg,color:renderBadge.color,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:99,backdropFilter:"blur(4px)"}}>
+        {renderBadge.label}
+      </div>
+
+      {/* Quick download */}
+      {renderStatus==="ready"&&<button onClick={quickDownload} disabled={downloading} style={{position:"absolute",top:8,right:8,background:"#000a",border:"1px solid #fff3",color:"#fff",borderRadius:8,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600,backdropFilter:"blur(4px)"}}>
+        {downloading?"…":"⬇️"}
+      </button>}
+
+      {/* Tag overlays */}
+      <div style={{position:"absolute",bottom:8,left:8,display:"flex",gap:4,flexWrap:"wrap",maxWidth:"90%",opacity:hovered?0:1,transition:"opacity 0.2s"}}>
+        {ad.metadata?.contentType&&<span style={{background:"#000a",color:"#fff",fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:4,backdropFilter:"blur(4px)"}}>{ad.metadata.contentType}</span>}
+        {stage&&<span style={{background:stageColor+"cc",color:"#fff",fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:4}}>{stage.label}</span>}
+      </div>
+
+      {/* Audio indicators */}
+      <div style={{position:"absolute",bottom:8,right:8,display:"flex",gap:4}}>
+        {ad.voiceover_url&&<span style={{background:"#000a",fontSize:10,padding:"2px 5px",borderRadius:4}}>🎙️</span>}
+        {ad.music_url&&<span style={{background:"#000a",fontSize:10,padding:"2px 5px",borderRadius:4}}>🎵</span>}
+      </div>
+    </div>
+
+    {/* Card body */}
+    <div style={{padding:"10px 12px",flex:1,display:"flex",flexDirection:"column",gap:6}}>
+      <div style={{fontWeight:700,fontSize:13,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{ad.title}</div>
+      
+      {/* Star rating */}
+      <div style={{display:"flex",gap:2}} onMouseLeave={()=>setHoverRating(0)}>
+        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={()=>setHoverRating(star)} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:14,color:(hoverRating||rating)>=star?"#f59e0b":"#ffffff22",transition:"color 0.1s"}}>★</span>)}
+      </div>
+
+      {/* Meta */}
+      <div style={{fontSize:10,color:C.muted,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        {ad.metadata?.productName&&ad.metadata.productName!=="General"&&<span style={{color:C.accent}}>{ad.metadata.productName}</span>}
+        {ad.metadata?.adLength&&<span>{ad.metadata.adLength}</span>}
+        <span>{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}</span>
+      </div>
+
+      {/* Notes */}
+      {(ad as any).notes&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as any}}>📝 {(ad as any).notes}</div>}
+
+      {/* Clip strip */}
+      <div style={{display:"flex",gap:3,marginTop:2}}>
+        {(ad.sections||[]).slice(0,6).map((s:any,i:number)=>{
+          const item=s.selectedClipId?items.find((it:Item)=>it.id===s.selectedClipId):null
+          const sc=secColor(s.type||s.label)
+          return<div key={i} style={{flex:1,position:"relative",paddingTop:"177.78%",background:"#111",borderRadius:4,overflow:"hidden",maxWidth:32}}>
+            {item?.mux_playback_id?<img src={muxThumb(item.mux_playback_id,item.thumbnail_time||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{position:"absolute",inset:0,background:sc.bg}}/>}
+            <div style={{position:"absolute",bottom:0,left:0,right:0,background:sc.bg,fontSize:5,fontWeight:800,color:sc.color,textAlign:"center",padding:"1px 0"}}>{(s.type||s.label||"").substring(0,4)}</div>
+          </div>
+        })}
+      </div>
+    </div>
+  </div>
+}
+
 function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefresh:()=>void}){
   const supabase=createClient()
-  const [statusFilter,setStatusFilter]=useState<"all"|"draft"|"complete">("all")
   const [previewId,setPreviewId]=useState<string|null>(null)
+  const [search,setSearch]=useState("")
+  const [activeTag,setActiveTag]=useState<string|null>(null)
+  const [expandedStages,setExpandedStages]=useState<Record<string,boolean>>({})
+  const [editingNotes,setEditingNotes]=useState<string|null>(null)
+  const [notesVal,setNotesVal]=useState("")
 
   async function deleteAd(id:string){if(!window.confirm("Delete this ad?"))return;await supabase.from("forged_ads").delete().eq("id",id);onRefresh()}
   async function markComplete(id:string){await supabase.from("forged_ads").update({status:"complete",updated_at:new Date().toISOString()}).eq("id",id);onRefresh()}
+  async function saveNotes(id:string){await supabase.from("forged_ads").update({notes:notesVal}).eq("id",id);setEditingNotes(null);onRefresh()}
 
-  const filtered=ads.filter(ad=>statusFilter==="all"||ad.status===statusFilter)
   const previewAd=previewId?ads.find(a=>a.id===previewId):null
 
-  return<div style={{maxWidth:900,margin:"0 auto",padding:28}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-      <div><STitle size={22} mb={4}>⚡ Forged Ads</STitle><div style={{color:C.muted,fontSize:14}}>Your saved and completed video ads</div></div>
-      <div style={{display:"flex",gap:6}}>{(["all","draft","complete"] as const).map(s=><button key={s} onClick={()=>setStatusFilter(s)} style={{background:statusFilter===s?C.accent:C.surface,color:statusFilter===s?"#fff":C.muted,border:"1px solid "+(statusFilter===s?C.accent:C.border),borderRadius:99,padding:"5px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>{s==="all"?"All":s==="draft"?"📝 Drafts":"✅ Complete"}</button>)}</div>
+  // Filter
+  const filtered=ads.filter(ad=>{
+    if(search.trim()){const q=search.toLowerCase();if(![ad.title,ad.metadata?.contentType,ad.metadata?.productName,ad.metadata?.awarenessStage,(ad as any).notes].some((f:any)=>f&&String(f).toLowerCase().includes(q)))return false}
+    if(activeTag){const q=activeTag.toLowerCase();if(![ad.metadata?.contentType,ad.metadata?.awarenessStage,ad.metadata?.productName].some((f:any)=>f&&String(f).toLowerCase().includes(q.toLowerCase())))return false}
+    return true
+  })
+
+  // Group by awareness stage
+  const stageGroups: Record<string,ForgedAd[]>={}
+  const stageOrder=["problem_aware","unaware","solution_aware","product_aware","most_aware",""]
+  filtered.forEach(ad=>{
+    const stage=ad.metadata?.awarenessStage||""
+    if(!stageGroups[stage])stageGroups[stage]=[]
+    stageGroups[stage].push(ad)
+  })
+
+  const sortedStages=stageOrder.filter(s=>stageGroups[s]?.length>0)
+  const otherStages=Object.keys(stageGroups).filter(s=>!stageOrder.includes(s))
+  const allStages=[...sortedStages,...otherStages]
+
+  function toggleStage(s:string){setExpandedStages(prev=>({...prev,[s]:prev[s]===false?true:prev[s]===undefined?false:true}))}
+  function isExpanded(s:string){return expandedStages[s]!==false}
+
+  const totalReady=ads.filter(a=>(a as any).render_status==="ready").length
+  const totalRendering=ads.filter(a=>(a as any).render_status==="rendering").length
+
+  return<div style={{padding:28,maxWidth:1200,margin:"0 auto"}}>
+    {/* Header */}
+    <div style={{marginBottom:24}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:12}}>
+        <div>
+          <STitle size={24} mb={4}>⚡ Forged Ads</STitle>
+          <div style={{fontSize:13,color:C.muted}}>Your complete video ad library — organised by awareness stage</div>
+        </div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          {totalReady>0&&<div style={{background:"#22c55e22",border:"1px solid #22c55e44",borderRadius:8,padding:"6px 14px",fontSize:12,color:C.green,fontWeight:600}}>✓ {totalReady} ready to download</div>}
+          {totalRendering>0&&<div style={{background:"#f59e0b22",border:"1px solid #f59e0b44",borderRadius:8,padding:"6px 14px",fontSize:12,color:C.yellow,fontWeight:600}}>⏳ {totalRendering} rendering</div>}
+        </div>
+      </div>
+
+      {/* Search + filters */}
+      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search ads by name, product, stage…" style={{flex:1,minWidth:220,background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 14px",color:C.text,fontSize:14,outline:"none"}}/>
+        {activeTag&&<button onClick={()=>setActiveTag(null)} style={{background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>✕ {activeTag}</button>}
+      </div>
     </div>
 
+    {/* Preview modal */}
     {previewAd&&<div onClick={()=>setPreviewId(null)} style={{position:"fixed",inset:0,background:"#000000ee",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:16,padding:24,maxWidth:900,width:"100%",marginTop:20}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <div>
-            <div style={{fontWeight:700,fontSize:18}}>{previewAd.title}</div>
-            <div style={{fontSize:13,color:C.muted,display:"flex",gap:10,marginTop:4}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,gap:16}}>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:18,marginBottom:6}}>{previewAd.title}</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
               <span style={{background:previewAd.status==="complete"?"#22c55e22":"#f59e0b22",color:previewAd.status==="complete"?C.green:C.yellow,border:"1px solid "+(previewAd.status==="complete"?"#22c55e44":"#f59e0b44"),borderRadius:99,fontSize:10,fontWeight:700,padding:"1px 7px"}}>{previewAd.status==="complete"?"✅ Complete":"📝 Draft"}</span>
-              {previewAd.mode==="broll"&&<span style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",borderRadius:99,fontSize:10,fontWeight:700,padding:"1px 7px"}}>🎬 B-Roll</span>}
-              {previewAd.created_at&&<span>Created {new Date(previewAd.created_at).toLocaleDateString()}</span>}
+              {previewAd.mode==="broll"&&<Chip label="🎬 B-Roll" color={{bg:"#22c55e22",color:C.green}}/>}
+              {previewAd.metadata?.contentType&&<Chip label={previewAd.metadata.contentType} color={{bg:"#0891b222",color:"#38bdf8"}}/>}
+              {previewAd.metadata?.awarenessStage&&<Chip label={STAGES.find(s=>s.value===previewAd.metadata?.awarenessStage)?.label||previewAd.metadata.awarenessStage} color={{bg:STAGE_COLORS[previewAd.metadata.awarenessStage]+"22",color:STAGE_COLORS[previewAd.metadata.awarenessStage]}}/>}
+              {previewAd.created_at&&<span style={{fontSize:11,color:C.muted}}>Created {new Date(previewAd.created_at).toLocaleDateString()}</span>}
             </div>
+            {/* Notes editor */}
+            {editingNotes===previewAd.id?<div style={{display:"flex",gap:8,marginTop:8}}>
+              <input value={notesVal} onChange={e=>setNotesVal(e.target.value)} placeholder="Add internal notes…" autoFocus style={{flex:1,background:C.surface,border:"1px solid "+C.accent,borderRadius:8,padding:"6px 10px",color:C.text,fontSize:13,outline:"none"}}/>
+              <Btn onClick={()=>saveNotes(previewAd.id)} style={{background:C.green,color:"#000",fontWeight:700,padding:"6px 12px",fontSize:12}}>Save</Btn>
+              <Btn onClick={()=>setEditingNotes(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"6px 12px",fontSize:12}}>Cancel</Btn>
+            </div>:<div onClick={()=>{setEditingNotes(previewAd.id);setNotesVal((previewAd as any).notes||"")}} style={{fontSize:12,color:(previewAd as any).notes?C.muted:C.accent,cursor:"pointer",marginTop:6,textDecoration:"underline"}}>
+              {(previewAd as any).notes?`📝 ${(previewAd as any).notes}`:"+ Add notes"}
+            </div>}
           </div>
-          <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
+          <div style={{display:"flex",gap:8,flexShrink:0}}>
+            {previewAd.status==="draft"&&<Btn onClick={()=>{markComplete(previewAd.id);setPreviewId(null)}} style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
+            <Btn onClick={()=>{deleteAd(previewAd.id);setPreviewId(null)}} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",fontSize:12,padding:"6px 12px"}}>Delete</Btn>
+            <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
+          </div>
         </div>
+        {previewAd.sections&&previewAd.sections.length>0&&<div style={{marginBottom:20}}><StitchedPreview sections={previewAd.sections} libraryItems={items}/></div>}
         <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
           {previewAd.voiceover_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover · {previewAd.voiceover_voice}</div><audio src={previewAd.voiceover_url} controls style={{width:"100%",height:36}}/></div>}
           {previewAd.music_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls style={{width:"100%",height:36}}/></div>}
@@ -1278,31 +1469,51 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
       </div>
     </div>}
 
-    {filtered.length===0?<Card style={{textAlign:"center",padding:60}}><div style={{fontSize:40,marginBottom:12}}>⚡</div><STitle mb={6}>{statusFilter==="draft"?"No drafts yet":statusFilter==="complete"?"No completed ads yet":"No forged ads yet"}</STitle><div style={{color:C.muted,fontSize:13}}>Create an ad from the Scripts tab and save it here.</div></Card>
-    :<div style={{display:"grid",gap:14}}>{filtered.map(ad=><Card key={ad.id}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
-            <span style={{background:ad.status==="complete"?"#22c55e22":"#f59e0b22",color:ad.status==="complete"?C.green:C.yellow,border:"1px solid "+(ad.status==="complete"?"#22c55e44":"#f59e0b44"),borderRadius:99,fontSize:10,fontWeight:700,padding:"2px 8px"}}>{ad.status==="complete"?"✅ Complete":"📝 Draft"}</span>
-            {ad.mode==="broll"&&<Chip label="🎬 B-Roll" color={{bg:"#22c55e22",color:C.green}}/>}
-            {ad.metadata?.contentType&&<Chip label={ad.metadata.contentType} color={{bg:"#0891b222",color:"#38bdf8"}}/>}
-            {ad.metadata?.productName&&ad.metadata.productName!=="General"&&<Chip label={ad.metadata.productName} color={{bg:"#6c63ff22",color:"#a5b4fc"}}/>}
-            {ad.voiceover_url&&<span style={{fontSize:10,color:C.green}}>🎙️</span>}
-            {ad.music_url&&<span style={{fontSize:10,color:C.accent}}>🎵</span>}
+    {/* Empty state */}
+    {ads.length===0&&<Card style={{textAlign:"center",padding:60}}><div style={{fontSize:40,marginBottom:12}}>⚡</div><STitle mb={6}>No forged ads yet</STitle><div style={{color:C.muted,fontSize:13}}>Create an ad from the Scripts tab and save it here.</div></Card>}
+
+    {/* No results */}
+    {ads.length>0&&filtered.length===0&&<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:28,marginBottom:8}}>🔍</div><div style={{color:C.muted,fontSize:14}}>No ads match your search.<br/><button onClick={()=>{setSearch("");setActiveTag(null)}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,textDecoration:"underline",marginTop:8}}>Clear filters</button></div></Card>}
+
+    {/* Stage folders */}
+    {allStages.map(stageKey=>{
+      const stageAds=stageGroups[stageKey]||[]
+      const stageInfo=STAGES.find(s=>s.value===stageKey)
+      const stageColor=STAGE_COLORS[stageKey]||C.accent
+      const expanded=isExpanded(stageKey)
+      const readyCount=stageAds.filter(a=>(a as any).render_status==="ready").length
+
+      return<div key={stageKey} style={{marginBottom:16,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
+        {/* Folder header */}
+        <div onClick={()=>toggleStage(stageKey)} style={{background:C.card,padding:"14px 20px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderBottom:expanded?"1px solid "+C.border:"none"}}>
+          <div style={{width:10,height:10,borderRadius:"50%",background:stageColor,flexShrink:0}}/>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:15,color:C.text}}>{stageInfo?.label||"General"}</div>
+            {stageInfo&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{stageInfo.desc}</div>}
           </div>
-          <div style={{fontWeight:700,fontSize:17,marginBottom:4}}>{ad.title}</div>
-          <div style={{fontSize:12,color:C.muted}}>{ad.created_at&&`Created ${new Date(ad.created_at).toLocaleDateString()}`}</div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{background:stageColor+"22",color:stageColor,border:"1px solid "+stageColor+"44",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 10px"}}>{stageAds.length} ad{stageAds.length!==1?"s":""}</span>
+            {readyCount>0&&<span style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 10px"}}>✓ {readyCount} ready</span>}
+            <span style={{fontSize:12,color:C.muted}}>{expanded?"▲":"▼"}</span>
+          </div>
         </div>
-        <div style={{display:"flex",gap:8,flexShrink:0,marginLeft:12}}>
-          <Btn onClick={()=>setPreviewId(ad.id)} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px"}}>▶ Open</Btn>
-          {ad.status==="draft"&&<Btn onClick={()=>markComplete(ad.id)} style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
-          <Btn onClick={()=>deleteAd(ad.id)} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",fontSize:12,padding:"6px 12px"}}>Delete</Btn>
-        </div>
+
+        {/* Cards grid */}
+        {expanded&&<div style={{padding:20,background:C.bg}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>
+            {stageAds.map(ad=><ForgedAdCard key={ad.id} ad={ad} items={items} onOpen={()=>setPreviewId(ad.id)} onRefresh={onRefresh}/>)}
+          </div>
+        </div>}
       </div>
-      {ad.sections&&ad.sections.length>0&&<div style={{display:"flex",gap:5,overflowX:"auto",paddingBottom:4}}>
-        {ad.sections.map((s:any,i:number)=>{const item=s.selectedClipId?items.find((it:Item)=>it.id===s.selectedClipId):null;const sc=secColor(s.type||s.label);return<div key={i} style={{flexShrink:0,textAlign:"center"}}><div style={{width:40,height:72,background:"#111",borderRadius:6,overflow:"hidden",border:"1px solid "+C.border,position:"relative"}}>{item?.mux_playback_id?<img src={muxThumb(item.mux_playback_id,item.thumbnail_time||0)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🎬</div>}</div><div style={{fontSize:7,fontWeight:800,color:sc.color,marginTop:2}}>{s.type||s.label}</div></div>})}
-      </div>}
-    </Card>)}</div>}
+    })}
+
+    {/* Tag cloud for quick filtering */}
+    {ads.length>0&&<div style={{marginTop:24,padding:"16px 20px",background:C.card,border:"1px solid "+C.border,borderRadius:12}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Filter by tag</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {[...new Set(ads.flatMap(ad=>[ad.metadata?.contentType,ad.metadata?.awarenessStage&&STAGES.find(s=>s.value===ad.metadata?.awarenessStage)?.label,ad.metadata?.productName].filter(Boolean)))].map((tag:any)=><button key={tag} onClick={()=>setActiveTag(activeTag===tag?null:tag)} style={{background:activeTag===tag?C.accent:C.surface,color:activeTag===tag?"#fff":C.muted,border:"1px solid "+(activeTag===tag?C.accent:C.border),borderRadius:99,padding:"4px 11px",cursor:"pointer",fontSize:11,fontWeight:600}}>{tag}</button>)}
+      </div>
+    </div>}
   </div>
 }
 
@@ -1331,8 +1542,7 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
       }
     }
     setSaving(false)
-  }  
-  async function crawlWebsite(){if(!brand.website?.trim()){setCrawlError("Enter a website URL first.");return};setCrawling(true);setCrawlError("");try{const res=await fetch("/api/brand/crawl",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:brand.website})});const d=await res.json();if(d.error)throw new Error(d.error);setBrand({...brand,...d.profile,id:brand.id,customer_avatars:brand.customer_avatars||[]})}catch(e:any){setCrawlError(e.message||"Could not fetch website.")};setCrawling(false)}
+  }  async function crawlWebsite(){if(!brand.website?.trim()){setCrawlError("Enter a website URL first.");return};setCrawling(true);setCrawlError("");try{const res=await fetch("/api/brand/crawl",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:brand.website})});const d=await res.json();if(d.error)throw new Error(d.error);setBrand({...brand,...d.profile,id:brand.id,customer_avatars:brand.customer_avatars||[]})}catch(e:any){setCrawlError(e.message||"Could not fetch website.")};setCrawling(false)}
   async function saveProd(prod:Product){if((prod as any).id){await supabase.from("products").update(prod).eq("id",(prod as any).id);setProducts(products.map((p:any)=>p.id===(prod as any).id?prod:p))}else{const{data}=await supabase.from("products").insert(prod).select().single();setProducts([...products,data])};setEditingProd(null)}
   async function deleteProd(id:string){await supabase.from("products").delete().eq("id",id);setProducts(products.filter((p:any)=>p.id!==id))}
   function saveAvatar(av:CustomerAvatar){const avatars=brand.customer_avatars||[];const exists=avatars.find((a:CustomerAvatar)=>a.id===av.id);const next=exists?avatars.map((a:CustomerAvatar)=>a.id===av.id?av:a):[...avatars,av];setBrand({...brand,customer_avatars:next});setEditingAvatar(null)}
