@@ -1,3 +1,6 @@
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import ffmpeg from 'fluent-ffmpeg'
@@ -7,8 +10,6 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path)
-
-export const maxDuration = 60
 
 async function downloadToTemp(url: string, filename: string): Promise<string> {
   const res = await fetch(url)
