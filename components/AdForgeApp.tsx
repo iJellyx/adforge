@@ -1334,9 +1334,10 @@ export default function AdForgeApp(){
   },[loadData])
 
   async function handleSaveForgedAd(ad:Omit<ForgedAd,"id">){
-  const{data}=await supabase.from("forged_ads").insert({...ad,updated_at:new Date().toISOString()}).select().single()
+  const{data,error}=await supabase.from("forged_ads").insert({...ad,updated_at:new Date().toISOString()}).select().single()
+  if(error){console.error("Save forged ad error:",error);return null}
   if(data){
-    setForgedAds(prev=>[data,...prev])
+    await loadData()
     setTab("forged")
   }
   return data
