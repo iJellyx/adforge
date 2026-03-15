@@ -113,9 +113,15 @@ Transcript: ${item.transcript || autoTranscript || 'not provided'}
 Creator: ${item.creator || 'unknown'}
 
 Return exactly this JSON shape:
-{"content_type":"UGC|Founder Clip|Tutorial|Behind the Scenes|High Production|Testimonial|Product Demo|Other","confidence":"High|Medium|Low","summary":"2-3 sentences","tone":"string","topics":["string"],"scene_tags":["string"],"hook":"string or null","key_quotes":["string"],"ad_potential":"High|Medium|Low","ad_notes":"string","missing_info":"string or null","clip_segments":[{"label":"string","start_seconds":0,"end_seconds":5,"description":"string","scene_tags":["string"],"use_case":"string"}]}
+{"content_type":"UGC|Founder Clip|Tutorial|Behind the Scenes|High Production|Testimonial|Product Demo|Other","confidence":"High|Medium|Low","summary":"2-3 sentences","tone":"string","topics":["string"],"scene_tags":["string"],"hook":"string or null","key_quotes":["string"],"ad_potential":"High|Medium|Low","ad_notes":"string","missing_info":"string or null","clip_segments":[{"label":"HOOK|PROBLEM|AGITATE|SOLUTION|SOCIAL PROOF|CTA|BODY","start_seconds":0,"end_seconds":5,"description":"exactly what is said and shown in this segment","scene_tags":["specific tags for this segment"],"use_case":"how this clip would be used in an ad e.g. hook opener, product demo, testimonial close"}]}
 
-clip_segments: create 3-8 segments, each MUST be 2-7 seconds long, together covering the full ${duration}s video.`
+clip_segments rules:
+- Create 3-8 segments covering the FULL ${duration}s video with no gaps
+- Each segment MUST be 2-8 seconds long
+- Label each segment with its direct response ad role: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA, or BODY
+- description must quote exact words spoken if transcript available
+- scene_tags must be specific and searchable e.g. "product close-up", "before skin", "smiling creator", not generic
+- use_case must explain specifically how this clip serves a direct response ad`
       }],
     })
 
@@ -141,12 +147,24 @@ clip_segments: create 3-8 segments, each MUST be 2-7 seconds long, together cove
       end_seconds: seg.end_seconds,
       thumbnail_time: seg.start_seconds + (seg.end_seconds - seg.start_seconds) / 2,
       duration_seconds: seg.end_seconds - seg.start_seconds,
+      description: seg.description,
       analysis: {
         content_type: analysis.content_type,
         summary: seg.description,
-        scene_tags: seg.scene_tags || [],
+        scene_tags: [...(seg.scene_tags || []), ...(analysis.scene_tags || []).slice(0,3)],
         use_case: seg.use_case,
         ad_potential: analysis.ad_potential,
+        tone: analysis.tone,
+        hook: seg.label === 'HOOK' ? analysis.hook : null,
+        key_quotes: (analysis.key_quotes || []).filter((q:string) => {
+          const segStart = seg.start_seconds
+          const segEnd = seg.end_seconds
+          const transcript = autoTranscript || item.transcript || ''
+          return transcript.toLowerCase().includes(q.toLowerCase().substring(0,20))
+        }),
+        label: seg.label,
+        parent_title: item.title,
+        creator_context: item.creator ? `${item.creator}${item.creator_age ? ', '+item.creator_age : ''}` : null,
       },
     }))
 
