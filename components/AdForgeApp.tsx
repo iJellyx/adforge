@@ -129,106 +129,80 @@ function TagEditor({tags,onUpdate}:{tags:string[],onUpdate:(t:string[])=>void}){
 
 // ── FFmpeg MP4 Exporter ───────────────────────────────────────────────────
 function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
+  const [exporting,setExporting]=useState(false)
+  const [progress,setProgress]=useState(0)
+  const [msg,setMsg]=useState("")
+  const [done,setDone]=useState(false)
+
   const clips=(sections||[]).map((s:any)=>{
     const item=s.selectedClipId?libraryItems.find((i:Item)=>i.id===s.selectedClipId):null
     if(!item?.mux_playback_id)return null
-    return{item,label:s.type||s.label||""}
+    return{item,label:s.type||s.label||"",selectedClipId:s.selectedClipId}
   }).filter(Boolean)
 
-  function downloadClip(clip:any){
-    const url=`https://stream.mux.com/${clip.item.mux_playback_id}/high.mp4`
-    const a=document.createElement("a")
-    a.href=url
-    a.download=`${clip.item.title||clip.label}.mp4`
-    a.target="_blank"
-    a.click()
-  }
+  async function doExport(){
+    if(!clips.length){alert("No clips assigned — assign clips to sections first.");return}
+    setExporting(true);setDone(false);setProgress(10);setMsg("Sending to server…")
+    try{
+      const itemIds=clips.map((c:any)=>c.item.id)
+      setProgress(20);setMsg("Downloading clips from Mux…")
 
-  function downloadAll(){
-    clips.forEach((clip:any,i:number)=>{
-      setTimeout(()=>downloadClip(clip),i*800)
-    })
-    if(voiceoverUrl){
-      setTimeout(()=>{
-        const a=document.createElement("a")
-        a.href=voiceoverUrl
-        a.download="voiceover.mp3"
-        a.click()
-      },clips.length*800)
+      const res=await fetch("/api/export",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          sections:sections.filter((s:any)=>s.selectedClipId),
+          itemIds,
+          voiceoverUrl:voiceoverUrl||null,
+          musicUrl:musicUrl||null,
+        })
+      })
+
+      if(!res.ok){
+        const err=await res.json()
+        throw new Error(err.error||`Server error: ${res.status}`)
+      }
+
+      setProgress(80);setMsg("Stitching clips…")
+      const blob=await res.blob()
+      setProgress(95);setMsg("Preparing download…")
+      const url=URL.createObjectURL(blob)
+      const a=document.createElement("a")
+      a.href=url
+      a.download=`adforge-ad-${Date.now()}.mp4`
+      a.click()
+      setTimeout(()=>URL.revokeObjectURL(url),15000)
+      setProgress(100);setMsg("✓ MP4 downloaded!");setDone(true)
+    }catch(e:any){
+      setMsg("Export failed: "+e.message)
+      console.error(e)
     }
+    setExporting(false)
   }
 
-  if(!clips.length)return(
-    <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20,marginTop:16}}>
-      <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>⬇️ Download Clips</div>
-      <div style={{fontSize:13,color:C.muted}}>Assign clips to sections above to enable downloads.</div>
+  const assignedCount=clips.length
+  const total=(sections||[]).length
+
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20,marginTop:16}}>
+    <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>⬇️ Export Final Ad as MP4</div>
+    <div style={{fontSize:13,color:C.muted,marginBottom:12}}>Stitches all clips{voiceoverUrl?" + voiceover":""}{musicUrl?" + music":""} into a single MP4 file on the server.</div>
+    <div style={{background:"#ffffff08",border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",fontSize:11,color:C.muted,marginBottom:12}}>⚠️ Requires Mux paid plan for MP4 access. Max ~60s of total ad length on Vercel's free plan.</div>
+    <div style={{display:"flex",gap:10,marginBottom:12,flexWrap:"wrap"}}>
+      <div style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"7px 12px",fontSize:12}}>🎬 {assignedCount}/{total} clips assigned</div>
+      {voiceoverUrl&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:8,padding:"7px 12px",fontSize:12,color:C.green}}>🎙️ Voiceover ready</div>}
+      {musicUrl&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"7px 12px",fontSize:12,color:C.accent}}>🎵 Music selected</div>}
     </div>
-  )
-
-  return(
-    <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20,marginTop:16}}>
-      <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>⬇️ Download Your Ad Clips</div>
-      <div style={{fontSize:13,color:C.muted,marginBottom:16}}>Download each clip as MP4 directly from Mux, then assemble them in your video editor (CapCut, Premiere, DaVinci Resolve etc).</div>
-
-      <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
-        <div style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"7px 12px",fontSize:12}}>🎬 {clips.length} clips ready</div>
-        {voiceoverUrl&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:8,padding:"7px 12px",fontSize:12,color:C.green}}>🎙️ Voiceover included</div>}
-        {musicUrl&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"7px 12px",fontSize:12,color:C.accent}}>🎵 Music selected</div>}
-      </div>
-
-      {/* Individual clip downloads */}
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
-        {clips.map((clip:any,i:number)=>{
-          const sc=secColor(clip.label)
-          return(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:C.surface,borderRadius:10,border:"1px solid "+C.border}}>
-              <div style={{width:36,height:64,borderRadius:6,overflow:"hidden",background:"#111",flexShrink:0}}>
-                {clip.item.mux_playback_id&&<img src={muxThumb(clip.item.mux_playback_id,clip.item.thumbnail_time||0)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>}
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{background:sc.bg,color:sc.color,fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:3,display:"inline-block",marginBottom:3}}>{clip.label}</div>
-                <div style={{fontSize:12,fontWeight:600,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{clip.item.title}</div>
-                <div style={{fontSize:10,color:C.muted}}>{fmt(clip.item.duration_seconds)}</div>
-              </div>
-              <button onClick={()=>downloadClip(clip)} style={{background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0}}>⬇️ MP4</button>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Voiceover download */}
-      {voiceoverUrl&&(
-        <div style={{marginBottom:16,padding:"10px 12px",background:C.surface,borderRadius:10,border:"1px solid "+C.border}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover</div>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <audio src={voiceoverUrl} controls style={{flex:1,height:32}}/>
-            <a href={voiceoverUrl} download="voiceover.mp3" style={{background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,textDecoration:"none",flexShrink:0}}>⬇️ MP3</a>
-          </div>
-        </div>
-      )}
-
-      {/* Music download */}
-      {musicUrl&&(
-        <div style={{marginBottom:16,padding:"10px 12px",background:C.surface,borderRadius:10,border:"1px solid "+C.border}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Background Music</div>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <audio src={musicUrl} controls style={{flex:1,height:32}}/>
-            <a href={musicUrl} download="background-music.mp3" style={{background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,textDecoration:"none",flexShrink:0}}>⬇️ MP3</a>
-          </div>
-        </div>
-      )}
-
-      {/* Download all */}
-      <Btn onClick={downloadAll} style={{background:C.green,color:"#000",fontWeight:700,width:"100%",padding:14,fontSize:15,borderRadius:12}}>
-        ⬇️ Download All Clips{voiceoverUrl?" + Voiceover":""}
-      </Btn>
-
-      <div style={{marginTop:12,background:"#ffffff08",border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",fontSize:11,color:C.muted}}>
-        💡 Import these clips into CapCut, DaVinci Resolve, Premiere or any editor to assemble your final ad. The order above matches your script sections.
-      </div>
-    </div>
-  )
+    {exporting&&<div style={{marginBottom:14}}>
+      <div style={{height:6,background:C.border,borderRadius:4,overflow:"hidden",marginBottom:8}}><div style={{height:"100%",width:progress+"%",background:C.green,borderRadius:4,transition:"width 0.5s"}}/></div>
+      <div style={{fontSize:12,color:C.muted}}>{msg}</div>
+    </div>}
+    {!exporting&&msg&&<div style={{fontSize:13,color:done?C.green:C.red,marginBottom:12,fontWeight:600}}>{msg}</div>}
+    <Btn onClick={doExport} disabled={exporting||assignedCount===0} style={{background:exporting?C.border:C.green,color:exporting?"#aaa":"#000",fontWeight:700,width:"100%",padding:14,fontSize:15,borderRadius:12}}>
+      {exporting?`⏳ ${msg}`:"⬇️ Download MP4"}
+    </Btn>
+  </div>
 }
+
 // ── Voiceover Generator ───────────────────────────────────────────────────
 function VoiceoverGenerator({sections,savedVoiceoverUrl,onSave,onSkip}:any){
   const [voices,setVoices]=useState<any[]>([])
