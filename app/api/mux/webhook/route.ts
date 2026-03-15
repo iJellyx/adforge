@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   let autoTranscript = ''
   if (playbackId && process.env.DEEPGRAM_API_KEY) {
     try {
-      const audioUrl = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`
+      const audioUrl = `https://stream.mux.com/${playbackId}.m3u8`
       const tRes = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true', {
         method: 'POST',
         headers: {
@@ -59,9 +59,13 @@ export async function POST(req: NextRequest) {
       if (tRes.ok) {
         const tData = await tRes.json()
         autoTranscript = tData.results?.channels?.[0]?.alternatives?.[0]?.transcript || ''
+        console.log('Deepgram transcript length:', autoTranscript.length)
+      } else {
+        const errText = await tRes.text()
+        console.log('Deepgram error:', tRes.status, errText.substring(0,200))
       }
-    } catch (e) {
-      console.log('Transcription failed, continuing without transcript')
+    } catch (e:any) {
+      console.log('Transcription failed:', e.message)
     }
   }
 
