@@ -141,46 +141,65 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
   }).filter(Boolean)
 
   async function doExport(){
-    if(!clips.length){alert("No clips assigned — assign clips to sections first.");return}
-    setExporting(true);setDone(false);setProgress(10);setMsg("Sending to server…")
-    try{
-      const itemIds=clips.map((c:any)=>c.item.id)
-      setProgress(20);setMsg("Downloading clips from Mux…")
-
-      const res=await fetch("/api/export",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          sections:sections.filter((s:any)=>s.selectedClipId),
-          itemIds,
-          voiceoverUrl:voiceoverUrl||null,
-          musicUrl:musicUrl||null,
-        })
+  if(!clips.length){alert("No clips assigned.");return}
+  setExporting(true);setDone(false);setProgress(10);setMsg("Submitting to Shotstack…")
+  try{
+    const itemIds=clips.map((c:any)=>c.item.id)
+    const res=await fetch("/api/export",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        sections:sections.filter((s:any)=>s.selectedClipId),
+        itemIds,
+        voiceoverUrl:voiceoverUrl||null,
+        musicUrl:musicUrl||null,
       })
+    })
+    const rawText=await res.text()
+    let data:any
+    try{data=JSON.parse(rawText)}catch{throw new Error(rawText.substring(0,200))}
+    if(!res.ok)throw new Error(data.error||`Server error: ${res.status}`)
 
-      if(!res.ok){
-        const rawText=await res.text()
-        let errMsg=`Server error: ${res.status}`
-        try{const parsed=JSON.parse(rawText);errMsg=parsed.error||errMsg}catch{errMsg=rawText.substring(0,200)||errMsg}
-        throw new Error(errMsg)
-      }
-
-      setProgress(80);setMsg("Stitching clips…")
-      const blob=await res.blob()
-      setProgress(95);setMsg("Preparing download…")
-      const url=URL.createObjectURL(blob)
+    if(data.url){
+      // Render completed within timeout — download directly
+      setProgress(95);setMsg("Downloading…")
       const a=document.createElement("a")
-      a.href=url
+      a.href=data.url
       a.download=`adforge-ad-${Date.now()}.mp4`
+      a.target="_blank"
       a.click()
-      setTimeout(()=>URL.revokeObjectURL(url),15000)
-      setProgress(100);setMsg("✓ MP4 downloaded!");setDone(true)
-    }catch(e:any){
-      setMsg("Export failed: "+e.message)
-      console.error(e)
+      setProgress(100);setMsg("✓ MP4 ready!");setDone(true)
+    } else if(data.renderId){
+      // Still rendering — poll from client
+      setProgress(50);setMsg("Rendering video… (this takes 1–2 mins)")
+      const renderId=data.renderId
+      const apiKey=process.env.NEXT_PUBLIC_SHOTSTACK_API_KEY||""
+      let attempts=0
+      while(attempts<40){
+        await new Promise(r=>setTimeout(r,4000))
+        const statusRes=await fetch(`/api/export/status?id=${renderId}`)
+        const statusData=await statusRes.json()
+        if(statusData.url){
+          setProgress(95);setMsg("Downloading…")
+          const a=document.createElement("a")
+          a.href=statusData.url
+          a.download=`adforge-ad-${Date.now()}.mp4`
+          a.target="_blank"
+          a.click()
+          setProgress(100);setMsg("✓ MP4 ready!");setDone(true)
+          break
+        }
+        if(statusData.failed)throw new Error("Render failed on Shotstack")
+        attempts++
+        setProgress(50+Math.round(attempts/40*40));setMsg(`Rendering… ${Math.round((attempts/40)*100)}%`)
+      }
     }
-    setExporting(false)
+  }catch(e:any){
+    setMsg("Export failed: "+e.message)
+    console.error(e)
   }
+  setExporting(false)
+}
 
   const assignedCount=clips.length
   const total=(sections||[]).length
