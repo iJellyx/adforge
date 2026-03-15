@@ -752,35 +752,61 @@ function LibraryTab({items,onRefresh,view,setView}:{items:Item[],onRefresh:()=>v
   const [filterGenders,setFilterGenders]=useState<string[]>([])
   const [filterAdPotential,setFilterAdPotential]=useState<string[]>([])
   const [filterDuration,setFilterDuration]=useState<string[]>([])
-  const [uploading,setUploading]=useState(false)
-  const [uploadProgress,setUploadProgress]=useState(0)
-  const [uploadMsg,setUploadMsg]=useState("")
-  const [uploadForm,setUploadForm]=useState({title:"",creator:"",creatorAge:"",creatorGender:"",description:"",transcript:""})
-  const [uploadFile,setUploadFile]=useState<File|null>(null)
   const [dragOver,setDragOver]=useState(false)
+  const [uploadQueue,setUploadQueue]=useState<any[]>([])
 
-  function setUF(k:string,v:string){setUploadForm(x=>({...x,[k]:v}))}
+  function addFiles(files:File[]){
+    const newEntries=files.map(file=>({
+      id:Date.now()+Math.random(),
+      file,
+      title:file.name.replace(/\.[^/.]+$/,"").replace(/[_-]+/g," "),
+      creator:"",
+      creatorAge:"",
+      creatorGender:"",
+      status:"pending",
+      progress:0,
+      msg:"",
+      previewUrl:null,
+    }))
+    setUploadQueue(prev=>[...prev,...newEntries])
+  }
+
+  function updateQueue(idx:number,update:any){setUploadQueue(prev=>prev.map((e,i)=>i===idx?{...e,...update}:e))}
+  function removeFromQueue(idx:number){setUploadQueue(prev=>prev.filter((_,i)=>i!==idx))}
+
+  async function uploadSingle(idx:number){
+    const entry=uploadQueue[idx]
+    if(!entry||!entry.title?.trim())return
+    updateQueue(idx,{status:"uploading",progress:5,msg:"Creating record…"})
+    try{
+      const res=await fetch("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:entry.file.name,contentType:entry.file.type,metadata:{title:entry.title,creator:entry.creator,creatorAge:entry.creatorAge,creatorGender:entry.creatorGender}})})
+      const{itemId,uploadUrl,error}=await res.json()
+      if(error)throw new Error(error)
+      updateQueue(idx,{progress:10,msg:"Uploading video…"})
+      await new Promise<void>((resolve,reject)=>{
+        const xhr=new XMLHttpRequest()
+        xhr.upload.onprogress=e=>{if(e.lengthComputable)updateQueue(idx,{progress:10+Math.round((e.loaded/e.total)*75),msg:"Uploading…"})}
+        xhr.onload=()=>resolve()
+        xhr.onerror=()=>reject(new Error("Upload failed"))
+        xhr.open("PUT",uploadUrl)
+        xhr.setRequestHeader("Content-Type",entry.file.type)
+        xhr.send(entry.file)
+      })
+      updateQueue(idx,{status:"done",progress:100,msg:"Done! ✓"})
+      onRefresh()
+    }catch(e:any){
+      updateQueue(idx,{status:"error",msg:"Failed: "+e.message})
+    }
+  }
+
+  async function uploadAll(){
+    const pending=uploadQueue.map((_,i)=>i).filter(i=>uploadQueue[i].status==="pending"&&uploadQueue[i].title?.trim())
+    for(const idx of pending){await uploadSingle(idx)}
+  }
+
   const allCreators=[...new Set(items.map(i=>i.creator).filter(Boolean))] as string[]
   const activeFilterCount=filterCtypes.length+filterCreators.length+filterAges.length+filterGenders.length+filterAdPotential.length+filterDuration.length
   function clearFilters(){setFilterCtypes([]);setFilterCreators([]);setFilterAges([]);setFilterGenders([]);setFilterAdPotential([]);setFilterDuration([])}
-  function handleFile(file:File|null){if(!file||!file.type.startsWith("video/"))return;setUploadFile(file);const name=file.name.replace(/\.[^/.]+$/,"").replace(/[_-]+/g," ");if(!uploadForm.title)setUF("title",name)}
-
-  async function handleUpload(){
-    if(!uploadFile||!uploadForm.title.trim())return
-    setUploading(true);setUploadProgress(5);setUploadMsg("Creating record…")
-    try{
-      const res=await fetch("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:uploadFile.name,contentType:uploadFile.type,metadata:uploadForm})})
-      const{itemId,uploadUrl,error}=await res.json()
-      if(error)throw new Error(error)
-      setUploadProgress(10);setUploadMsg("Uploading video…")
-      await new Promise<void>((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.upload.onprogress=e=>{if(e.lengthComputable)setUploadProgress(10+Math.round((e.loaded/e.total)*70))};xhr.onload=()=>resolve();xhr.onerror=()=>reject(new Error("Upload failed"));xhr.open("PUT",uploadUrl);xhr.setRequestHeader("Content-Type",uploadFile.type);xhr.send(uploadFile)})
-      setUploadProgress(85);setUploadMsg("Processing + AI analysis… (1–3 mins)")
-      let attempts=0;while(attempts<60){await new Promise(r=>setTimeout(r,5000));const sr=await fetch(`/api/items/${itemId}/status`);const status=await sr.json();if(status.mux_status==="ready"){setUploadProgress(100);setUploadMsg("Done! ✓");break}if(status.mux_status==="errored")throw new Error("Video processing failed");attempts++}
-      onRefresh();setView("grid");setUploadFile(null);setUploadForm({title:"",creator:"",creatorAge:"",creatorGender:"",description:"",transcript:""})
-    }catch(e:any){alert("Upload failed: "+e.message)}
-    setUploading(false)
-  }
-
   async function handleDelete(id:string){const item=items.find(i=>i.id===id);await supabase.from("items").delete().in("id",[id,...(item?.clip_ids||[])]);onRefresh();setSelected(null);setView("grid")}
   async function bulkDelete(){if(!window.confirm(`Delete ${selectedIds.length} item(s)?`))return;setDeleting(true);const gone=new Set(selectedIds);selectedIds.forEach(id=>{const item=items.find(i=>i.id===id);(item?.clip_ids||[]).forEach(cid=>gone.add(cid))});await supabase.from("items").delete().in("id",Array.from(gone));onRefresh();setSelectMode(false);setSelectedIds([]);setDeleting(false)}
   async function updateTags(id:string,tags:string[]){const item=items.find(i=>i.id===id);const newAnalysis={...(item?.analysis||{}),scene_tags:tags};await supabase.from("items").update({analysis:newAnalysis}).eq("id",id);onRefresh();if(selected?.id===id)setSelected({...selected,analysis:newAnalysis})}
@@ -801,25 +827,67 @@ function LibraryTab({items,onRefresh,view,setView}:{items:Item[],onRefresh:()=>v
     return[item.title,item.creator,a.summary,a.tone,...(a.scene_tags||[]),...(a.topics||[])].some(f=>f&&String(f).toLowerCase().includes(q))
   }))
 
-  if(view==="add")return<div style={{maxWidth:660,margin:"0 auto",padding:28}}>
+  if(view==="add")return<div style={{maxWidth:860,margin:"0 auto",padding:28}}>
     <button onClick={()=>setView("grid")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back to Library</button>
-    <STitle size={22}>Add New Content</STitle>
-    <div style={{color:C.muted,fontSize:14,marginBottom:20}}>Upload a video — Claude will analyse, tag, and create clips automatically.</div>
-    <div onDrop={e=>{e.preventDefault();setDragOver(false);handleFile(e.dataTransfer.files[0])}} onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onClick={()=>{if(!uploadFile)fileRef.current?.click()}} style={{border:"2px dashed "+(dragOver?C.accent:C.border),borderRadius:14,padding:"28px 20px",textAlign:"center",cursor:uploadFile?"default":"pointer",background:dragOver?C.accentSoft:C.surface,marginBottom:20}}>
-      <input ref={fileRef} type="file" accept="video/*" style={{display:"none"}} onChange={e=>{handleFile(e.target.files?.[0]||null);e.target.value=""}}/>
-      {uploadFile?<div><div style={{fontSize:32,marginBottom:8}}>🎬</div><div style={{fontWeight:600,color:C.green,marginBottom:4}}>✓ {uploadFile.name}</div><div style={{fontSize:12,color:C.muted,marginBottom:8}}>{(uploadFile.size/1024/1024).toFixed(1)} MB</div><button onClick={e=>{e.stopPropagation();setUploadFile(null)}} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"3px 11px",cursor:"pointer",fontSize:12}}>Remove</button></div>:<div><div style={{fontSize:34,marginBottom:8}}>🎬</div><div style={{fontWeight:600,marginBottom:4}}>Drop video or click to upload</div><div style={{fontSize:12,color:C.muted}}>MP4, MOV, WebM supported</div></div>}
+    <STitle size={22}>Add Content</STitle>
+    <div style={{color:C.muted,fontSize:14,marginBottom:24}}>Upload one or more videos. AI will automatically transcribe, analyse, and create clips from each one.</div>
+
+    {/* Drop zone */}
+    <div onDrop={e=>{e.preventDefault();setDragOver(false);const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith("video/"));if(files.length>0)addFiles(files)}} onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onClick={()=>fileRef.current?.click()} style={{border:"2px dashed "+(dragOver?C.accent:C.border),borderRadius:14,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:dragOver?C.accentSoft:C.surface,marginBottom:20,transition:"all 0.15s"}}>
+      <input ref={fileRef} type="file" accept="video/*" multiple style={{display:"none"}} onChange={e=>{const files=Array.from(e.target.files||[]).filter(f=>f.type.startsWith("video/"));if(files.length>0)addFiles(files);e.target.value=""}}/>
+      <div style={{fontSize:36,marginBottom:10}}>🎬</div>
+      <div style={{fontWeight:700,fontSize:16,marginBottom:6}}>Drop videos here or click to select</div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:4}}>MP4, MOV, WebM — select multiple files at once</div>
+      <div style={{fontSize:12,color:C.accent}}>✨ AI will auto-transcribe and analyse each video</div>
     </div>
-    <div style={{marginBottom:14}}><Label>Title *</Label><Input value={uploadForm.title} onChange={(e:any)=>setUF("title",e.target.value)} placeholder="e.g. Sarah UGC Serum Review"/></div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:14}}>
-      <div><Label>Creator</Label><Input value={uploadForm.creator} onChange={(e:any)=>setUF("creator",e.target.value)} placeholder="e.g. Sarah"/></div>
-      <div><Label>Age Range</Label><select value={uploadForm.creatorAge} onChange={e=>setUF("creatorAge",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}><option value="">Unknown</option>{AGE_RANGES.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
-      <div><Label>Gender</Label><select value={uploadForm.creatorGender} onChange={e=>setUF("creatorGender",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}><option value="">Unknown</option>{GENDERS.map(g=><option key={g} value={g}>{g}</option>)}</select></div>
-    </div>
-    <div style={{marginBottom:14}}><Label>Description (optional)</Label><Input textarea value={uploadForm.description} onChange={(e:any)=>setUF("description",e.target.value)} placeholder="What's on screen?" rows={2}/></div>
-    <div style={{marginBottom:8}}><Label>Transcript (optional — greatly improves analysis)</Label><Input textarea value={uploadForm.transcript} onChange={(e:any)=>setUF("transcript",e.target.value)} placeholder="Paste what the creator says…" rows={4}/></div>
-    <div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"8px 12px",fontSize:11,color:C.accent,marginBottom:20}}>💡 Adding a transcript significantly improves AI tagging and clip quality</div>
-    {uploading&&<div style={{marginBottom:16}}><div style={{height:6,background:C.border,borderRadius:4,marginBottom:8,overflow:"hidden"}}><div style={{height:"100%",width:uploadProgress+"%",background:C.accent,borderRadius:4,transition:"width 0.3s"}}/></div><div style={{fontSize:12,color:C.muted}}>{uploadMsg}</div></div>}
-    <Btn onClick={handleUpload} disabled={uploading||!uploadFile||!uploadForm.title.trim()} style={{background:uploading||!uploadFile||!uploadForm.title.trim()?C.border:C.accent,color:"#fff",width:"100%",padding:14,fontSize:15,borderRadius:12}}>{uploading?`⏳ ${uploadMsg}`:"✨ Upload & Analyse"}</Btn>
+
+    {/* Upload queue */}
+    {uploadQueue.length>0&&<div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:20}}>
+      {uploadQueue.map((entry:any,idx:number)=><div key={entry.id} style={{background:C.card,border:"1px solid "+(entry.status==="done"?C.green:entry.status==="error"?"#ef4444":C.border),borderRadius:12,padding:16}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+          {/* Thumbnail preview */}
+          <div style={{width:48,height:48,borderRadius:8,background:"#111",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>
+            {entry.previewUrl?<img src={entry.previewUrl} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🎬"}
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            {/* Title field */}
+            {entry.status==="pending"||entry.status==="uploading"?<input value={entry.title} onChange={e=>updateQueue(idx,{title:e.target.value})} placeholder="Video title *" style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"6px 10px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const,marginBottom:6}}/> :<div style={{fontWeight:600,fontSize:13,marginBottom:4}}>{entry.title}</div>}
+            {/* Creator + age + gender in one row */}
+            {entry.status==="pending"&&<div style={{display:"flex",gap:6,marginBottom:6}}>
+              <input value={entry.creator} onChange={e=>updateQueue(idx,{creator:e.target.value})} placeholder="Creator name" style={{flex:2,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"5px 8px",color:C.text,fontSize:12,outline:"none"}}/>
+              <select value={entry.creatorAge} onChange={e=>updateQueue(idx,{creatorAge:e.target.value})} style={{flex:1,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"5px 8px",color:C.text,fontSize:12,outline:"none",cursor:"pointer"}}>
+                <option value="">Age</option>{AGE_RANGES.map(a=><option key={a} value={a}>{a}</option>)}
+              </select>
+              <select value={entry.creatorGender} onChange={e=>updateQueue(idx,{creatorGender:e.target.value})} style={{flex:1,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"5px 8px",color:C.text,fontSize:12,outline:"none",cursor:"pointer"}}>
+                <option value="">Gender</option>{GENDERS.map(g=><option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>}
+            {/* Progress */}
+            {(entry.status==="uploading"||entry.status==="processing")&&<div>
+              <div style={{height:4,background:C.border,borderRadius:4,overflow:"hidden",marginBottom:4}}><div style={{height:"100%",width:entry.progress+"%",background:C.accent,borderRadius:4,transition:"width 0.3s"}}/></div>
+              <div style={{fontSize:11,color:C.muted}}>{entry.msg}</div>
+            </div>}
+            {entry.status==="done"&&<div style={{fontSize:12,color:C.green,fontWeight:600}}>✓ Uploaded — AI is analysing in the background (1-3 mins)</div>}
+            {entry.status==="error"&&<div style={{fontSize:12,color:"#ef4444"}}>{entry.msg}</div>}
+          </div>
+          <div style={{display:"flex",gap:6,flexShrink:0}}>
+            {entry.status==="pending"&&<Btn onClick={()=>uploadSingle(idx)} disabled={!entry.title?.trim()} style={{background:C.accent,color:"#fff",fontSize:12,padding:"6px 12px"}}>Upload</Btn>}
+            {entry.status==="pending"&&<Btn onClick={()=>removeFromQueue(idx)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"6px 10px"}}>✕</Btn>}
+          </div>
+        </div>
+      </div>)}
+    </div>}
+
+    {/* Upload all button */}
+    {uploadQueue.filter((e:any)=>e.status==="pending").length>1&&<Btn onClick={uploadAll} disabled={uploadQueue.some((e:any)=>e.status==="uploading")} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:15,borderRadius:12,marginBottom:12}}>
+      ✨ Upload All {uploadQueue.filter((e:any)=>e.status==="pending").length} Videos
+    </Btn>}
+
+    {/* Success summary */}
+    {uploadQueue.filter((e:any)=>e.status==="done").length>0&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:10,padding:"12px 16px",fontSize:13,color:C.green,marginBottom:12}}>
+      ✓ {uploadQueue.filter((e:any)=>e.status==="done").length} video{uploadQueue.filter((e:any)=>e.status==="done").length!==1?"s":""} uploaded — AI is transcribing and analysing in the background. Check your library in 1-3 minutes.
+      <button onClick={()=>{onRefresh();setView("grid")}} style={{background:"none",border:"none",color:C.green,cursor:"pointer",fontSize:13,fontWeight:700,textDecoration:"underline",marginLeft:8}}>View Library →</button>
+    </div>}
   </div>
 
   if(view==="detail"&&selected){
