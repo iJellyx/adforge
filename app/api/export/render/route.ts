@@ -6,24 +6,39 @@ const SHOTSTACK_ENV = process.env.SHOTSTACK_ENV || 'stage'
 const SHOTSTACK_BASE = `https://api.shotstack.io/${SHOTSTACK_ENV}`
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   try {
-    const { sections, itemIds, voiceoverUrl, musicUrl } = await req.json()
+    const { adId } = await req.json()
     const supabase = createServiceClient()
 
-    // Fetch items from DB
+    // Get the forged ad
+    const { data: ad } = await supabase
+      .from('forged_ads')
+      .select('*')
+      .eq('id', adId)
+      .single()
+
+    if (!ad) return NextResponse.json({ error: 'Ad not found' }, { status: 404 })
+
+    const sections = ad.sections || []
+    const itemIds = sections.map((s: any) => s.selectedClipId).filter(Boolean)
+
+    if (!itemIds.length) {
+      return NextResponse.json({ error: 'No clips assigned' }, { status: 400 })
+    }
+
+    // Fetch items
     const { data: items } = await supabase
       .from('items')
-      .select('id, mux_playback_id, start_seconds, end_seconds, duration_seconds, title')
+      .select('id, mux_playback_id, start_seconds, end_seconds, duration_seconds')
       .in('id', itemIds)
 
-    if (!items || !items.length) {
+    if (!items?.length) {
       return NextResponse.json({ error: 'No items found' }, { status: 400 })
     }
 
-    // Build ordered clips from sections
+    // Build clips
     const clips = sections
       .map((s: any) => {
         const item = items.find((i: any) => i.id === s.selectedClipId)
@@ -31,15 +46,15 @@ export async function POST(req: NextRequest) {
         const start = item.start_seconds || 0
         const end = item.end_seconds || item.duration_seconds || 5
         const duration = Math.max(0.5, end - start)
-        return { item, start, duration, label: s.type || s.label || '' }
+        return { item, start, duration }
       })
       .filter(Boolean)
 
     if (!clips.length) {
-      return NextResponse.json({ error: 'No clips assigned' }, { status: 400 })
+      return NextResponse.json({ error: 'No valid clips' }, { status: 400 })
     }
 
-    // Build Shotstack timeline tracks
+    // Build Shotstack timeline
     const videoClips = clips.map((clip: any, i: number) => ({
       asset: {
         type: 'video',
@@ -52,36 +67,30 @@ export async function POST(req: NextRequest) {
     }))
 
     const tracks: any[] = [{ clips: videoClips }]
-
-    // Add voiceover track
-    if (voiceoverUrl) {
-      tracks.push({
-        clips: [{
-          asset: { type: 'audio', src: voiceoverUrl, volume: 1 },
-          start: 0,
-          length: clips.reduce((acc: number, c: any) => acc + c.duration, 0),
-        }]
-      })
-    }
-
-    // Add music track at low volume
-    if (musicUrl) {
-      tracks.push({
-        clips: [{
-          asset: { type: 'audio', src: musicUrl, volume: 0.15 },
-          start: 0,
-          length: clips.reduce((acc: number, c: any) => acc + c.duration, 0),
-        }]
-      })
-    }
-
     const totalDuration = clips.reduce((acc: number, c: any) => acc + c.duration, 0)
 
-    // Build Shotstack payload
+    if (ad.voiceover_url) {
+      tracks.push({
+        clips: [{
+          asset: { type: 'audio', src: ad.voiceover_url, volume: 1 },
+          start: 0,
+          length: totalDuration,
+        }]
+      })
+    }
+
+    if (ad.music_url) {
+      tracks.push({
+        clips: [{
+          asset: { type: 'audio', src: ad.music_url, volume: 0.15 },
+          start: 0,
+          length: totalDuration,
+        }]
+      })
+    }
+
     const payload = {
-      timeline: {
-        tracks,
-      },
+      timeline: { tracks },
       output: {
         format: 'mp4',
         resolution: 'hd',
@@ -90,7 +99,7 @@ export async function POST(req: NextRequest) {
       },
     }
 
-    // Submit render job to Shotstack
+    // Submit to Shotstack
     const renderRes = await fetch(`${SHOTSTACK_BASE}/render`, {
       method: 'POST',
       headers: {
@@ -103,38 +112,22 @@ export async function POST(req: NextRequest) {
     const renderData = await renderRes.json()
 
     if (!renderRes.ok || !renderData.response?.id) {
-      console.error('Shotstack submit error:', renderData)
-      return NextResponse.json({ error: renderData.response?.message || 'Shotstack submission failed' }, { status: 500 })
+      await supabase.from('forged_ads').update({ render_status: 'failed' }).eq('id', adId)
+      return NextResponse.json({ error: 'Shotstack submission failed' }, { status: 500 })
     }
 
     const renderId = renderData.response.id
 
-    // Poll for completion (max 55 seconds)
-    const start = Date.now()
-    while (Date.now() - start < 55000) {
-      await new Promise(r => setTimeout(r, 3000))
+    // Save render ID to DB
+    await supabase.from('forged_ads').update({
+      render_id: renderId,
+      render_status: 'rendering',
+      updated_at: new Date().toISOString(),
+    }).eq('id', adId)
 
-      const statusRes = await fetch(`${SHOTSTACK_BASE}/render/${renderId}`, {
-        headers: { 'x-api-key': SHOTSTACK_API_KEY },
-      })
-      const statusData = await statusRes.json()
-      const status = statusData.response?.status
-
-      if (status === 'done') {
-        const url = statusData.response.url
-        return NextResponse.json({ renderId, url })
-      }
-
-      if (status === 'failed') {
-        return NextResponse.json({ error: 'Render failed on Shotstack' }, { status: 500 })
-      }
-    }
-
-    // If we hit the timeout, return the render ID so client can poll
-    return NextResponse.json({ renderId, polling: true })
-
+    return NextResponse.json({ renderId, status: 'rendering' })
   } catch (e: any) {
-    console.error('Export error:', e)
+    console.error('Background render error:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }

@@ -16,7 +16,7 @@ type Script = { id: string; product_name?: string; metadata?: any; sections?: an
 type BrandProfile = { id?: string; name: string; website: string; description: string; voice: string; target_customer: string; reviews: string; additional_info: string; customer_avatars: CustomerAvatar[] }
 type CustomerAvatar = { id: string; name: string; age: string; gender: string; description: string; pains: string; desires: string; objections: string }
 type Product = { id?: string; name: string; description: string; benefits: string; target_customer: string; claims: string; ingredients: string; differentiators: string; reviews: string; notes: string; price: string; url: string }
-type ForgedAd = { id: string; title: string; status: 'draft'|'complete'; mode?: 'script'|'broll'; script_id?: string; sections?: any[]; voiceover_url?: string; voiceover_voice?: string; music_url?: string; music_name?: string; metadata?: any; created_at?: string; updated_at?: string }
+type ForgedAd = { id: string; title: string; status: 'draft'|'complete'; mode?: 'script'|'broll'; script_id?: string; sections?: any[]; voiceover_url?: string; voiceover_voice?: string; music_url?: string; music_name?: string; render_id?: string; render_url?: string; render_status?: string; metadata?: any; created_at?: string; updated_at?: string }
 
 const C = { bg:"#0a0a0f",surface:"#13131a",card:"#1a1a24",border:"#2a2a3a",accent:"#6c63ff",accentSoft:"#6c63ff22",text:"#f0f0f5",muted:"#7a7a9a",green:"#22c55e",yellow:"#f59e0b",red:"#ef4444" }
 const GENDERS = ["Male","Female","Non-binary","Other"]
@@ -161,12 +161,15 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     if(!res.ok)throw new Error(data.error||`Server error: ${res.status}`)
 
     if(data.url){
-      // Render completed within timeout — download directly
-      setProgress(95);setMsg("Downloading…")
+      setProgress(95);setMsg("Downloading MP4…")
+      const dlRes=await fetch(`/api/export/status?id=${data.renderId}&download=true`)
+      const blob=await dlRes.blob()
+      const blobUrl=URL.createObjectURL(blob)
       const a=document.createElement("a")
-      a.href=data.url
+      a.href=blobUrl
       a.download=`adforge-ad-${Date.now()}.mp4`
       a.click()
+      setTimeout(()=>URL.revokeObjectURL(blobUrl),15000)
       setProgress(100);setMsg("✓ MP4 ready!");setDone(true)
     } else if(data.renderId){
       // Still rendering — poll from client
@@ -883,10 +886,18 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd}:
   }
 
   async function handleSaveForged(status:"draft"|"complete"){
-    const title=genMeta?.productName?`${genMeta.productName} — ${form.contentType||"Ad"}`:`${brand.name||"Ad"} — ${new Date().toLocaleDateString()}`
-    await onSaveForgedAd({title,status,mode:"script",sections,voiceover_url:voiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName}})
-    setView("list")
+  const title=genMeta?.productName?`${genMeta.productName} — ${form.contentType||"Ad"}`:`${brand.name||"Ad"} — ${new Date().toLocaleDateString()}`
+  const adData={title,status,mode:"script" as const,sections,voiceover_url:voiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName}}
+  const savedAd=await onSaveForgedAd(adData)
+  if(savedAd?.id){
+    fetch("/api/export/render",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({adId:savedAd.id})
+    }).catch(e=>console.error("Background render error:",e))
   }
+  setView("list")
+}
 
   async function handleDeleteScript(id:string){const supabase=createClient();await supabase.from("scripts").delete().eq("id",id);onSaveScripts(scripts.filter((s:Script)=>s.id!==id));setView("list")}
 
@@ -1055,6 +1066,85 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd}:
   return null
 }
 
+function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
+  const [checking,setChecking]=useState(false)
+  const [downloading,setDownloading]=useState(false)
+  const [msg,setMsg]=useState("")
+
+  useEffect(()=>{
+    // Auto-check status when opened
+    if(ad.render_status==="rendering")checkStatus()
+  },[])
+
+  async function checkStatus(){
+    setChecking(true)
+    try{
+      const res=await fetch("/api/export/check",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:ad.id})})
+      const data=await res.json()
+      if(data.status==="ready"||data.status==="rendering"||data.status==="failed"){
+        onRefresh()
+      }
+    }catch(e){console.error(e)}
+    setChecking(false)
+  }
+
+  async function startRender(){
+    setMsg("Starting render…")
+    try{
+      await fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:ad.id})})
+      onRefresh()
+      setMsg("Rendering started — check back in 1-2 mins")
+    }catch(e:any){setMsg("Error: "+e.message)}
+  }
+
+  async function downloadMp4(){
+    if(!ad.render_url)return
+    setDownloading(true);setMsg("Downloading…")
+    try{
+      const res=await fetch(ad.render_url)
+      const blob=await res.blob()
+      const url=URL.createObjectURL(blob)
+      const a=document.createElement("a")
+      a.href=url
+      a.download=`${ad.title||"adforge-ad"}.mp4`
+      a.click()
+      setTimeout(()=>URL.revokeObjectURL(url),15000)
+      setMsg("✓ Downloaded!")
+    }catch(e:any){setMsg("Download failed: "+e.message)}
+    setDownloading(false)
+  }
+
+  const renderStatus=ad.render_status||"pending"
+
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20,marginTop:16}}>
+    <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>⬇️ Download MP4</div>
+
+    {renderStatus==="pending"&&<div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:12}}>Render not started yet.</div>
+      <Btn onClick={startRender} style={{background:C.accent,color:"#fff",width:"100%",padding:12}}>{msg||"🎬 Start Rendering"}</Btn>
+    </div>}
+
+    {renderStatus==="rendering"&&<div>
+      <div style={{background:"#f59e0b11",border:"1px solid #f59e0b33",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#fbbf24",marginBottom:12}}>⏳ Rendering in progress — usually takes 1-2 minutes.</div>
+      <div style={{display:"flex",gap:10}}>
+        <Btn onClick={checkStatus} disabled={checking} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",flex:1}}>{checking?"Checking…":"🔄 Check Status"}</Btn>
+      </div>
+      {msg&&<div style={{fontSize:12,color:C.muted,marginTop:8}}>{msg}</div>}
+    </div>}
+
+    {renderStatus==="ready"&&<div>
+      <div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:8,padding:"10px 14px",fontSize:13,color:C.green,marginBottom:12}}>✅ Your MP4 is ready to download!</div>
+      <Btn onClick={downloadMp4} disabled={downloading} style={{background:C.green,color:"#000",fontWeight:700,width:"100%",padding:14,fontSize:15,borderRadius:12}}>{downloading?"⏳ Downloading…":"⬇️ Download MP4"}</Btn>
+      {msg&&<div style={{fontSize:12,color:msg.includes("✓")?C.green:C.red,marginTop:8,fontWeight:600}}>{msg}</div>}
+    </div>}
+
+    {renderStatus==="failed"&&<div>
+      <div style={{background:"#ef444411",border:"1px solid #ef444433",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#ef4444",marginBottom:12}}>❌ Render failed. Try again.</div>
+      <Btn onClick={startRender} style={{background:C.accent,color:"#fff",width:"100%",padding:12}}>🔄 Retry Render</Btn>
+    </div>}
+  </div>
+}
+
 // ── Forged Ads Tab ────────────────────────────────────────────────────────
 function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefresh:()=>void}){
   const supabase=createClient()
@@ -1086,12 +1176,12 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
           </div>
           <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
         </div>
-        {previewAd.sections&&previewAd.sections.length>0&&<div style={{marginBottom:20}}><StitchedPreview sections={previewAd.sections} libraryItems={items}/></div>}
+        <ForgedAdDownload ad={previewAd} onRefresh={onRefresh}/>
         <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
           {previewAd.voiceover_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover · {previewAd.voiceover_voice}</div><audio src={previewAd.voiceover_url} controls style={{width:"100%",height:36}}/></div>}
           {previewAd.music_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls style={{width:"100%",height:36}}/></div>}
         </div>
-        {previewAd.sections&&previewAd.sections.length>0&&<ExportVideo sections={previewAd.sections} libraryItems={items} voiceoverUrl={previewAd.voiceover_url} musicUrl={previewAd.music_url}/>}
+        <ForgedAdDownload ad={previewAd} onRefresh={onRefresh}/>
       </div>
     </div>}
 
@@ -1233,9 +1323,10 @@ export default function AdForgeApp(){
   },[loadData])
 
   async function handleSaveForgedAd(ad:Omit<ForgedAd,"id">){
-    const{data}=await supabase.from("forged_ads").insert({...ad,updated_at:new Date().toISOString()}).select().single()
-    if(data)setForgedAds(prev=>[data,...prev])
-  }
+  const{data}=await supabase.from("forged_ads").insert({...ad,updated_at:new Date().toISOString()}).select().single()
+  if(data)setForgedAds(prev=>[data,...prev])
+  return data
+}
 
   async function handleSignOut(){await supabase.auth.signOut();window.location.href="/login"}
 
