@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         type: 'video',
         src: `https://stream.mux.com/${clip.item.mux_playback_id}/capped-1080p.mp4`,
         trim: clip.start,
-        volume: 1,
+        volume: clip.muted ? 0 : 1,
       },
       start: clips.slice(0, i).reduce((acc: number, c: any) => acc + c.duration, 0),
       length: clip.duration,

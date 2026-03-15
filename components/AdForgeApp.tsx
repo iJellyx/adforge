@@ -590,15 +590,25 @@ function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productN
   const [pickerIdx,setPickerIdx]=useState<number|null>(null)
   const [fillingIdx,setFillingIdx]=useState<number|null>(null)
   const [mutedClips,setMutedClips]=useState<Record<number,boolean>>({})
-  const [allMuted,setAllMuted]=useState(false)
+  const [allMuted,setAllMuted]=useState(!!voiceoverUrl)
 
   function updM(idx:number,obj:any){onChange(sections.map((s:any,i:number)=>i===idx?{...s,...obj}:s))}
   function upd(idx:number,key:string,val:any){onChange(sections.map((s:any,i:number)=>i===idx?{...s,[key]:val}:s))}
   function addRow(){onChange([...sections,{id:Date.now(),type:"BODY",spokenWords:"",visualDirection:"",matchedClipIds:[],selectedClipId:null,autoSelected:false}])}
   function removeRow(idx:number){onChange(sections.filter((_:any,i:number)=>i!==idx))}
   function move(idx:number,dir:number){const a=[...sections],t=idx+dir;if(t<0||t>=a.length)return;[a[idx],a[t]]=[a[t],a[idx]];onChange(a)}
-  function toggleMuteAll(){const next=!allMuted;setAllMuted(next);const m:Record<number,boolean>={};sections.forEach((_:any,i:number)=>{m[i]=next});setMutedClips(m)}
-  function toggleMuteClip(idx:number){setMutedClips(prev=>({...prev,[idx]:!prev[idx]}))}
+  function toggleMuteAll(){
+  const next=!allMuted;setAllMuted(next)
+  const m:Record<number,boolean>={}
+  sections.forEach((_:any,i:number)=>{m[i]=next})
+  setMutedClips(m)
+  onChange(sections.map((s:any,i:number)=>({...s,muted:next})))
+}
+function toggleMuteClip(idx:number){
+  const next=!mutedClips[idx]
+  setMutedClips(prev=>({...prev,[idx]:next}))
+  updM(idx,{muted:next})
+}
 
   async function autofillRow(idx:number){
     const row=sections[idx];setFillingIdx(idx)
