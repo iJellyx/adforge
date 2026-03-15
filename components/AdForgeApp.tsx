@@ -1357,17 +1357,10 @@ export default function AdForgeApp(){
   },[loadData])
 
   async function handleSaveForgedAd(ad:Omit<ForgedAd,"id">){
-    console.log("Saving forged ad:", ad.title)
-    const{data,error}=await supabase.from("forged_ads").insert({...ad,updated_at:new Date().toISOString()}).select().single()
-    console.log("Save result:", data, "Error:", error)
-    if(error){console.error("Save forged ad error:",error);return null}
-    if(data){
-      console.log("Saved successfully, loading data...")
-      await loadData()
-      console.log("Load complete, switching to forged tab")
-      setTab("forged")
-    }
-    return data
+  const{data,error}=await supabase.from("forged_ads").insert({...ad,updated_at:new Date().toISOString()}).select().single()
+  if(error){console.error("Save forged ad error:",error);return null}
+  if(data)setForgedAds(prev=>[data,...prev])
+  return data
 }
 
   async function handleSignOut(){await supabase.auth.signOut();window.location.href="/login"}
