@@ -851,6 +851,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [musicUrl,setMusicUrl]=useState<string|null>(null)
   const [musicName,setMusicName]=useState<string|null>(null)
   const [suggestedMood,setSuggestedMood]=useState("Uplifting")
+  const [adTitle,setAdTitle]=useState("")
   const [form,setForm]=useState({productId:"",awarenessStage:"problem_aware",contentType:"UGC",adLength:"30 seconds",customerAvatar:"",useAvatarId:"",painPoints:"",desires:"",objections:"",request:""})
   function setF(k:string,v:string){setForm(x=>({...x,[k]:v}))}
   const savedAvatars=(brand?.customer_avatars||[])
@@ -891,15 +892,33 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
     onSaveScripts([...scripts,data]);setSelected(data);setSections(sections);setView("detail")
   }
 
-  async function handleSaveForged(status:"draft"|"complete"){
-  const title=genMeta?.productName?`${genMeta.productName} — ${form.contentType||"Ad"}`:`${brand.name||"Ad"} — ${new Date().toLocaleDateString()}`
-  const adData={title,status,mode:"script" as const,sections,voiceover_url:voiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName}}
-  const savedAd=await onSaveForgedAd(adData)
-  if(savedAd?.id){
-    fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(e=>console.error("Background render error:",e))
+ async function handleSaveForged(status:"draft"|"complete"){
+    // Build auto-name if no custom title
+    const stage=form.awarenessStage?.split("_").map((w:string)=>w.charAt(0).toUpperCase()+w.slice(1)).join("")||"Ad"
+    const autoName=`${stage}_${form.contentType||"UGC"}_${(form.adLength||"30s").replace(" seconds","s")}_v1`
+    const title=adTitle.trim()||autoName
+
+    // Upload voiceover to Supabase Storage so Shotstack can access it
+    let finalVoiceoverUrl=voiceoverUrl
+    if(voiceoverUrl&&voiceoverUrl.startsWith("blob:")){
+      try{
+        const blob=await fetch(voiceoverUrl).then(r=>r.blob())
+        const file=new File([blob],"voiceover.mp3",{type:"audio/mpeg"})
+        const fd=new FormData();fd.append("file",file)
+        const res=await fetch("/api/voiceover/upload",{method:"POST",body:fd})
+        const d=await res.json()
+        if(d.url)finalVoiceoverUrl=d.url
+      }catch(e){console.error("Voiceover upload failed:",e)}
+    }
+
+    const adData={title,status,mode:"script" as const,sections,voiceover_url:finalVoiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName}}
+    const savedAd=await onSaveForgedAd(adData)
+    if(savedAd?.id){
+      fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(e=>console.error("Background render error:",e))
+    }
+    setAdTitle("")
+    onGoToForged()
   }
-  onGoToForged()
-}
 
   async function handleDeleteScript(id:string){const supabase=createClient();await supabase.from("scripts").delete().eq("id",id);onSaveScripts(scripts.filter((s:Script)=>s.id!==id));setView("list")}
 
@@ -1020,14 +1039,20 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
       </div>}
 
       {step==="preview"&&<div style={{maxWidth:860,margin:"0 auto"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
-          <button onClick={()=>setStep("music")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Back to Music</button>
-          <div style={{display:"flex",gap:10}}>
-            <Btn onClick={()=>handleSaveForged("draft")} style={{background:C.surface,color:C.text,border:"1px solid "+C.border}}>💾 Save Draft</Btn>
-            <Btn onClick={handleSaveScript} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44"}}>Save Script Only</Btn>
-            <Btn onClick={()=>handleSaveForged("complete")} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Mark Complete</Btn>
-          </div>
-        </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+                <button onClick={()=>setStep("music")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Back to Music</button>
+                <div style={{display:"flex",gap:10}}>
+                  <Btn onClick={()=>handleSaveForged("draft")} style={{background:C.surface,color:C.text,border:"1px solid "+C.border}}>💾 Save Draft</Btn>
+                  <Btn onClick={()=>handleSaveForged("complete")} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Mark Complete</Btn>
+                </div>
+              </div>
+              <div style={{marginBottom:20}}>
+                <Label>Ad Name (optional)</Label>
+                <input value={adTitle} onChange={e=>setAdTitle(e.target.value)}
+                  placeholder={`e.g. ${(STAGE_COLORS[form.awarenessStage]?"":"ProblemAware_")}${form.contentType||"UGC"}_${form.adLength?.replace(" seconds","s")||"30s"}_v1`}
+                  style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
+                <div style={{fontSize:11,color:C.muted,marginTop:5}}>Leave blank to auto-name e.g. <strong style={{color:C.text}}>{form.awarenessStage?.replace("_"," ")||"ProblemAware"}_{form.contentType||"UGC"}_{form.adLength?.replace(" seconds","s")||"30s"}_v1</strong></div>
+              </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
           <Card><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>🎙️ Voiceover</div>{voiceoverUrl?<><audio src={voiceoverUrl} controls style={{width:"100%",height:36,marginBottom:6}}/><div style={{fontSize:12,color:C.green}}>✓ {voiceoverVoice}</div><button onClick={()=>setStep("voiceover")} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline",padding:0,marginTop:4}}>Change</button></>:<div style={{fontSize:13,color:C.muted}}>No voiceover — <button onClick={()=>setStep("voiceover")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,textDecoration:"underline",padding:0}}>add one</button></div>}</Card>
           <Card><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>🎵 Music</div>{musicUrl?<><audio src={musicUrl} controls style={{width:"100%",height:36,marginBottom:6}}/><div style={{fontSize:12,color:C.green}}>✓ {musicName}</div><button onClick={()=>setStep("music")} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline",padding:0,marginTop:4}}>Change</button></>:<div style={{fontSize:13,color:C.muted}}>No music — <button onClick={()=>setStep("music")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,textDecoration:"underline",padding:0}}>add some</button></div>}</Card>
