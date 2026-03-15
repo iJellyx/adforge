@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   let autoTranscript = ''
   if (playbackId && process.env.DEEPGRAM_API_KEY) {
     try {
-      const audioUrl = `https://stream.mux.com/${playbackId}/audio.m4a`
+      const audioUrl = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`
       const tRes = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true', {
         method: 'POST',
         headers: {
@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       mux_playback_id: playbackId,
       mux_status: 'analysing',
       duration_seconds: duration,
+      ...(autoTranscript ? { transcript: autoTranscript } : {}),
     })
     .eq('id', itemId)
     .select()
