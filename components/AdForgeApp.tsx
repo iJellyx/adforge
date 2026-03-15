@@ -228,7 +228,7 @@ const blob=new Blob([new Uint8Array(data as unknown as ArrayBuffer)],{type:"vide
       setMsg("✓ MP4 downloaded!");setProgress(100);setDone(true)
     }catch(e:any){
       console.error("Export error:",e)
-      setMsg("Export failed: "+e.message)
+      setMsg("Export failed: "+(e?.message||e?.toString()||"unknown error — check browser console"))
       setProgress(0)
     }
     setExporting(false)
