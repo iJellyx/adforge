@@ -31,7 +31,7 @@ const STAGES = [
 ]
 const STAGE_COLORS: Record<string,string> = { unaware:"#7c3aed",problem_aware:"#ef4444",solution_aware:"#f59e0b",product_aware:"#3b82f6",most_aware:"#22c55e" }
 const AD_LENGTHS = ["15 seconds","30 seconds","45 seconds","60 seconds","90 seconds"]
-const FORM_CTYPES = ["UGC","Talking Head","Founder Story","Mashup","Testimonial","Problem/Solution","Tutorial","Before & After"]
+const FORM_CTYPES = ["UGC","Talking Head","Founder Story","Mashup","Testimonial","Problem-Solution","Tutorial","Before & After"]
 const SORTS = ["Newest first","Oldest first","A → Z","Z → A"]
 const DEFAULT_BRAND: BrandProfile = { name:"",website:"",description:"",voice:"",target_customer:"",reviews:"",additional_info:"",customer_avatars:[] }
 const DEFAULT_PRODUCT: Product = { name:"",description:"",benefits:"",target_customer:"",claims:"",ingredients:"",differentiators:"",reviews:"",notes:"",price:"",url:"" }
@@ -311,9 +311,10 @@ function MusicPicker({suggestedMood,onSave}:any){
   const [playingId,setPlayingId]=useState<string|null>(null)
   const audioRefs=useRef<Record<string,HTMLAudioElement>>({})
 
-  async function search(){
+  async function search(searchMood?:string){
+    const q=searchMood||mood
     setLoading(true);setError("")
-    try{const res=await fetch(`/api/pixabay/music?q=${encodeURIComponent(mood)}`);const d=await res.json();if(d.tracks&&d.tracks.length>0){setTracks(d.tracks)}else{setError(d.error||"No tracks found");setTracks(FALLBACK_TRACKS)}}catch{setError("Using sample tracks");setTracks(FALLBACK_TRACKS)}
+    try{const res=await fetch(`/api/pixabay/music?q=${encodeURIComponent(q)}`);const d=await res.json();if(d.tracks&&d.tracks.length>0){setTracks(d.tracks)}else{setError(d.error||"No tracks found");setTracks(FALLBACK_TRACKS)}}catch{setError("Using sample tracks");setTracks(FALLBACK_TRACKS)}
     setLoading(false)
   }
   useEffect(()=>{search()},[])
@@ -329,8 +330,7 @@ function MusicPicker({suggestedMood,onSave}:any){
     {suggestedMood&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"8px 12px",fontSize:12,color:C.accent,marginBottom:12}}>✨ AI suggested: <strong>{suggestedMood}</strong></div>}
     {error&&<div style={{background:"#f59e0b11",border:"1px solid #f59e0b33",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#fbbf24",marginBottom:10}}>⚠️ {error}</div>}
     <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-      {MUSIC_MOODS.map(m=><button key={m} onClick={()=>setMood(m)} style={{background:mood===m?C.accent:C.surface,color:mood===m?"#fff":C.muted,border:"1px solid "+(mood===m?C.accent:C.border),borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}>{m}</button>)}
-      <Btn onClick={search} disabled={loading} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",padding:"4px 12px"}}>{loading?"…":"Search"}</Btn>
+      {MUSIC_MOODS.map(m=><button key={m} onClick={()=>{setMood(m);search(m)}} style={{background:mood===m?C.accent:C.surface,color:mood===m?"#fff":C.muted,border:"1px solid "+(mood===m?C.accent:C.border),borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}>{m}</button>)}
     </div>
     <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:240,overflowY:"auto"}}>
       {tracks.map((track:any)=><div key={track.id} onClick={()=>setSelectedTrack(selectedTrack?.id===track.id?null:track)} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,border:"2px solid "+(selectedTrack?.id===track.id?C.accent:C.border),background:selectedTrack?.id===track.id?C.accentSoft:C.surface,cursor:"pointer"}}>
