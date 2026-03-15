@@ -129,134 +129,106 @@ function TagEditor({tags,onUpdate}:{tags:string[],onUpdate:(t:string[])=>void}){
 
 // ── FFmpeg MP4 Exporter ───────────────────────────────────────────────────
 function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
-  const [exporting,setExporting]=useState(false)
-  const [progress,setProgress]=useState(0)
-  const [msg,setMsg]=useState("")
-  const [done,setDone]=useState(false)
-
   const clips=(sections||[]).map((s:any)=>{
     const item=s.selectedClipId?libraryItems.find((i:Item)=>i.id===s.selectedClipId):null
     if(!item?.mux_playback_id)return null
-    return{item,start:item.start_seconds||0,end:item.end_seconds||(item.start_seconds||0)+5,label:s.type}
+    return{item,label:s.type||s.label||""}
   }).filter(Boolean)
 
-  async function doExport(){
-    if(!clips.length){alert("No clips assigned — assign clips to sections first.");return}
-    setExporting(true);setDone(false);setProgress(0);setMsg("Loading FFmpeg…")
-    try{
-      // Load FFmpeg from CDN
-      const {FFmpeg}=await import("@ffmpeg/ffmpeg")
-      const {fetchFile,toBlobURL}=await import("@ffmpeg/util")
-
-      const ffmpeg=new FFmpeg()
-      ffmpeg.on("progress",({progress:p}:any)=>{
-        setProgress(10+Math.round(p*80))
-        setMsg(`Processing… ${Math.round(p*100)}%`)
-      })
-
-      await ffmpeg.load({
-        coreURL:await toBlobURL("/ffmpeg-core.js","text/javascript"),
-        wasmURL:await toBlobURL("/ffmpeg-core.wasm","application/wasm"),
-      })
-
-      setProgress(10);setMsg("Fetching clips from Mux…")
-
-      // Download each clip as MP4 from Mux's direct MP4 endpoint
-      const inputFiles:string[]=[]
-      for(let i=0;i<clips.length;i++){
-        const clip=clips[i]
-        setMsg(`Fetching clip ${i+1}/${clips.length}…`);setProgress(10+Math.round((i/clips.length)*30))
-        try{
-          const mp4Url=muxMp4(clip.item.mux_playback_id)
-          const data=await fetchFile(mp4Url)
-          const fname=`clip${i}.mp4`
-          await ffmpeg.writeFile(fname,data)
-          // Trim to start/end using ffmpeg
-          const trimmed=`trimmed${i}.mp4`
-          await ffmpeg.exec(["-i",fname,"-ss",String(clip.start),"-to",String(clip.end),"-c","copy","-y",trimmed])
-          inputFiles.push(trimmed)
-        }catch(e){console.warn("Could not fetch clip",i,e)}
-      }
-
-      if(!inputFiles.length){throw new Error("No clips could be fetched. Mux MP4 downloads may require a paid Mux plan.")}
-
-      // Build concat list
-      setMsg("Stitching clips…");setProgress(55)
-      const concatContent=inputFiles.map(f=>`file '${f}'`).join("\n")
-      await ffmpeg.writeFile("list.txt",concatContent)
-      await ffmpeg.exec(["-f","concat","-safe","0","-i","list.txt","-c","copy","-y","stitched.mp4"])
-
-      // Mix audio if voiceover or music
-      let finalInput="stitched.mp4"
-      if(voiceoverUrl||musicUrl){
-        setMsg("Mixing audio…");setProgress(70)
-        const args=["-i","stitched.mp4"]
-        const filterParts:string[]=["[0:v]copy[v]"]
-        const audioInputs:string[]=[]
-
-        if(voiceoverUrl){
-          const voData=await fetchFile(voiceoverUrl)
-          await ffmpeg.writeFile("voice.mp3",voData)
-          args.push("-i","voice.mp3")
-          const idx=args.filter(a=>a==="-i").length
-          audioInputs.push(`[${idx-1}:a]volume=1.0[vo]`)
-        }
-        if(musicUrl){
-          const muData=await fetchFile(musicUrl)
-          await ffmpeg.writeFile("music.mp3",muData)
-          args.push("-i","music.mp3")
-          const idx=args.filter(a=>a==="-i").length
-          audioInputs.push(`[${idx-1}:a]volume=0.2[mu]`)
-        }
-
-        let mixFilter=""
-        if(audioInputs.length===2){mixFilter=`${audioInputs.join("")}[vo][mu]amix=inputs=2:duration=first[a]`}
-        else if(audioInputs.length===1){const label=voiceoverUrl?"[vo]":"[mu]";mixFilter=`${audioInputs[0]}${label.replace("[vo]","[a]").replace("[mu]","[a]")}`}
-
-        const fullFilter=filterParts.join(";")+";"+mixFilter
-        args.push("-filter_complex",fullFilter,"-map","[v]","-map","[a]","-shortest","-y","final.mp4")
-        await ffmpeg.exec(args)
-        finalInput="final.mp4"
-      }
-
-      setMsg("Finalising MP4…");setProgress(90)
-      const data=await ffmpeg.readFile(finalInput)
-const blob=new Blob([new Uint8Array(data as unknown as ArrayBuffer)],{type:"video/mp4"})
-      const url=URL.createObjectURL(blob)
-      const a=document.createElement("a");a.href=url;a.download=`adforge-ad-${Date.now()}.mp4`;a.click()
-      setTimeout(()=>URL.revokeObjectURL(url),15000)
-      setMsg("✓ MP4 downloaded!");setProgress(100);setDone(true)
-    }catch(e:any){
-      console.error("Export error:",e)
-      setMsg("Export failed: "+(e?.message||e?.toString()||"unknown error — check browser console"))
-      setProgress(0)
-    }
-    setExporting(false)
+  function downloadClip(clip:any){
+    const url=`https://stream.mux.com/${clip.item.mux_playback_id}/high.mp4`
+    const a=document.createElement("a")
+    a.href=url
+    a.download=`${clip.item.title||clip.label}.mp4`
+    a.target="_blank"
+    a.click()
   }
 
-  const assignedCount=clips.length
-  const total=(sections||[]).length
+  function downloadAll(){
+    clips.forEach((clip:any,i:number)=>{
+      setTimeout(()=>downloadClip(clip),i*800)
+    })
+    if(voiceoverUrl){
+      setTimeout(()=>{
+        const a=document.createElement("a")
+        a.href=voiceoverUrl
+        a.download="voiceover.mp3"
+        a.click()
+      },clips.length*800)
+    }
+  }
 
-  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20,marginTop:16}}>
-    <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>⬇️ Export Final Ad as MP4</div>
-    <div style={{fontSize:13,color:C.muted,marginBottom:12}}>Compiles all clips{voiceoverUrl?" + voiceover":""}{musicUrl?" + music":""} into a single downloadable MP4 file.</div>
-    <div style={{background:"#ffffff08",border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",fontSize:11,color:C.muted,marginBottom:12}}>💡 Uses FFmpeg in the browser — first run downloads ~10MB (cached after). Requires Mux paid plan for MP4 clip downloads. If clips fail, upgrade your Mux account at mux.com/pricing.</div>
-    <div style={{display:"flex",gap:10,marginBottom:12,flexWrap:"wrap"}}>
-      <div style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"7px 12px",fontSize:12}}>🎬 {assignedCount}/{total} clips assigned</div>
-      {voiceoverUrl&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:8,padding:"7px 12px",fontSize:12,color:C.green}}>🎙️ Voiceover ready</div>}
-      {musicUrl&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"7px 12px",fontSize:12,color:C.accent}}>🎵 Music selected</div>}
+  if(!clips.length)return(
+    <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20,marginTop:16}}>
+      <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>⬇️ Download Clips</div>
+      <div style={{fontSize:13,color:C.muted}}>Assign clips to sections above to enable downloads.</div>
     </div>
-    {exporting&&<div style={{marginBottom:14}}>
-      <div style={{height:6,background:C.border,borderRadius:4,overflow:"hidden",marginBottom:8}}><div style={{height:"100%",width:progress+"%",background:C.green,borderRadius:4,transition:"width 0.3s"}}/></div>
-      <div style={{fontSize:12,color:C.muted}}>{msg}</div>
-    </div>}
-    {!exporting&&msg&&<div style={{fontSize:13,color:done?C.green:C.red,marginBottom:12,fontWeight:600}}>{msg}</div>}
-    <Btn onClick={doExport} disabled={exporting||assignedCount===0} style={{background:exporting?C.border:C.green,color:exporting?"#aaa":"#000",fontWeight:700,width:"100%",padding:14,fontSize:15,borderRadius:12}}>
-      {exporting?`⏳ ${msg}`:"⬇️ Download MP4"}
-    </Btn>
-  </div>
-}
+  )
 
+  return(
+    <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20,marginTop:16}}>
+      <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>⬇️ Download Your Ad Clips</div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:16}}>Download each clip as MP4 directly from Mux, then assemble them in your video editor (CapCut, Premiere, DaVinci Resolve etc).</div>
+
+      <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+        <div style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"7px 12px",fontSize:12}}>🎬 {clips.length} clips ready</div>
+        {voiceoverUrl&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:8,padding:"7px 12px",fontSize:12,color:C.green}}>🎙️ Voiceover included</div>}
+        {musicUrl&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"7px 12px",fontSize:12,color:C.accent}}>🎵 Music selected</div>}
+      </div>
+
+      {/* Individual clip downloads */}
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+        {clips.map((clip:any,i:number)=>{
+          const sc=secColor(clip.label)
+          return(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:C.surface,borderRadius:10,border:"1px solid "+C.border}}>
+              <div style={{width:36,height:64,borderRadius:6,overflow:"hidden",background:"#111",flexShrink:0}}>
+                {clip.item.mux_playback_id&&<img src={muxThumb(clip.item.mux_playback_id,clip.item.thumbnail_time||0)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{background:sc.bg,color:sc.color,fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:3,display:"inline-block",marginBottom:3}}>{clip.label}</div>
+                <div style={{fontSize:12,fontWeight:600,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{clip.item.title}</div>
+                <div style={{fontSize:10,color:C.muted}}>{fmt(clip.item.duration_seconds)}</div>
+              </div>
+              <button onClick={()=>downloadClip(clip)} style={{background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0}}>⬇️ MP4</button>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Voiceover download */}
+      {voiceoverUrl&&(
+        <div style={{marginBottom:16,padding:"10px 12px",background:C.surface,borderRadius:10,border:"1px solid "+C.border}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover</div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <audio src={voiceoverUrl} controls style={{flex:1,height:32}}/>
+            <a href={voiceoverUrl} download="voiceover.mp3" style={{background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,textDecoration:"none",flexShrink:0}}>⬇️ MP3</a>
+          </div>
+        </div>
+      )}
+
+      {/* Music download */}
+      {musicUrl&&(
+        <div style={{marginBottom:16,padding:"10px 12px",background:C.surface,borderRadius:10,border:"1px solid "+C.border}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Background Music</div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <audio src={musicUrl} controls style={{flex:1,height:32}}/>
+            <a href={musicUrl} download="background-music.mp3" style={{background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,textDecoration:"none",flexShrink:0}}>⬇️ MP3</a>
+          </div>
+        </div>
+      )}
+
+      {/* Download all */}
+      <Btn onClick={downloadAll} style={{background:C.green,color:"#000",fontWeight:700,width:"100%",padding:14,fontSize:15,borderRadius:12}}>
+        ⬇️ Download All Clips{voiceoverUrl?" + Voiceover":""}
+      </Btn>
+
+      <div style={{marginTop:12,background:"#ffffff08",border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",fontSize:11,color:C.muted}}>
+        💡 Import these clips into CapCut, DaVinci Resolve, Premiere or any editor to assemble your final ad. The order above matches your script sections.
+      </div>
+    </div>
+  )
+}
 // ── Voiceover Generator ───────────────────────────────────────────────────
 function VoiceoverGenerator({sections,savedVoiceoverUrl,onSave,onSkip}:any){
   const [voices,setVoices]=useState<any[]>([])
