@@ -893,32 +893,29 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   }
 
  async function handleSaveForged(status:"draft"|"complete"){
-    // Build auto-name if no custom title
-    const stage=form.awarenessStage?.split("_").map((w:string)=>w.charAt(0).toUpperCase()+w.slice(1)).join("")||"Ad"
-    const autoName=`${stage}_${form.contentType||"UGC"}_${(form.adLength||"30s").replace(" seconds","s")}_v1`
-    const title=adTitle.trim()||autoName
-
-    // Upload voiceover to Supabase Storage so Shotstack can access it
-    let finalVoiceoverUrl=voiceoverUrl
-    if(voiceoverUrl&&voiceoverUrl.startsWith("blob:")){
-      try{
-        const blob=await fetch(voiceoverUrl).then(r=>r.blob())
-        const file=new File([blob],"voiceover.mp3",{type:"audio/mpeg"})
-        const fd=new FormData();fd.append("file",file)
-        const res=await fetch("/api/voiceover/upload",{method:"POST",body:fd})
-        const d=await res.json()
-        if(d.url)finalVoiceoverUrl=d.url
-      }catch(e){console.error("Voiceover upload failed:",e)}
-    }
-
-    const adData={title,status,mode:"script" as const,sections,voiceover_url:finalVoiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName}}
-    const savedAd=await onSaveForgedAd(adData)
-    if(savedAd?.id){
-      fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(e=>console.error("Background render error:",e))
-    }
-    setAdTitle("")
-    onGoToForged()
+  const stageWords=(form.awarenessStage||"problem_aware").split("_").map((w:string)=>w.charAt(0).toUpperCase()+w.slice(1)).join("")
+  const autoName=`${stageWords}_${form.contentType||"UGC"}_${(form.adLength||"30 seconds").replace(" seconds","s")}_v1`
+  const title=adTitle.trim()||autoName
+  let finalVoiceoverUrl=voiceoverUrl
+  if(voiceoverUrl&&voiceoverUrl.startsWith("blob:")){
+    try{
+      const blob=await fetch(voiceoverUrl).then(r=>r.blob())
+      const file=new File([blob],"voiceover.mp3",{type:"audio/mpeg"})
+      const fd=new FormData()
+      fd.append("file",file)
+      const res=await fetch("/api/voiceover/upload",{method:"POST",body:fd})
+      const d=await res.json()
+      if(d.url)finalVoiceoverUrl=d.url
+    }catch(e){console.error("Voiceover upload failed:",e)}
   }
+  const adData={title,status,mode:"script" as const,sections,voiceover_url:finalVoiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName}}
+  const savedAd=await onSaveForgedAd(adData)
+  if(savedAd?.id){
+    fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(e=>console.error("Background render error:",e))
+  }
+  setAdTitle("")
+  onGoToForged()
+}
 
   async function handleDeleteScript(id:string){const supabase=createClient();await supabase.from("scripts").delete().eq("id",id);onSaveScripts(scripts.filter((s:Script)=>s.id!==id));setView("list")}
 
@@ -1181,6 +1178,8 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
   </div>
 }
 
+
+
 // ── Forged Ads Tab ────────────────────────────────────────────────────────
 function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefresh:()=>void}){
   const supabase=createClient()
@@ -1212,7 +1211,6 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
           </div>
           <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
         </div>
-        <ForgedAdDownload ad={previewAd} onRefresh={onRefresh}/>
         <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
           {previewAd.voiceover_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover · {previewAd.voiceover_voice}</div><audio src={previewAd.voiceover_url} controls style={{width:"100%",height:36}}/></div>}
           {previewAd.music_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls style={{width:"100%",height:36}}/></div>}
