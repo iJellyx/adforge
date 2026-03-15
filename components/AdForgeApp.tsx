@@ -242,10 +242,17 @@ function VoiceoverGenerator({sections,savedVoiceoverUrl,onSave,onSkip}:any){
   const [loading,setLoading]=useState(false)
   const [generating,setGenerating]=useState(false)
   const [audioUrl,setAudioUrl]=useState<string|null>(savedVoiceoverUrl||null)
+  const audioRef=useRef<HTMLAudioElement>(null)
   const [error,setError]=useState("")
   const [voiceSearch,setVoiceSearch]=useState("")
 
   const fullScript=(sections||[]).map((s:any)=>s.spokenWords||"").filter(Boolean).join(" ")
+
+  useEffect(()=>{
+    return()=>{
+      if(audioRef.current){audioRef.current.pause();audioRef.current.currentTime=0}
+    }
+  },[])
 
   useEffect(()=>{
     setLoading(true)
@@ -291,7 +298,7 @@ function VoiceoverGenerator({sections,savedVoiceoverUrl,onSave,onSkip}:any){
         <strong style={{color:C.text}}>Script:</strong> {fullScript||"No spoken words yet."}
       </div>
       {error&&<div style={{background:"#ef444422",border:"1px solid #ef444433",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#ef4444",marginBottom:12}}>{error}</div>}
-      {audioUrl&&<div style={{marginBottom:14}}><Label>Generated Voiceover{selectedVoiceObj?` — ${selectedVoiceObj.name}`:""}</Label><audio src={audioUrl} controls style={{width:"100%",height:40}}/></div>}
+      {audioUrl&&<div style={{marginBottom:14}}><Label>Generated Voiceover{selectedVoiceObj?` — ${selectedVoiceObj.name}`:""}</Label><audio ref={audioRef} src={audioUrl} controls style={{width:"100%",height:40}}/></div>}
       <div style={{display:"flex",gap:10}}>
         <Btn onClick={generate} disabled={generating||!fullScript||!selectedVoice} style={{background:generating?C.border:C.accent,color:"#fff",flex:1}}>{generating?"⏳ Generating…":"🎙️ Generate Voiceover"}</Btn>
         {audioUrl&&<Btn onClick={()=>onSave(audioUrl,selectedVoiceObj?.name||selectedVoice)} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Use This</Btn>}
@@ -318,6 +325,12 @@ function MusicPicker({suggestedMood,onSave}:any){
     setLoading(false)
   }
   useEffect(()=>{search()},[])
+
+    useEffect(()=>{
+      return()=>{
+        Object.values(audioRefs.current).forEach(a=>{a.pause();a.currentTime=0})
+      }
+    },[])
 
   function togglePlay(track:any){
     if(playingId===track.id){audioRefs.current[track.id]?.pause();setPlayingId(null)}
@@ -367,7 +380,7 @@ function StitchedPreview({sections,libraryItems}:any){
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 260px"}}>
       <div style={{position:"relative",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:320}}>
-        <video ref={vidRef} playsInline preload="metadata" style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
+        <video ref={vidRef} playsInline preload="metadata" muted style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
         {!playing&&<div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}><div style={{width:52,height:52,borderRadius:"50%",background:"#000a",border:"2px solid #fff4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>▶</div></div>}
       </div>
       <div style={{borderLeft:"1px solid "+C.border,overflowY:"auto",maxHeight:480}}>
@@ -585,6 +598,42 @@ Return ONLY valid JSON:
   return null
 }
 
+// ── Clip Segment Player ───────────────────────────────────────────────────
+function ClipSegmentPlayer({playbackId,start,end,muted}:{playbackId:string,start:number,end?:number,muted:boolean}){
+  const vidRef=useRef<HTMLVideoElement>(null)
+  const [playing,setPlaying]=useState(false)
+  const src=`https://stream.mux.com/${playbackId}.m3u8`
+
+  useEffect(()=>{
+    const v=vidRef.current;if(!v)return
+    function seek(){if(v)v.currentTime=start}
+    if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true})
+  },[src,start])
+
+  function onTimeUpdate(){
+    const v=vidRef.current;if(!v)return
+    if(end&&v.currentTime>=end){v.pause();v.currentTime=start;setPlaying(false)}
+  }
+
+  function toggle(){
+    const v=vidRef.current;if(!v)return
+    if(playing){v.pause();setPlaying(false)}else{v.play().catch(()=>{});setPlaying(true)}
+  }
+
+  return(
+    <div style={{position:"relative",width:"100%",height:"100%"}}>
+      <video ref={vidRef} src={src} playsInline preload="metadata" muted={muted}
+        style={{width:"100%",height:"100%",objectFit:"cover"}}
+        onTimeUpdate={onTimeUpdate}
+        onPlay={()=>setPlaying(true)}
+        onPause={()=>setPlaying(false)}/>
+      <div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+        {!playing&&<div style={{width:36,height:36,borderRadius:"50%",background:"#000a",border:"2px solid #fff6",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>▶</div>}
+      </div>
+    </div>
+  )
+}
+
 // ── Script Table (Horizontal) ─────────────────────────────────────────────
 function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productName,voiceoverUrl}:any){
   const [pickerIdx,setPickerIdx]=useState<number|null>(null)
@@ -645,7 +694,7 @@ function toggleMuteClip(idx:number){
             </div>
             <div style={{background:C.bg,padding:10}}>
               <div style={{position:"relative",width:"100%",paddingTop:"177.78%",background:"#111",borderRadius:10,overflow:"hidden",marginBottom:8}}>
-                {selectedClip?.mux_playback_id?<div style={{position:"absolute",inset:0}}><MuxPlayer playbackId={selectedClip.mux_playback_id} startTime={selectedClip.start_seconds||0} streamType="on-demand" accentColor={C.accent} muted={isMuted} style={{width:"100%",height:"100%"}}/></div>:<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6}}><div style={{fontSize:24}}>🎬</div><div style={{fontSize:10,color:C.muted,textAlign:"center",padding:"0 8px"}}>{selectedClip?"Processing…":"No clip assigned"}</div>{!readOnly&&<button onClick={()=>setPickerIdx(idx)} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Pick Clip</button>}</div>}
+                {selectedClip?.mux_playback_id?<div style={{position:"absolute",inset:0}}><ClipSegmentPlayer playbackId={selectedClip.mux_playback_id} start={selectedClip.start_seconds||0} end={selectedClip.end_seconds} muted={isMuted}/></div>:<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6}}><div style={{fontSize:24}}>🎬</div><div style={{fontSize:10,color:C.muted,textAlign:"center",padding:"0 8px"}}>{selectedClip?"Processing…":"No clip assigned"}</div>{!readOnly&&<button onClick={()=>setPickerIdx(idx)} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Pick Clip</button>}</div>}
                 {selectedClip&&<button onClick={()=>toggleMuteClip(idx)} style={{position:"absolute",bottom:8,left:8,background:"#000a",border:"none",color:"#fff",borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:11}}>{isMuted?"🔇":"🔊"}</button>}
                 {row.autoSelected&&selectedClip&&<div style={{position:"absolute",top:6,left:6,background:C.green,color:"#000",fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4}}>✦ AI</div>}
               </div>
