@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     const clipPaths: string[] = []
     for (let i = 0; i < clips.length; i++) {
       const clip = clips[i]
-      const mp4Url = `https://stream.mux.com/${clip.mux_playback_id}/high.mp4`
+      const mp4Url = `https://stream.mux.com/${clip.mux_playback_id}/capped-1080p.mp4`
       const filename = `clip_${i}_${Date.now()}.mp4`
       const path = await downloadToTemp(mp4Url, filename)
       tempFiles.push(path)
