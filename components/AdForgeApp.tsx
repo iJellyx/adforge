@@ -166,7 +166,6 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
       const a=document.createElement("a")
       a.href=data.url
       a.download=`adforge-ad-${Date.now()}.mp4`
-      a.target="_blank"
       a.click()
       setProgress(100);setMsg("✓ MP4 ready!");setDone(true)
     } else if(data.renderId){
@@ -180,12 +179,15 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
         const statusRes=await fetch(`/api/export/status?id=${renderId}`)
         const statusData=await statusRes.json()
         if(statusData.url){
-          setProgress(95);setMsg("Downloading…")
-          const a=document.createElement("a")
-          a.href=statusData.url
-          a.download=`adforge-ad-${Date.now()}.mp4`
-          a.target="_blank"
-          a.click()
+         setProgress(95);setMsg("Downloading MP4…")
+         const dlRes=await fetch(`/api/export/status?id=${renderId}&download=true`)
+         const blob=await dlRes.blob()
+         const blobUrl=URL.createObjectURL(blob)
+         const a=document.createElement("a")
+         a.href=blobUrl
+         a.download=`adforge-ad-${Date.now()}.mp4`
+         a.click()
+  setTimeout(()=>URL.revokeObjectURL(blobUrl),15000)
           setProgress(100);setMsg("✓ MP4 ready!");setDone(true)
           break
         }
