@@ -1241,7 +1241,7 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
 
 
 // ── Forged Ads Tab ────────────────────────────────────────────────────────
-function ForgedAdCard({ad,items,onOpen,onRefresh}:{ad:ForgedAd,items:Item[],onOpen:()=>void,onRefresh:()=>void}){
+function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleSelect}:{ad:ForgedAd,items:Item[],onOpen:()=>void,onRefresh:()=>void,selectMode:boolean,isSelected:boolean,onToggleSelect:()=>void}){
   const supabase=createClient()
   const [hovered,setHovered]=useState(false)
   const [thumbIdx,setThumbIdx]=useState(0)
@@ -1256,7 +1256,6 @@ function ForgedAdCard({ad,items,onOpen,onRefresh}:{ad:ForgedAd,items:Item[],onOp
   }).filter(Boolean)
 
   const firstClip=clips[0]
-  const thumbUrl=firstClip?.mux_playback_id?muxThumb(firstClip.mux_playback_id,firstClip.thumbnail_time||0):null
 
   useEffect(()=>{
     if(hovered&&clips.length>1){
@@ -1267,10 +1266,11 @@ function ForgedAdCard({ad,items,onOpen,onRefresh}:{ad:ForgedAd,items:Item[],onOp
     return()=>clearInterval(intervalRef.current)
   },[hovered,clips.length])
 
-  const currentThumb=clips[thumbIdx]?.mux_playback_id?muxThumb(clips[thumbIdx].mux_playback_id,clips[thumbIdx].thumbnail_time||0):thumbUrl
+  const currentClip=clips[thumbIdx]||firstClip
+  const currentThumb=currentClip?.mux_playback_id?muxThumb(currentClip.mux_playback_id,currentClip.thumbnail_time||0):null
 
   const renderStatus=(ad as any).render_status||"pending"
-  const renderBadge=renderStatus==="ready"?{bg:"#22c55e22",color:C.green,label:"✓ Ready"}:renderStatus==="rendering"?{bg:"#f59e0b22",color:C.yellow,label:"⏳ Rendering"}:renderStatus==="failed"?{bg:"#ef444422",color:"#ef4444",label:"❌ Failed"}:{bg:"#ffffff11",color:C.muted,label:"Not rendered"}
+  const renderBadge=renderStatus==="ready"?{bg:"#22c55e22",color:C.green,label:"✓ Ready"}:renderStatus==="rendering"?{bg:"#f59e0b22",color:C.yellow,label:"⏳ Rendering"}:renderStatus==="failed"?{bg:"#ef444422",color:"#ef4444",label:"❌ Failed"}:{bg:"#ffffff11",color:C.muted,label:"Pending"}
 
   async function quickDownload(e:React.MouseEvent){
     e.stopPropagation()
@@ -1294,78 +1294,64 @@ function ForgedAdCard({ad,items,onOpen,onRefresh}:{ad:ForgedAd,items:Item[],onOp
   const stage=STAGES.find(s=>s.value===ad.metadata?.awarenessStage)
   const stageColor=STAGE_COLORS[ad.metadata?.awarenessStage||""]||C.accent
 
+  function handleClick(){if(selectMode)onToggleSelect();else onOpen()}
+
   return<div
     onMouseEnter={()=>setHovered(true)}
     onMouseLeave={()=>setHovered(false)}
-    style={{background:C.card,border:"1px solid "+(hovered?C.accent:C.border),borderRadius:14,overflow:"hidden",cursor:"pointer",transition:"border-color 0.2s,transform 0.2s",transform:hovered?"translateY(-2px)":"none",display:"flex",flexDirection:"column"}}
+    onClick={handleClick}
+    style={{background:C.card,border:"2px solid "+(isSelected?C.accent:hovered?C.accent:C.border),borderRadius:14,overflow:"hidden",cursor:"pointer",transition:"border-color 0.15s,transform 0.15s",transform:hovered&&!selectMode?"translateY(-2px)":"none",display:"flex",flexDirection:"column",position:"relative"}}
   >
+    {/* Select checkbox */}
+    {selectMode&&<div style={{position:"absolute",top:8,left:8,zIndex:20,width:22,height:22,borderRadius:6,background:isSelected?C.accent:"#000a",border:"2px solid "+(isSelected?"#fff":"#fff5"),display:"flex",alignItems:"center",justifyContent:"center"}}>
+      {isSelected&&<span style={{color:"#fff",fontSize:12,fontWeight:800}}>✓</span>}
+    </div>}
+
     {/* Thumbnail */}
-    <div onClick={onOpen} style={{position:"relative",paddingTop:"177.78%",background:"#111",overflow:"hidden",flexShrink:0}}>
+    <div style={{position:"relative",paddingTop:"177.78%",background:"#111",overflow:"hidden",flexShrink:0}}>
       {currentThumb&&<img src={currentThumb} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",transition:"opacity 0.3s"}}/>}
-      
-      {/* Overlay on hover */}
-      {hovered&&<div style={{position:"absolute",inset:0,background:"#00000055",display:"flex",alignItems:"center",justifyContent:"center"}}>
+
+      {/* Hover overlay */}
+      {hovered&&!selectMode&&<div style={{position:"absolute",inset:0,background:"#00000055",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{width:48,height:48,borderRadius:"50%",background:"#000a",border:"2px solid #fff6",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>▶</div>
       </div>}
 
-      {/* Clip strip indicator */}
-      {clips.length>1&&hovered&&<div style={{position:"absolute",bottom:8,left:8,right:8,display:"flex",gap:3,justifyContent:"center"}}>
+      {/* Clip progress dots */}
+      {clips.length>1&&hovered&&<div style={{position:"absolute",bottom:40,left:8,right:8,display:"flex",gap:3}}>
         {clips.map((_:any,i:number)=><div key={i} style={{height:2,flex:1,borderRadius:2,background:i===thumbIdx?"#fff":"#ffffff44",transition:"background 0.3s"}}/>)}
       </div>}
 
-      {/* Render status badge */}
-      <div style={{position:"absolute",top:8,left:8,background:renderBadge.bg,color:renderBadge.color,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:99,backdropFilter:"blur(4px)"}}>
+      {/* Render status */}
+      <div style={{position:"absolute",top:8,right:selectMode?8:renderStatus==="ready"?40:8,background:renderBadge.bg,color:renderBadge.color,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:99,backdropFilter:"blur(4px)",border:"1px solid "+renderBadge.color+"44"}}>
         {renderBadge.label}
       </div>
 
       {/* Quick download */}
-      {renderStatus==="ready"&&<button onClick={quickDownload} disabled={downloading} style={{position:"absolute",top:8,right:8,background:"#000a",border:"1px solid #fff3",color:"#fff",borderRadius:8,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600,backdropFilter:"blur(4px)"}}>
+      {renderStatus==="ready"&&!selectMode&&<button onClick={quickDownload} disabled={downloading} style={{position:"absolute",top:8,right:8,background:"#000a",border:"1px solid #fff3",color:"#fff",borderRadius:8,padding:"5px 8px",cursor:"pointer",fontSize:13,backdropFilter:"blur(4px)"}}>
         {downloading?"…":"⬇️"}
       </button>}
 
-      {/* Tag overlays */}
-      <div style={{position:"absolute",bottom:8,left:8,display:"flex",gap:4,flexWrap:"wrap",maxWidth:"90%",opacity:hovered?0:1,transition:"opacity 0.2s"}}>
-        {ad.metadata?.contentType&&<span style={{background:"#000a",color:"#fff",fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:4,backdropFilter:"blur(4px)"}}>{ad.metadata.contentType}</span>}
-        {stage&&<span style={{background:stageColor+"cc",color:"#fff",fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:4}}>{stage.label}</span>}
+      {/* Tag overlays bottom */}
+      <div style={{position:"absolute",bottom:8,left:8,display:"flex",gap:4,flexWrap:"wrap",maxWidth:"calc(100% - 16px)"}}>
+        {ad.metadata?.contentType&&<span style={{background:"#000b",color:"#fff",fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:4,backdropFilter:"blur(4px)"}}>{ad.metadata.contentType}</span>}
+        {stage&&<span style={{background:stageColor+"dd",color:"#fff",fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:4}}>{stage.label}</span>}
       </div>
 
       {/* Audio indicators */}
-      <div style={{position:"absolute",bottom:8,right:8,display:"flex",gap:4}}>
-        {ad.voiceover_url&&<span style={{background:"#000a",fontSize:10,padding:"2px 5px",borderRadius:4}}>🎙️</span>}
-        {ad.music_url&&<span style={{background:"#000a",fontSize:10,padding:"2px 5px",borderRadius:4}}>🎵</span>}
+      <div style={{position:"absolute",bottom:8,right:8,display:"flex",gap:3}}>
+        {ad.voiceover_url&&<span style={{background:"#000b",fontSize:10,padding:"2px 4px",borderRadius:4}}>🎙️</span>}
+        {ad.music_url&&<span style={{background:"#000b",fontSize:10,padding:"2px 4px",borderRadius:4}}>🎵</span>}
       </div>
     </div>
 
-    {/* Card body */}
-    <div style={{padding:"10px 12px",flex:1,display:"flex",flexDirection:"column",gap:6}}>
-      <div style={{fontWeight:700,fontSize:13,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{ad.title}</div>
-      
-      {/* Star rating */}
+    {/* Card body — compact */}
+    <div style={{padding:"10px 12px",flex:1,display:"flex",flexDirection:"column",gap:5}}>
+      <div style={{fontWeight:700,fontSize:12,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{ad.title}</div>
       <div style={{display:"flex",gap:2}} onMouseLeave={()=>setHoverRating(0)}>
-        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={()=>setHoverRating(star)} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:14,color:(hoverRating||rating)>=star?"#f59e0b":"#ffffff22",transition:"color 0.1s"}}>★</span>)}
+        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={e=>{e.stopPropagation();setHoverRating(star)}} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:13,color:(hoverRating||rating)>=star?"#f59e0b":"#ffffff22",transition:"color 0.1s"}}>★</span>)}
       </div>
-
-      {/* Meta */}
-      <div style={{fontSize:10,color:C.muted,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-        {ad.metadata?.productName&&ad.metadata.productName!=="General"&&<span style={{color:C.accent}}>{ad.metadata.productName}</span>}
-        {ad.metadata?.adLength&&<span>{ad.metadata.adLength}</span>}
-        <span>{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}</span>
-      </div>
-
-      {/* Notes */}
-      {(ad as any).notes&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as any}}>📝 {(ad as any).notes}</div>}
-
-      {/* Clip strip */}
-      <div style={{display:"flex",gap:3,marginTop:2}}>
-        {(ad.sections||[]).slice(0,6).map((s:any,i:number)=>{
-          const item=s.selectedClipId?items.find((it:Item)=>it.id===s.selectedClipId):null
-          const sc=secColor(s.type||s.label)
-          return<div key={i} style={{flex:1,position:"relative",paddingTop:"177.78%",background:"#111",borderRadius:4,overflow:"hidden",maxWidth:32}}>
-            {item?.mux_playback_id?<img src={muxThumb(item.mux_playback_id,item.thumbnail_time||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{position:"absolute",inset:0,background:sc.bg}}/>}
-            <div style={{position:"absolute",bottom:0,left:0,right:0,background:sc.bg,fontSize:5,fontWeight:800,color:sc.color,textAlign:"center",padding:"1px 0"}}>{(s.type||s.label||"").substring(0,4)}</div>
-          </div>
-        })}
-      </div>
+      <div style={{fontSize:10,color:C.muted}}>{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}{ad.metadata?.adLength?` · ${ad.metadata.adLength}`:""}</div>
+      {(ad as any).notes&&<div style={{fontSize:10,color:C.muted,fontStyle:"italic",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>📝 {(ad as any).notes}</div>}
     </div>
   </div>
 }
@@ -1375,62 +1361,111 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
   const [previewId,setPreviewId]=useState<string|null>(null)
   const [search,setSearch]=useState("")
   const [activeTag,setActiveTag]=useState<string|null>(null)
+  const [renderFilter,setRenderFilter]=useState<string|null>(null)
   const [expandedStages,setExpandedStages]=useState<Record<string,boolean>>({})
   const [editingNotes,setEditingNotes]=useState<string|null>(null)
   const [notesVal,setNotesVal]=useState("")
-
-  async function deleteAd(id:string){if(!window.confirm("Delete this ad?"))return;await supabase.from("forged_ads").delete().eq("id",id);onRefresh()}
-  async function markComplete(id:string){await supabase.from("forged_ads").update({status:"complete",updated_at:new Date().toISOString()}).eq("id",id);onRefresh()}
-  async function saveNotes(id:string){await supabase.from("forged_ads").update({notes:notesVal}).eq("id",id);setEditingNotes(null);onRefresh()}
+  const [selectMode,setSelectMode]=useState(false)
+  const [selectedIds,setSelectedIds]=useState<string[]>([])
+  const [deleting,setDeleting]=useState(false)
+  const [autoRendering,setAutoRendering]=useState(false)
+  const pollRef=useRef<any>(null)
 
   const previewAd=previewId?ads.find(a=>a.id===previewId):null
 
+  // Auto-poll render status every 15 seconds
+  useEffect(()=>{
+    async function pollRenderStatus(){
+      const rendering=ads.filter(a=>(a as any).render_status==="rendering")
+      if(rendering.length===0)return
+      for(const ad of rendering){
+        try{
+          const res=await fetch("/api/export/check",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:ad.id})})
+          const data=await res.json()
+          if(data.status==="ready"||data.status==="failed"){onRefresh();break}
+        }catch(e){}
+      }
+    }
+    pollRenderStatus()
+    pollRef.current=setInterval(pollRenderStatus,15000)
+    return()=>clearInterval(pollRef.current)
+  },[ads.map(a=>(a as any).render_status).join(",")])
+
+  async function deleteAd(id:string){await supabase.from("forged_ads").delete().eq("id",id);onRefresh()}
+  async function markComplete(id:string){await supabase.from("forged_ads").update({status:"complete",updated_at:new Date().toISOString()}).eq("id",id);onRefresh()}
+  async function saveNotes(id:string){await supabase.from("forged_ads").update({notes:notesVal}).eq("id",id);setEditingNotes(null);onRefresh()}
+
+  async function bulkDelete(){
+    if(!window.confirm(`Delete ${selectedIds.length} ad(s)?`))return
+    setDeleting(true)
+    for(const id of selectedIds){await supabase.from("forged_ads").delete().eq("id",id)}
+    setSelectedIds([]);setSelectMode(false);setDeleting(false);onRefresh()
+  }
+
+  async function autoRenderAll(){
+    setAutoRendering(true)
+    const pending=ads.filter(a=>(a as any).render_status==="pending"||(a as any).render_status==="failed"||!(a as any).render_status)
+    for(const ad of pending){
+      try{await fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:ad.id})})}catch(e){}
+    }
+    onRefresh();setAutoRendering(false)
+  }
+
   // Filter
   const filtered=ads.filter(ad=>{
+    if(renderFilter&&(ad as any).render_status!==renderFilter)return false
     if(search.trim()){const q=search.toLowerCase();if(![ad.title,ad.metadata?.contentType,ad.metadata?.productName,ad.metadata?.awarenessStage,(ad as any).notes].some((f:any)=>f&&String(f).toLowerCase().includes(q)))return false}
-    if(activeTag){const q=activeTag.toLowerCase();if(![ad.metadata?.contentType,ad.metadata?.awarenessStage,ad.metadata?.productName].some((f:any)=>f&&String(f).toLowerCase().includes(q.toLowerCase())))return false}
+    if(activeTag){if(![ad.metadata?.contentType,ad.metadata?.awarenessStage&&STAGES.find(s=>s.value===ad.metadata?.awarenessStage)?.label,ad.metadata?.productName].some((f:any)=>f&&f===activeTag))return false}
     return true
   })
 
   // Group by awareness stage
-  const stageGroups: Record<string,ForgedAd[]>={}
   const stageOrder=["problem_aware","unaware","solution_aware","product_aware","most_aware",""]
-  filtered.forEach(ad=>{
-    const stage=ad.metadata?.awarenessStage||""
-    if(!stageGroups[stage])stageGroups[stage]=[]
-    stageGroups[stage].push(ad)
-  })
+  const stageGroups:Record<string,ForgedAd[]>={}
+  filtered.forEach(ad=>{const s=ad.metadata?.awarenessStage||"";if(!stageGroups[s])stageGroups[s]=[];stageGroups[s].push(ad)})
+  const allStages=[...stageOrder.filter(s=>stageGroups[s]?.length>0),...Object.keys(stageGroups).filter(s=>!stageOrder.includes(s)&&stageGroups[s]?.length>0)]
 
-  const sortedStages=stageOrder.filter(s=>stageGroups[s]?.length>0)
-  const otherStages=Object.keys(stageGroups).filter(s=>!stageOrder.includes(s))
-  const allStages=[...sortedStages,...otherStages]
-
-  function toggleStage(s:string){setExpandedStages(prev=>({...prev,[s]:prev[s]===false?true:prev[s]===undefined?false:true}))}
+  function toggleStage(s:string){setExpandedStages(prev=>({...prev,[s]:prev[s]===false?true:false}))}
   function isExpanded(s:string){return expandedStages[s]!==false}
 
   const totalReady=ads.filter(a=>(a as any).render_status==="ready").length
   const totalRendering=ads.filter(a=>(a as any).render_status==="rendering").length
+  const totalPending=ads.filter(a=>(a as any).render_status==="pending"||!(a as any).render_status||(a as any).render_status==="failed").length
+  const allFilteredIds=filtered.map(a=>a.id)
 
   return<div style={{padding:28,maxWidth:1200,margin:"0 auto"}}>
     {/* Header */}
-    <div style={{marginBottom:24}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:12}}>
-        <div>
-          <STitle size={24} mb={4}>⚡ Forged Ads</STitle>
-          <div style={{fontSize:13,color:C.muted}}>Your complete video ad library — organised by awareness stage</div>
-        </div>
-        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-          {totalReady>0&&<div style={{background:"#22c55e22",border:"1px solid #22c55e44",borderRadius:8,padding:"6px 14px",fontSize:12,color:C.green,fontWeight:600}}>✓ {totalReady} ready to download</div>}
-          {totalRendering>0&&<div style={{background:"#f59e0b22",border:"1px solid #f59e0b44",borderRadius:8,padding:"6px 14px",fontSize:12,color:C.yellow,fontWeight:600}}>⏳ {totalRendering} rendering</div>}
-        </div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12}}>
+      <div>
+        <STitle size={24} mb={4}>⚡ Forged Ads</STitle>
+        <div style={{fontSize:13,color:C.muted}}>Your complete video ad library — organised by awareness stage</div>
       </div>
-
-      {/* Search + filters */}
-      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search ads by name, product, stage…" style={{flex:1,minWidth:220,background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 14px",color:C.text,fontSize:14,outline:"none"}}/>
-        {activeTag&&<button onClick={()=>setActiveTag(null)} style={{background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>✕ {activeTag}</button>}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        {totalPending>0&&<Btn onClick={autoRenderAll} disabled={autoRendering} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"7px 14px"}}>{autoRendering?"⏳ Rendering…":`🎬 Render All (${totalPending})`}</Btn>}
+        {!selectMode&&<Btn onClick={()=>setSelectMode(true)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"7px 14px"}}>Select</Btn>}
+        {selectMode&&<>
+          <Btn onClick={()=>{setSelectedIds(allFilteredIds)}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"7px 14px"}}>Select All ({filtered.length})</Btn>
+          <Btn onClick={bulkDelete} disabled={selectedIds.length===0||deleting} style={{background:selectedIds.length>0?"#ef444433":C.border,color:selectedIds.length>0?"#ef4444":C.muted,border:"1px solid "+(selectedIds.length>0?"#ef444466":C.border),fontSize:12,padding:"7px 14px"}}>Delete ({selectedIds.length})</Btn>
+          <Btn onClick={()=>{setSelectMode(false);setSelectedIds([])}} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"7px 14px"}}>Cancel</Btn>
+        </>}
       </div>
     </div>
+
+    {/* Search + filter row */}
+    <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search ads by name, product, stage…" style={{flex:1,minWidth:220,background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 14px",color:C.text,fontSize:14,outline:"none"}}/>
+
+      {/* Render status filter buttons */}
+      <button onClick={()=>setRenderFilter(renderFilter==="ready"?null:"ready")} style={{background:renderFilter==="ready"?"#22c55e33":C.surface,border:"1px solid "+(renderFilter==="ready"?"#22c55e":C.border),color:renderFilter==="ready"?C.green:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>✓ Ready ({totalReady})</button>
+      <button onClick={()=>setRenderFilter(renderFilter==="rendering"?null:"rendering")} style={{background:renderFilter==="rendering"?"#f59e0b33":C.surface,border:"1px solid "+(renderFilter==="rendering"?"#f59e0b":C.border),color:renderFilter==="rendering"?C.yellow:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>⏳ Rendering ({totalRendering})</button>
+
+      {(activeTag||renderFilter||search)&&<button onClick={()=>{setActiveTag(null);setRenderFilter(null);setSearch("")}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:12,textDecoration:"underline"}}>Clear filters</button>}
+    </div>
+
+    {/* Tag cloud */}
+    {ads.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>
+      {[...new Set(ads.flatMap(ad=>[ad.metadata?.contentType,ad.metadata?.awarenessStage&&STAGES.find(s=>s.value===ad.metadata?.awarenessStage)?.label,ad.metadata?.productName&&ad.metadata.productName!=="General"?ad.metadata.productName:null].filter(Boolean)))].map((tag:any)=><button key={tag} onClick={()=>setActiveTag(activeTag===tag?null:tag)} style={{background:activeTag===tag?C.accent:C.surface,color:activeTag===tag?"#fff":C.muted,border:"1px solid "+(activeTag===tag?C.accent:C.border),borderRadius:99,padding:"4px 11px",cursor:"pointer",fontSize:11,fontWeight:600}}>{tag}</button>)}
+    </div>}
 
     {/* Preview modal */}
     {previewAd&&<div onClick={()=>setPreviewId(null)} style={{position:"fixed",inset:0,background:"#000000ee",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
@@ -1445,14 +1480,15 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
               {previewAd.metadata?.awarenessStage&&<Chip label={STAGES.find(s=>s.value===previewAd.metadata?.awarenessStage)?.label||previewAd.metadata.awarenessStage} color={{bg:STAGE_COLORS[previewAd.metadata.awarenessStage]+"22",color:STAGE_COLORS[previewAd.metadata.awarenessStage]}}/>}
               {previewAd.created_at&&<span style={{fontSize:11,color:C.muted}}>Created {new Date(previewAd.created_at).toLocaleDateString()}</span>}
             </div>
-            {/* Notes editor */}
-            {editingNotes===previewAd.id?<div style={{display:"flex",gap:8,marginTop:8}}>
-              <input value={notesVal} onChange={e=>setNotesVal(e.target.value)} placeholder="Add internal notes…" autoFocus style={{flex:1,background:C.surface,border:"1px solid "+C.accent,borderRadius:8,padding:"6px 10px",color:C.text,fontSize:13,outline:"none"}}/>
-              <Btn onClick={()=>saveNotes(previewAd.id)} style={{background:C.green,color:"#000",fontWeight:700,padding:"6px 12px",fontSize:12}}>Save</Btn>
-              <Btn onClick={()=>setEditingNotes(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"6px 12px",fontSize:12}}>Cancel</Btn>
-            </div>:<div onClick={()=>{setEditingNotes(previewAd.id);setNotesVal((previewAd as any).notes||"")}} style={{fontSize:12,color:(previewAd as any).notes?C.muted:C.accent,cursor:"pointer",marginTop:6,textDecoration:"underline"}}>
-              {(previewAd as any).notes?`📝 ${(previewAd as any).notes}`:"+ Add notes"}
-            </div>}
+            {editingNotes===previewAd.id
+              ?<div style={{display:"flex",gap:8,marginTop:8}}>
+                <input value={notesVal} onChange={e=>setNotesVal(e.target.value)} placeholder="Add internal notes…" autoFocus style={{flex:1,background:C.surface,border:"1px solid "+C.accent,borderRadius:8,padding:"6px 10px",color:C.text,fontSize:13,outline:"none"}}/>
+                <Btn onClick={()=>saveNotes(previewAd.id)} style={{background:C.green,color:"#000",fontWeight:700,padding:"6px 12px",fontSize:12}}>Save</Btn>
+                <Btn onClick={()=>setEditingNotes(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"6px 12px",fontSize:12}}>Cancel</Btn>
+              </div>
+              :<div onClick={()=>{setEditingNotes(previewAd.id);setNotesVal((previewAd as any).notes||"")}} style={{fontSize:12,color:(previewAd as any).notes?C.muted:C.accent,cursor:"pointer",marginTop:6,textDecoration:"underline"}}>
+                {(previewAd as any).notes?`📝 ${(previewAd as any).notes}`:"+ Add notes"}
+              </div>}
           </div>
           <div style={{display:"flex",gap:8,flexShrink:0}}>
             {previewAd.status==="draft"&&<Btn onClick={()=>{markComplete(previewAd.id);setPreviewId(null)}} style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
@@ -1471,9 +1507,7 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
 
     {/* Empty state */}
     {ads.length===0&&<Card style={{textAlign:"center",padding:60}}><div style={{fontSize:40,marginBottom:12}}>⚡</div><STitle mb={6}>No forged ads yet</STitle><div style={{color:C.muted,fontSize:13}}>Create an ad from the Scripts tab and save it here.</div></Card>}
-
-    {/* No results */}
-    {ads.length>0&&filtered.length===0&&<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:28,marginBottom:8}}>🔍</div><div style={{color:C.muted,fontSize:14}}>No ads match your search.<br/><button onClick={()=>{setSearch("");setActiveTag(null)}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,textDecoration:"underline",marginTop:8}}>Clear filters</button></div></Card>}
+    {ads.length>0&&filtered.length===0&&<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:28,marginBottom:8}}>🔍</div><div style={{color:C.muted,fontSize:14}}>No ads match your filters.<br/><button onClick={()=>{setSearch("");setActiveTag(null);setRenderFilter(null)}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,textDecoration:"underline",marginTop:8}}>Clear all filters</button></div></Card>}
 
     {/* Stage folders */}
     {allStages.map(stageKey=>{
@@ -1484,36 +1518,25 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
       const readyCount=stageAds.filter(a=>(a as any).render_status==="ready").length
 
       return<div key={stageKey} style={{marginBottom:16,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
-        {/* Folder header */}
         <div onClick={()=>toggleStage(stageKey)} style={{background:C.card,padding:"14px 20px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderBottom:expanded?"1px solid "+C.border:"none"}}>
           <div style={{width:10,height:10,borderRadius:"50%",background:stageColor,flexShrink:0}}/>
           <div style={{flex:1}}>
-            <div style={{fontWeight:700,fontSize:15,color:C.text}}>{stageInfo?.label||"General"}</div>
+            <div style={{fontWeight:700,fontSize:15}}>{stageInfo?.label||"General"}</div>
             {stageInfo&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{stageInfo.desc}</div>}
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <span style={{background:stageColor+"22",color:stageColor,border:"1px solid "+stageColor+"44",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 10px"}}>{stageAds.length} ad{stageAds.length!==1?"s":""}</span>
             {readyCount>0&&<span style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 10px"}}>✓ {readyCount} ready</span>}
-            <span style={{fontSize:12,color:C.muted}}>{expanded?"▲":"▼"}</span>
+            <span style={{fontSize:12,color:C.muted,marginLeft:4}}>{expanded?"▲":"▼"}</span>
           </div>
         </div>
-
-        {/* Cards grid */}
         {expanded&&<div style={{padding:20,background:C.bg}}>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>
-            {stageAds.map(ad=><ForgedAdCard key={ad.id} ad={ad} items={items} onOpen={()=>setPreviewId(ad.id)} onRefresh={onRefresh}/>)}
+            {stageAds.map(ad=><ForgedAdCard key={ad.id} ad={ad} items={items} onOpen={()=>setPreviewId(ad.id)} onRefresh={onRefresh} selectMode={selectMode} isSelected={selectedIds.includes(ad.id)} onToggleSelect={()=>setSelectedIds(prev=>prev.includes(ad.id)?prev.filter(x=>x!==ad.id):[...prev,ad.id])}/>)}
           </div>
         </div>}
       </div>
     })}
-
-    {/* Tag cloud for quick filtering */}
-    {ads.length>0&&<div style={{marginTop:24,padding:"16px 20px",background:C.card,border:"1px solid "+C.border,borderRadius:12}}>
-      <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Filter by tag</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-        {[...new Set(ads.flatMap(ad=>[ad.metadata?.contentType,ad.metadata?.awarenessStage&&STAGES.find(s=>s.value===ad.metadata?.awarenessStage)?.label,ad.metadata?.productName].filter(Boolean)))].map((tag:any)=><button key={tag} onClick={()=>setActiveTag(activeTag===tag?null:tag)} style={{background:activeTag===tag?C.accent:C.surface,color:activeTag===tag?"#fff":C.muted,border:"1px solid "+(activeTag===tag?C.accent:C.border),borderRadius:99,padding:"4px 11px",cursor:"pointer",fontSize:11,fontWeight:600}}>{tag}</button>)}
-      </div>
-    </div>}
   </div>
 }
 
