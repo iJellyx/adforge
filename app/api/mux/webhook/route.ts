@@ -40,8 +40,30 @@ export async function POST(req: NextRequest) {
   const itemId = asset.passthrough
   if (!itemId) return NextResponse.json({ ok: true })
 
-  const playbackId = asset.playback_ids?.[0]?.id
+ const playbackId = asset.playback_ids?.[0]?.id
   const duration = asset.duration || 30
+
+  // Auto-transcribe using Deepgram
+  let autoTranscript = ''
+  if (playbackId && process.env.DEEPGRAM_API_KEY) {
+    try {
+      const audioUrl = `https://stream.mux.com/${playbackId}/audio.m4a`
+      const tRes = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: audioUrl }),
+      })
+      if (tRes.ok) {
+        const tData = await tRes.json()
+        autoTranscript = tData.results?.channels?.[0]?.alternatives?.[0]?.transcript || ''
+      }
+    } catch (e) {
+      console.log('Transcription failed, continuing without transcript')
+    }
+  }
 
   const { data: item } = await supabase
     .from('items')
@@ -67,7 +89,7 @@ export async function POST(req: NextRequest) {
 Title: ${item.title}
 Duration: ${duration}s
 Description: ${item.description || 'not provided'}
-Transcript: ${item.transcript || 'not provided'}
+Transcript: ${item.transcript || autoTranscript || 'not provided'}
 Creator: ${item.creator || 'unknown'}
 
 Return exactly this JSON shape:

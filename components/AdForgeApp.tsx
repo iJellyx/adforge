@@ -1273,8 +1273,8 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
       <div style={{marginBottom:16}}>
         <Label>Website URL</Label>
         <div style={{display:"flex",gap:8}}>
-          <Input value={brand.website||""} onChange={(e:any)=>setBrand({...brand,website:e.target.value})} placeholder="https://yourbrand.com" style={{flex:1}}/>
-          <Btn onClick={crawlWebsite} disabled={crawling} style={{background:crawling?C.border:C.accentSoft,color:crawling?C.muted:C.accent,border:"1px solid "+C.accent+"44",flexShrink:0,whiteSpace:"nowrap"}}>{crawling?"⏳ Fetching…":"✨ Autofill from Website"}</Btn>
+          <Input value={brand.website||""} onChange={(e:any)=>{setBrand({...brand,website:e.target.value})}} onKeyDown={(e:any)=>{if(e.key==="Enter")crawlWebsite()}} placeholder="https://yourbrand.com — press Enter to autofill" style={{flex:1}}/>
+          <Btn onClick={crawlWebsite} disabled={crawling} style={{background:crawling?C.border:C.accentSoft,color:crawling?C.muted:C.accent,border:"1px solid "+C.accent+"44",flexShrink:0,whiteSpace:"nowrap"}}>{crawling?"⏳ Fetching…":"✨ Autofill"}</Btn>
         </div>
         {crawlError&&<div style={{background:"#ef444422",border:"1px solid #ef444433",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#ef4444",marginTop:8}}>{crawlError}</div>}
         <div style={{fontSize:11,color:C.muted,marginTop:6}}>AI visits your website and fills fields in first-person brand voice. Edit anything afterwards.</div>
@@ -1317,6 +1317,16 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
     {section==="products"&&editingProd&&<Card>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><STitle size={16} mb={0}>{(editingProd as any).id?"Edit Product":"New Product"}</STitle><Btn onClick={()=>setEditingProd(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn></div>
       {[{k:"name",l:"Product Name *"},{k:"price",l:"Price",ph:"49.99"},{k:"url",l:"Product URL",ph:"https://"},{k:"description",l:"Description",ta:true,r:3},{k:"benefits",l:"Key Benefits",ta:true,r:3},{k:"claims",l:"Claims & Results",ta:true,r:2},{k:"ingredients",l:"Key Ingredients",ta:true,r:2},{k:"differentiators",l:"What makes this different?",ta:true,r:2},{k:"reviews",l:"Product Reviews",ta:true,r:3},{k:"notes",l:"Script Notes",ta:true,r:2}].map(f=><div key={f.k} style={{marginBottom:13}}><Label>{f.l}</Label><Input value={(editingProd as any)[f.k]||""} onChange={(e:any)=>setEditingProd({...editingProd,[f.k]:e.target.value} as Product)} placeholder={(f as any).ph||""} textarea={!!(f as any).ta} rows={(f as any).r}/></div>)}
+      {editingProd.url&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"8px 12px",fontSize:12,color:C.accent,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <span>✨ Product URL detected — autofill fields from this page?</span>
+        <button onClick={async()=>{
+          try{
+            const res=await fetch("/api/brand/crawl",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:editingProd.url})})
+            const d=await res.json()
+            if(d.profile){setEditingProd((prev:any)=>({...prev,name:prev.name||d.profile.name||prev.name,description:d.profile.description||prev.description,benefits:d.profile.additional_info||prev.benefits}))}
+          }catch(e){console.error(e)}
+        }} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0}}>Autofill</button>
+      </div>}
       <Btn onClick={()=>saveProd(editingProd)} disabled={!editingProd.name?.trim()} style={{background:C.accent,color:"#fff",width:"100%",padding:13,fontSize:15,borderRadius:12,marginTop:4}}>{(editingProd as any).id?"Save Changes":"Add Product"}</Btn>
     </Card>}
   </div>
@@ -1381,7 +1391,8 @@ export default function AdForgeApp(){
         </button>
         {tabBtn("brand","🏷️ Brand")}
         <div style={{flex:1}}/>
-        {tab==="library"&&libView!=="add"&&<Btn onClick={()=>setLibView("add")} style={{background:C.accent,color:"#fff",margin:"8px 0",fontSize:12,padding:"7px 14px"}}>+ Add Content</Btn>}
+        {tab==="library"&&libView!=="add"&&<Btn onClick={()=>setLibView("add")} style={{background:C.surface,color:C.text,border:"1px solid "+C.border,margin:"8px 0",fontSize:12,padding:"7px 14px"}}>+ Add Content</Btn>}
+        <Btn onClick={()=>{setTab("scripts");}} style={{background:C.accent,color:"#fff",margin:"8px 0",fontSize:12,padding:"7px 14px",marginLeft:8}}>⚡ Create Ad</Btn>
         <button onClick={handleSignOut} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:12,marginLeft:16}}>Sign out</button>
       </div>
     </div>

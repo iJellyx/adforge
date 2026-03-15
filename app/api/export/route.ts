@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     if (musicUrl) {
       tracks.push({
         clips: [{
-          asset: { type: 'audio', src: musicUrl, volume: 0.15 },
+          asset: { type: 'audio', src: musicUrl, volume: voiceoverUrl ? 0.08 : 0.3 },
           start: 0,
           length: clips.reduce((acc: number, c: any) => acc + c.duration, 0),
         }]
