@@ -49,8 +49,15 @@ export async function POST(req: NextRequest) {
     try {
       // Download the MP4 from Mux first, then send as binary to Deepgram
       const mp4Url = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`
-      const audioFetch = await fetch(mp4Url)
-      if (audioFetch.ok) {
+      // MP4 rendition may still be preparing — retry up to 5 times with 30s delays
+      let audioFetch: Response | null = null
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const tryFetch = await fetch(mp4Url)
+        if (tryFetch.ok) { audioFetch = tryFetch; break }
+        console.log(`MP4 not ready yet (attempt ${attempt + 1}/5), waiting 30s…`)
+        await new Promise(r => setTimeout(r, 30000))
+      }
+      if (audioFetch) {
         const audioBuffer = await audioFetch.arrayBuffer()
         const tRes = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true', {
           method: 'POST',
@@ -70,7 +77,7 @@ export async function POST(req: NextRequest) {
           console.log('Deepgram error:', tRes.status, errText.substring(0,200))
         }
       } else {
-        console.log('Could not fetch MP4 from Mux:', mp4Url, audioFetch.status)
+        console.log('MP4 not available after 5 attempts, skipping transcription')
       }
     } catch (e:any) {
       console.log('Transcription failed:', e.message)
