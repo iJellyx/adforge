@@ -832,7 +832,7 @@ function LibraryTab({items,onRefresh,view,setView}:{items:Item[],onRefresh:()=>v
 }
 
 // ── Scripts Tab ───────────────────────────────────────────────────────────
-function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd}:any){
+function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged}:any){
   const [view,setView]=useState("list")  // list | chooseMode | generate | broll | review | detail
   const [selected,setSelected]=useState<Script|null>(null)
   const [sections,setSections]=useState<any[]>([])
@@ -890,13 +890,9 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd}:
   const adData={title,status,mode:"script" as const,sections,voiceover_url:voiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName}}
   const savedAd=await onSaveForgedAd(adData)
   if(savedAd?.id){
-    fetch("/api/export/render",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({adId:savedAd.id})
-    }).catch(e=>console.error("Background render error:",e))
+    fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(e=>console.error("Background render error:",e))
   }
-  setView("list")
+  onGoToForged()
 }
 
   async function handleDeleteScript(id:string){const supabase=createClient();await supabase.from("scripts").delete().eq("id",id);onSaveScripts(scripts.filter((s:Script)=>s.id!==id));setView("list")}
@@ -1054,6 +1050,11 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd}:
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn onClick={()=>{setSections(disp);setView("review");setStep("voiceover")}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44"}}>Edit Script</Btn>
+          <Btn onClick={async()=>{
+            const fresh=disp.map((s:any)=>({...s,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
+            const matched=items.length>0?await matchClips(fresh,items):fresh
+            setSections(matched);setView("review");setStep("voiceover")
+          }} style={{background:C.green+"22",color:C.green,border:"1px solid "+C.green+"44"}}>↺ Reuse Script</Btn>
           <Btn onClick={()=>handleDeleteScript(selected.id!)} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433"}}>Delete</Btn>
         </div>
       </div>
@@ -1324,7 +1325,8 @@ export default function AdForgeApp(){
 
   async function handleSaveForgedAd(ad:Omit<ForgedAd,"id">){
   const{data}=await supabase.from("forged_ads").insert({...ad,updated_at:new Date().toISOString()}).select().single()
-  if(data)setForgedAds(prev=>[data,...prev])
+  if(data){setForgedAds(prev=>[data,...prev])}
+  await loadData()
   return data
 }
 
@@ -1351,7 +1353,7 @@ export default function AdForgeApp(){
       </div>
     </div>
     {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView}/>}
-    {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd}/>}
+    {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")}/>}
     {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} onRefresh={loadData}/>}
     {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
   </div>
