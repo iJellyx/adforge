@@ -1316,7 +1316,22 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
   const [editingProd,setEditingProd]=useState<Product|null>(null)
   const [editingAvatar,setEditingAvatar]=useState<CustomerAvatar|null>(null)
 
-  async function saveBrand(){setSaving(true);if(brand.id){await supabase.from("brand_profile").update(brand).eq("id",brand.id)}else{const{data}=await supabase.from("brand_profile").insert(brand).select().single();setBrand(data)};setSaving(false)}
+  async function saveBrand(){
+    setSaving(true)
+    if(brand.id){
+      await supabase.from("brand_profile").update(brand).eq("id",brand.id)
+    } else {
+      const{data:existing}=await supabase.from("brand_profile").select("id").limit(1).single()
+      if(existing?.id){
+        await supabase.from("brand_profile").update(brand).eq("id",existing.id)
+        setBrand({...brand,id:existing.id})
+      } else {
+        const{data}=await supabase.from("brand_profile").insert(brand).select().single()
+        if(data)setBrand(data)
+      }
+    }
+    setSaving(false)
+  }  
   async function crawlWebsite(){if(!brand.website?.trim()){setCrawlError("Enter a website URL first.");return};setCrawling(true);setCrawlError("");try{const res=await fetch("/api/brand/crawl",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:brand.website})});const d=await res.json();if(d.error)throw new Error(d.error);setBrand({...brand,...d.profile,id:brand.id,customer_avatars:brand.customer_avatars||[]})}catch(e:any){setCrawlError(e.message||"Could not fetch website.")};setCrawling(false)}
   async function saveProd(prod:Product){if((prod as any).id){await supabase.from("products").update(prod).eq("id",(prod as any).id);setProducts(products.map((p:any)=>p.id===(prod as any).id?prod:p))}else{const{data}=await supabase.from("products").insert(prod).select().single();setProducts([...products,data])};setEditingProd(null)}
   async function deleteProd(id:string){await supabase.from("products").delete().eq("id",id);setProducts(products.filter((p:any)=>p.id!==id))}
