@@ -47,22 +47,30 @@ export async function POST(req: NextRequest) {
   let autoTranscript = ''
   if (playbackId && process.env.DEEPGRAM_API_KEY) {
     try {
-      const audioUrl = `https://stream.mux.com/${playbackId}.m3u8`
-      const tRes = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url: audioUrl }),
-      })
-      if (tRes.ok) {
-        const tData = await tRes.json()
-        autoTranscript = tData.results?.channels?.[0]?.alternatives?.[0]?.transcript || ''
-        console.log('Deepgram transcript length:', autoTranscript.length)
+      // Download the MP4 from Mux first, then send as binary to Deepgram
+      const mp4Url = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`
+      const audioFetch = await fetch(mp4Url)
+      if (audioFetch.ok) {
+        const audioBuffer = await audioFetch.arrayBuffer()
+        const tRes = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
+            'Content-Type': 'video/mp4',
+            'Content-Length': audioBuffer.byteLength.toString(),
+          },
+          body: audioBuffer,
+        })
+        if (tRes.ok) {
+          const tData = await tRes.json()
+          autoTranscript = tData.results?.channels?.[0]?.alternatives?.[0]?.transcript || ''
+          console.log('Deepgram transcript length:', autoTranscript.length)
+        } else {
+          const errText = await tRes.text()
+          console.log('Deepgram error:', tRes.status, errText.substring(0,200))
+        }
       } else {
-        const errText = await tRes.text()
-        console.log('Deepgram error:', tRes.status, errText.substring(0,200))
+        console.log('Could not fetch MP4 from Mux:', mp4Url, audioFetch.status)
       }
     } catch (e:any) {
       console.log('Transcription failed:', e.message)
