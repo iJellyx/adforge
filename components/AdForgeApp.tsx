@@ -366,7 +366,7 @@ function StitchedPreview({sections,libraryItems}:any){
   const vidRef=useRef<HTMLVideoElement>(null)
   const clips=(sections||[]).map((s:any)=>{const item=s.selectedClipId?libraryItems.find((i:Item)=>i.id===s.selectedClipId):null;if(!item?.mux_playback_id)return null;return{item,start:item.start_seconds||0,end:item.end_seconds,label:s.type,spoken:s.spokenWords||""}}).filter(Boolean)
   const cur=clips[clipIdx]
-  useEffect(()=>{const v=vidRef.current;if(!v||!cur)return;v.src=`https://stream.mux.com/${cur.item.mux_playback_id}.m3u8`;function seek(){v!.currentTime=cur!.start}if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true});if(playing)v.play().catch(()=>{})},[clipIdx])
+  useEffect(()=>{const v=vidRef.current;if(!v||!cur)return;v.src=`https://stream.mux.com/${cur.item.mux_playback_id}/capped-1080p.mp4`;function seek(){v!.currentTime=cur!.start}if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true});if(playing)v.play().catch(()=>{})},[clipIdx])
   function onTimeUpdate(){const v=vidRef.current;if(!v||!cur?.end)return;if(v.currentTime>=cur.end){if(clipIdx<clips.length-1)setClipIdx(i=>i+1);else{v.pause();setPlaying(false);setClipIdx(0)}}}
   function toggle(){const v=vidRef.current;if(!v)return;if(playing){v.pause();setPlaying(false)}else{v.play();setPlaying(true)}}
   if(clips.length===0)return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:32,textAlign:"center",color:C.muted}}><div style={{fontSize:28,marginBottom:8}}>🎬</div><div style={{fontSize:13}}>Assign clips to sections to preview the full ad</div></div>
@@ -602,7 +602,7 @@ Return ONLY valid JSON:
 function ClipSegmentPlayer({playbackId,start,end,muted}:{playbackId:string,start:number,end?:number,muted:boolean}){
   const vidRef=useRef<HTMLVideoElement>(null)
   const [playing,setPlaying]=useState(false)
-  const src=`https://stream.mux.com/${playbackId}.m3u8`
+  const src=`https://stream.mux.com/${playbackId}/capped-1080p.mp4`
 
   useEffect(()=>{
     const v=vidRef.current;if(!v)return
