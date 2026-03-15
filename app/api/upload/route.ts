@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       new_asset_settings: {
         playback_policy: ['public'],
         passthrough: item.id,
-        mp4_support: 'standard',
+        mp4_support: 'capped-1080p',
       },
       cors_origin: '*',
     })

@@ -22,7 +22,7 @@ export async function POST() {
             'Authorization': `Basic ${auth}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ mp4_support: 'standard' })
+          body: JSON.stringify({ mp4_support: 'capped-1080p' })
         })
         const data = await res.json()
         results.push({ id: asset.id, status: res.ok ? 'updated' : 'failed', data })
