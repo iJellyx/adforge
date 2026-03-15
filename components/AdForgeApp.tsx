@@ -159,8 +159,10 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
       })
 
       if(!res.ok){
-        const err=await res.json()
-        throw new Error(err.error||`Server error: ${res.status}`)
+        const rawText=await res.text()
+        let errMsg=`Server error: ${res.status}`
+        try{const parsed=JSON.parse(rawText);errMsg=parsed.error||errMsg}catch{errMsg=rawText.substring(0,200)||errMsg}
+        throw new Error(errMsg)
       }
 
       setProgress(80);setMsg("Stitching clips…")
