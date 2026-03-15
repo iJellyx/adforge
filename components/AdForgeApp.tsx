@@ -128,7 +128,7 @@ function TagEditor({tags,onUpdate}:{tags:string[],onUpdate:(t:string[])=>void}){
 }
 
 // ── FFmpeg MP4 Exporter ───────────────────────────────────────────────────
-function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
+function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl,onSave}:any){
   const [exporting,setExporting]=useState(false)
   const [progress,setProgress]=useState(0)
   const [msg,setMsg]=useState("")
@@ -145,6 +145,12 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl}:any){
   setExporting(true);setDone(false);setProgress(10);setMsg("Submitting to Shotstack…")
   try{
     const itemIds=clips.map((c:any)=>c.item.id)
+    // Save to Forged Ads first if not already saved
+    let savedAdId:string|null=null
+    if(onSave){
+      setMsg("Saving ad…")
+      savedAdId=await onSave()
+    }
     const res=await fetch("/api/export",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
@@ -1027,7 +1033,11 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
           <Card><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>🎵 Music</div>{musicUrl?<><audio src={musicUrl} controls style={{width:"100%",height:36,marginBottom:6}}/><div style={{fontSize:12,color:C.green}}>✓ {musicName}</div><button onClick={()=>setStep("music")} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline",padding:0,marginTop:4}}>Change</button></>:<div style={{fontSize:13,color:C.muted}}>No music — <button onClick={()=>setStep("music")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,textDecoration:"underline",padding:0}}>add some</button></div>}</Card>
         </div>
         <StitchedPreview sections={sections} libraryItems={items}/>
-        <ExportVideo sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl}/>
+        <ExportVideo sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl} onSave={async()=>{
+          const title=genMeta?.productName?`${genMeta.productName} — ${form.contentType||"Ad"}`:`${brand.name||"Ad"} — ${new Date().toLocaleDateString()}`
+          const savedAd=await onSaveForgedAd({title,status:"complete",mode:"script",sections,voiceover_url:voiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName}})
+          return savedAd?.id||null
+        }}/>
       </div>}
     </div>
   }
@@ -1325,8 +1335,10 @@ export default function AdForgeApp(){
 
   async function handleSaveForgedAd(ad:Omit<ForgedAd,"id">){
   const{data}=await supabase.from("forged_ads").insert({...ad,updated_at:new Date().toISOString()}).select().single()
-  if(data){setForgedAds(prev=>[data,...prev])}
-  await loadData()
+  if(data){
+    setForgedAds(prev=>[data,...prev])
+    setTab("forged")
+  }
   return data
 }
 
