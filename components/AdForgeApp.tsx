@@ -1036,7 +1036,8 @@ function LibraryTab({items,onRefresh,view,setView}:{items:Item[],onRefresh:()=>v
 
 // ── Scripts Tab ───────────────────────────────────────────────────────────
 function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode}:any){
-  const [view,setView]=useState(startAtChooseMode?"chooseMode":"list")  // list | chooseMode | generate | broll | review | detail
+  const [view,setView]=useState("list")  // list | chooseMode | generate | broll | review | detail
+  useEffect(()=>{if(startAtChooseMode)setView("chooseMode")},[startAtChooseMode])
   const [selected,setSelected]=useState<Script|null>(null)
   const [sections,setSections]=useState<any[]>([])
   const [genMeta,setGenMeta]=useState<any>(null)
