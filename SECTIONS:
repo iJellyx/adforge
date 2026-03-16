@@ -1,0 +1,20 @@
+Script started on Mon Mar 16 01:05:55 2026
+
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+[?1034hbash-3.2$   const bestId=m?.best_id&&validIds.has(m.best_id)?m.best_id:null
+bash: syntax error near unexpected token `m.best_id'
+bash-3.2$         const matchedIds=(m?.clip_ids||[]).filter((id:string)=>validIds.has(id))
+bash: syntax error near unexpected token `('
+bash-3.2$         return{...s,matchedClipIds:matchedIds.length>0?matchedIds:(s.matchedClipIds| |[]),selectedClipId:bestId||(s.selectedClipId||null),autoSelected:!!bestId,matchReason:m?.reas on||""}
+        return{...s,matchedClipIds:matchedIds.length>0?matchedIds:(s.matchedClipIds||[]),selectedClipId:bestId||(s.selectedClipId||null),autoSelected:        const matchedIds=(m?.clip_ids||[]).filter((id:string)=>validIds.has(id))bestId,matchReason:m?.reason||""}
+bash: syntax error near unexpected token `('
+bash-3.2$       })
+bash: syntax error near unexpected token `}'
+bash-3.2$     }catch(e){return secs}
+bash: syntax error near unexpected token `e'
+bash-3.2$   }git add .
+bash: }git: command not found
+bash-3.2$ git add .
+bash-3.2$ 

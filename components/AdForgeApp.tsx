@@ -1073,14 +1073,50 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   }
 
   async function matchClips(secs:any[],libItems:Item[]){
-    const libSummary=libItems.map(item=>`ID:${item.id}|title:${item.title}|creator:${item.creator||""}|tags:${(item.analysis?.scene_tags||[]).join(",")}|use:${item.analysis?.use_case||""}`).join("\n")
-    const scriptDesc=secs.map((s:any,i:number)=>`Section ${i} [${s.type}]: spoken="${(s.spokenWords||"").substring(0,80)}"`).join("\n")
-    const prompt=`Match script sections to video clips. Return ONLY valid JSON array:\nSCRIPT:\n${scriptDesc}\nLIBRARY:\n${libSummary}\nReturn: [{"section":0,"clip_ids":["uuid1"],"best_id":"uuid1"},…]`
+    // Use clips preferentially — they have richer analysis than originals
+    const clips=libItems.filter(i=>i.type==="clip"&&i.mux_playback_id)
+    const originals=libItems.filter(i=>i.type==="original"&&i.mux_playback_id)
+    const matchPool=clips.length>0?clips:originals
+
+    const libSummary=matchPool.map(item=>{
+      const a=item.analysis||{}
+      const tags=(a.scene_tags||[]).join(", ")
+      const useCase=a.use_case||""
+      const label=a.label||""
+      const summary=(a.summary||item.description||"").substring(0,100)
+      const transcript=(item.transcript||"").substring(0,80)
+      return `ID:${item.id}|label:${label}|use:${useCase}|tags:${tags}|summary:${summary}|transcript:${transcript}|creator:${item.creator||""}|adPotential:${a.ad_potential||""}`
+    }).join("\n")
+
+    const scriptDesc=secs.map((s:any,i:number)=>`Section ${i} [${s.type}]: "${(s.spokenWords||"").substring(0,100)}" — visual: ${(s.visualDirection||"").substring(0,60)}`).join("\n")
+
+    const prompt=`You are a direct response video editor. Match each script section to the best clip from the library.
+
+SCRIPT SECTIONS:
+${scriptDesc}
+
+CLIP LIBRARY (${matchPool.length} clips):
+${libSummary}
+
+Rules:
+- Match based on content relevance: HOOK clips for HOOK sections, product demos for SOLUTION sections, testimonials for SOCIAL PROOF sections etc
+- Use the clip's label, use_case, tags, and transcript to find the best match
+- Each section should get a different clip where possible
+- Return 2-3 alternative clips per section in order of relevance
+
+Return ONLY valid JSON array:
+[{"section":0,"clip_ids":["best_id","alt1","alt2"],"best_id":"best_matching_id","reason":"brief reason"},…]`
+
     try{
-      const raw=await callClaude([{role:"user",content:prompt}],700)
+      const raw=await callClaude([{role:"user",content:prompt}],1000)
       const matches=JSON.parse(raw.replace(/```json|```/g,"").trim())
       const validIds=new Set(libItems.map(i=>i.id))
-      return secs.map((s:any,i:number)=>{const m=matches.find((x:any)=>x.section===i);const bestId=m?.best_id&&validIds.has(m.best_id)?m.best_id:null;const matchedIds=(m?.clip_ids||[]).filter((id:string)=>validIds.has(id));return{...s,matchedClipIds:matchedIds.length>0?matchedIds:(s.matchedClipIds||[]),selectedClipId:bestId||(s.selectedClipId||null),autoSelected:!!bestId}})
+      return secs.map((s:any,i:number)=>{
+        const m=matches.find((x:any)=>x.section===i)
+        const bestId=m?.best_id&&validIds.has(m.best_id)?m.best_id:null
+        const matchedIds=(m?.clip_ids||[]).filter((id:string)=>validIds.has(id))
+        return{...s,matchedClipIds:matchedIds.length>0?matchedIds:(s.matchedClipIds||[]),selectedClipId:bestId||(s.selectedClipId||null),autoSelected:!!bestId,matchReason:m?.reason||""}
+      })
     }catch(e){return secs}
   }
 
