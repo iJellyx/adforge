@@ -411,8 +411,10 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     }
   }
 
-   function getVoiceTime(idx:number){
-    return clipStartTimesRef.current[idx]||0
+    function getVoiceTime(idx:number){
+    const fraction=clipStartTimesRef.current[idx]||0
+    const voiceDur=voiceRef.current?.duration||0
+    return fraction*voiceDur
   }
 
   function toggle(){
