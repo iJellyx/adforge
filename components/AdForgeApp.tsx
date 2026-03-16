@@ -1403,8 +1403,8 @@ Return ONLY valid JSON:
 
         {/* Hook variations */}
         {hookVariations.length>0&&<div style={{marginBottom:20}}>
-          <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>⚡ Hook Variations — pick one or save all 3</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
+          <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>⚡ Hook Variations — original + 3 AI variations</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginBottom:12}}>
             {hookVariations.map((variation:any[],vi:number)=>{
               const hook=variation[0]
               const isActive=sections[0]?.spokenWords===hook.spokenWords
@@ -1431,7 +1431,7 @@ Return ONLY valid JSON:
                 if(savedAd?.id){fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(console.error)}
               }
               onGoToForged()
-            }} style={{background:C.green,color:"#000",fontWeight:700,flex:1}}>💾 Save All 3 Hook Variations</Btn>
+            }} style={{background:C.green,color:"#000",fontWeight:700,flex:1}}>💾 Save All {hookVariations.length} Hook Variations</Btn>
           </div>
         </div>}
 
@@ -2017,7 +2017,7 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
       </div>
       {editingAvatar&&<Card style={{marginBottom:20,border:"1px solid "+C.accent+"44"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><STitle size={15} mb={0}>{editingAvatar.name||"New Avatar"}</STitle><Btn onClick={()=>setEditingAvatar(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"5px 10px"}}>Cancel</Btn></div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginBottom:12}}>
           <div><Label>Name *</Label><Input value={editingAvatar.name} onChange={(e:any)=>setEditingAvatar({...editingAvatar,name:e.target.value})} placeholder="e.g. Sarah"/></div>
           <div><Label>Age Range</Label><select value={editingAvatar.age} onChange={e=>setEditingAvatar({...editingAvatar,age:e.target.value})} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}><option value="">Any</option>{AGE_RANGES.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
           <div><Label>Gender</Label><select value={editingAvatar.gender} onChange={e=>setEditingAvatar({...editingAvatar,gender:e.target.value})} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}><option value="">Any</option>{GENDERS.map(g=><option key={g} value={g}>{g}</option>)}</select></div>
