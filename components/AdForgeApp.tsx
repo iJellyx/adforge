@@ -1199,23 +1199,54 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
         {reviewSteps.map((s,i)=><button key={s.id} onClick={()=>setStep(s.id as any)} style={{flex:1,padding:"12px 8px",background:step===s.id?C.accent:"transparent",color:step===s.id?"#fff":C.muted,border:"none",cursor:"pointer",fontSize:12,fontWeight:step===s.id?700:500,borderRight:i<reviewSteps.length-1?"1px solid "+C.border:"none"}}>{s.label}{s.id==="voiceover"&&voiceoverUrl?" ✓":""}{s.id==="music"&&musicUrl?" ✓":""}</button>)}
       </div>
 
-      {/* Step 1: Script */}
-      {step==="script"&&<>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+         {/* Step 1: Script */}
+      {step==="script"&&<div style={{maxWidth:760,margin:"0 auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <button onClick={()=>setView("generate")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Edit Parameters</button>
           <Btn onClick={()=>setStep("audio")} style={{background:C.accent,color:"#fff"}}>Next: Audio →</Btn>
         </div>
-        <Card style={{padding:0,overflow:"hidden",marginBottom:20}}>
-          <ScriptTable sections={sections} onChange={setSections} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} voiceoverUrl={null}/>
-        </Card>
-      </>}
+        <div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,marginBottom:16}}>✏️ Review your script below. Edit any section before moving to Audio.</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {sections.map((s:any,idx:number)=>{
+            const sc=secColor(s.type)
+            return<Card key={s.id||idx} pad={14} style={{border:"1px solid "+sc.bd}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <span style={{background:sc.bg,color:sc.color,fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:5,border:"1px solid "+sc.bd}}>{s.type}</span>
+                {s.durationEstimate&&<span style={{fontSize:10,color:C.muted}}>{s.durationEstimate}</span>}
+              </div>
+              <textarea value={s.spokenWords||""} onChange={e=>setSections(prev=>prev.map((r:any,i:number)=>i===idx?{...r,spokenWords:e.target.value}:r))} placeholder="Spoken words…" style={{width:"100%",background:"transparent",border:"none",resize:"none",color:C.text,fontSize:13,lineHeight:1.8,outline:"none",fontFamily:"inherit",minHeight:60,boxSizing:"border-box" as const,marginBottom:4}}/>
+              {s.visualDirection&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>{s.visualDirection}</div>}
+            </Card>
+          })}
+        </div>
+      </div>}
 
-      {/* Step 2: Audio — voiceover + music on one page */}
+       {/* Step 2: Audio — voiceover + music on one page */}
       {step==="audio"&&<div style={{maxWidth:640,margin:"0 auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <button onClick={()=>setStep("script")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Back to Script</button>
           <Btn onClick={()=>setStep("clips")} style={{background:C.accent,color:"#fff"}}>Next: Match Clips →</Btn>
         </div>
+
+        {/* Voiceover status banner */}
+        {voiceoverUrl&&<div style={{background:"#22c55e11",border:"1px solid #22c55e44",borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{color:C.green,fontSize:16}}>✓</span>
+          <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.green}}>Voiceover ready — {voiceoverVoice}</div><audio src={voiceoverUrl} controls style={{width:"100%",height:28,marginTop:4}}/></div>
+          <button onClick={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,textDecoration:"underline"}}>Remove</button>
+        </div>}
+
+        {/* Music status banner */}
+        {musicUrl&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff44",borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{color:C.accent,fontSize:16}}>✓</span>
+          <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.accent}}>Music selected — {musicName}</div><audio src={musicUrl} controls style={{width:"100%",height:28,marginTop:4}}/></div>
+          <button onClick={()=>{setMusicUrl(null);setMusicName(null)}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,textDecoration:"underline"}}>Remove</button>
+        </div>}
+
+        {/* Ready indicator */}
+        {voiceoverUrl&&musicUrl&&<div style={{background:"#22c55e11",border:"1px solid #22c55e44",borderRadius:10,padding:"10px 16px",marginBottom:16,fontSize:13,color:C.green,fontWeight:600,textAlign:"center"}}>
+          ✅ Both audio tracks selected — ready to match clips!
+        </div>}
+
         <VoiceoverGenerator sections={sections} savedVoiceoverUrl={voiceoverUrl} onSave={(url:string|null,voice:string|null)=>{setVoiceoverUrl(url);setVoiceoverVoice(voice)}} onSkip={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}}/>
         <div style={{marginTop:16}}>
           <MusicPicker suggestedMood={suggestedMood} onSave={(url:string|null,name:string|null)=>{setMusicUrl(url);setMusicName(name)}}/>
@@ -1632,7 +1663,7 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
             <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
           </div>
         </div>
-        {previewAd.sections&&previewAd.sections.length>0&&<div style={{marginBottom:20}}><StitchedPreview sections={previewAd.sections} libraryItems={items}/></div>}
+        {previewAd.sections&&previewAd.sections.length>0&&<div style={{marginBottom:20}}><StitchedPreview sections={previewAd.sections} libraryItems={items} voiceoverUrl={previewAd.voiceover_url} musicUrl={previewAd.music_url}/></div>}
         <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
           {previewAd.voiceover_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover · {previewAd.voiceover_voice}</div><audio src={previewAd.voiceover_url} controls style={{width:"100%",height:36}}/></div>}
           {previewAd.music_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls style={{width:"100%",height:36}}/></div>}
