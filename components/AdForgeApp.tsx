@@ -367,11 +367,12 @@ function MusicPicker({suggestedMood,onSave}:any){
 
 // ── Stitched Preview ──────────────────────────────────────────────────────
 function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
-  const [clipIdx,setClipIdx]=useState(0)
+ const [clipIdx,setClipIdx]=useState(0)
   const [playing,setPlaying]=useState(false)
   const vidRef=useRef<HTMLVideoElement>(null)
   const voiceRef=useRef<HTMLAudioElement>(null)
   const musicRef=useRef<HTMLAudioElement>(null)
+  const clipStartTimesRef=useRef<number[]>([])
 
   const clips=(sections||[]).map((s:any)=>{
     const item=s.selectedClipId?libraryItems.find((i:Item)=>i.id===s.selectedClipId):null
@@ -380,6 +381,18 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
   }).filter(Boolean)
 
   const cur=clips[clipIdx]
+
+  useEffect(()=>{
+    // Pre-calculate cumulative start times for each clip using item duration_seconds
+    let elapsed=0
+    const times=clips.map((c:any)=>{
+      const t=elapsed
+      const dur=c.item.duration_seconds||(c.end&&c.start!=null?c.end-c.start:5)
+      elapsed+=dur
+      return t
+    })
+    clipStartTimesRef.current=times
+  },[clips.length])
 
   useEffect(()=>{
     const v=vidRef.current;if(!v||!cur)return
@@ -397,12 +410,8 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     }
   }
 
-  function getVoiceTime(idx:number){
-    // Calculate cumulative duration of all clips before this index
-    return clips.slice(0,idx).reduce((acc:number,c:any)=>{
-      const dur=c.end&&c.start!=null?c.end-c.start:5
-      return acc+dur
-    },0)
+   function getVoiceTime(idx:number){
+    return clipStartTimesRef.current[idx]||0
   }
 
   function toggle(){
