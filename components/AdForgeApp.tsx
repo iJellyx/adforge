@@ -438,13 +438,14 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     if(playing)v.play().catch(()=>{})
   },[clipIdx])
 
- function getSectionDuration(idx:number){
-    const voiceDur=voiceRef.current?.duration||0
-    if(!voiceDur)return cur?.end&&cur?.start!=null?cur.end-cur.start:5
-    const spokenWords=clips.map((c:any)=>c.spoken||"")
-    const wordCounts=spokenWords.map((s:string)=>s.trim().split(/\s+/).filter(Boolean).length)
-    const totalWords=wordCounts.reduce((a:number,b:number)=>a+b,0)||1
-    return(wordCounts[idx]/totalWords)*voiceDur
+  function getSectionDuration(idx:number){
+    const clip=clips[idx]
+    // If this section has its own voiceover, use that audio's duration
+    if(clip?.voiceover_url&&voiceRef.current?.duration){
+      return voiceRef.current.duration
+    }
+    // Fallback to clip segment length
+    return clip?.end&&clip?.start!=null?(clip.end-clip.start):5
   }
 
   function onTimeUpdate(){
