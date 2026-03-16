@@ -1159,6 +1159,8 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [musicName,setMusicName]=useState<string|null>(null)
   const [suggestedMood,setSuggestedMood]=useState("Uplifting")
   const [adTitle,setAdTitle]=useState("")
+  const [hookVariations,setHookVariations]=useState<any[][]>([])
+  const [generatingHooks,setGeneratingHooks]=useState(false)
   const [form,setForm]=useState({productId:"",awarenessStage:"problem_aware",contentType:"UGC",adLength:"30 seconds",customerAvatar:"",useAvatarId:"",painPoints:"",desires:"",objections:"",request:""})
   function setF(k:string,v:string){setForm(x=>({...x,[k]:v}))}
   const savedAvatars=(brand?.customer_avatars||[])
@@ -1268,6 +1270,38 @@ Return ONLY valid JSON array:
   setAdTitle("")
   onGoToForged()
 }
+async function generateHookVariations(){
+  setGeneratingHooks(true)
+  try{
+    const bodyText=sections.filter((s:any)=>s.type!=="HOOK").map((s:any)=>s.spokenWords||"").join(" ")
+    const prod=products.find((x:Product)=>String((x as any).id)===String(form.productId))||null
+    const prompt=`Write 3 different HOOK variations for a direct response video ad.
+
+Brand: ${brand.name||"Unknown"}
+Product: ${prod?.name||"General"}
+Ad body (stays the same): "${bodyText.substring(0,300)}"
+
+Write 3 hooks using different angles:
+1. Question hook — opens with a provocative question
+2. Bold statement hook — opens with a surprising or bold claim
+3. Pain point hook — opens by naming a specific customer pain
+
+Return ONLY valid JSON:
+{"hooks":[{"type":"Question","spokenWords":"exact hook words","visualDirection":"what is shown"}{"type":"Bold Statement","spokenWords":"exact hook words","visualDirection":"what is shown"},{"type":"Pain Point","spokenWords":"exact hook words","visualDirection":"what is shown"}]}`
+
+    const raw=await callClaude([{role:"user",content:prompt}],600)
+    const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
+    const hooks=data.hooks||[]
+    // Build 3 complete section arrays — each with a different hook, same body
+    const bodyBections=sections.filter((s:any)=>s.type!=="HOOK")
+    const variations=hooks.map((hook:any)=>[
+      {...(sections.find((s:any)=>s.type==="HOOK")||sections[0]),spokenWords:hook.spokenWords,visualDirection:hook.visualDirection,hookType:hook.type,voiceover_url:null},
+      ...bodyBections
+    ])
+    setHookVariations(variations)
+  }catch(e){console.error(e);alert("Failed to generate hook variations")}
+  setGeneratingHooks(false)
+}
 
   async function handleDeleteScript(id:string){const supabase=createClient();await supabase.from("scripts").delete().eq("id",id);onSaveScripts(scripts.filter((s:Script)=>s.id!==id));setView("list")}
 
@@ -1355,12 +1389,51 @@ Return ONLY valid JSON array:
       </div>
 
          {/* Step 1: Script */}
-      {step==="script"&&<div style={{maxWidth:760,margin:"0 auto"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+      {step==="script"&&<div style={{maxWidth:860,margin:"0 auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
           <button onClick={()=>setView("generate")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Edit Parameters</button>
-          <Btn onClick={()=>setStep("audio")} style={{background:C.accent,color:"#fff"}}>Next: Audio →</Btn>
+          <div style={{display:"flex",gap:10}}>
+            <Btn onClick={generateHookVariations} disabled={generatingHooks||sections.length===0} style={{background:generatingHooks?C.border:C.accentSoft,color:generatingHooks?C.muted:C.accent,border:"1px solid "+C.accent+"44"}}>{generatingHooks?"⏳ Generating…":"⚡ Generate 3 Hook Variations"}</Btn>
+            <Btn onClick={()=>setStep("audio")} style={{background:C.accent,color:"#fff"}}>Next: Audio →</Btn>
+          </div>
         </div>
-        <div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,marginBottom:16}}>✏️ Review your script below. Edit any section before moving to Audio.</div>
+        <div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,marginBottom:16}}>✏️ Review and edit your script below. Use "Generate 3 Hook Variations" to create testable hook options.</div>
+
+        {/* Hook variations */}
+        {hookVariations.length>0&&<div style={{marginBottom:20}}>
+          <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>⚡ Hook Variations — pick one or save all 3</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
+            {hookVariations.map((variation:any[],vi:number)=>{
+              const hook=variation[0]
+              const isActive=sections[0]?.spokenWords===hook.spokenWords
+              return<div key={vi} style={{background:isActive?C.accentSoft:C.card,border:"2px solid "+(isActive?C.accent:C.border),borderRadius:12,padding:14,cursor:"pointer"}} onClick={()=>setSections(variation)}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <span style={{background:C.accent+"22",color:C.accent,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99}}>Hook {vi+1} — {hook.hookType}</span>
+                  {isActive&&<span style={{color:C.accent,fontSize:11,fontWeight:700}}>✓ Selected</span>}
+                </div>
+                <div style={{fontSize:13,lineHeight:1.6,color:C.text}}>"{hook.spokenWords}"</div>
+              </div>
+            })}
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <Btn onClick={async()=>{
+              for(let i=0;i<hookVariations.length;i++){
+                const stageWords=(form.awarenessStage||"problem_aware").split("_").map((w:string)=>w.charAt(0).toUpperCase()+w.slice(1)).join("")
+                const baseAutoName=`${stageWords}_${form.contentType||"UGC"}_${(form.adLength||"30 seconds").replace(" seconds","s")}_Hook${i+1}`
+                const supabaseCheck=createClient()
+                const{data:existingAds}=await supabaseCheck.from("forged_ads").select("title").ilike("title",`${baseAutoName}%`)
+                let version=1
+                if(existingAds&&existingAds.length>0){const versions=existingAds.map((a:any)=>{const m=a.title.match(/_v(\d+)$/);return m?parseInt(m[1]):1});version=Math.max(...versions)+1}
+                const title=`${baseAutoName}_v${version}`
+                const savedAd=await onSaveForgedAd({title,status:"complete",mode:"script",sections:hookVariations[i],voiceover_url:null,voiceover_voice:null,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName,hookVariation:i+1,hookType:hookVariations[i][0]?.hookType}})
+                if(savedAd?.id){fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(console.error)}
+              }
+              onGoToForged()
+            }} style={{background:C.green,color:"#000",fontWeight:700,flex:1}}>💾 Save All 3 Hook Variations</Btn>
+          </div>
+        </div>}
+
+        {/* Main script */}
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {sections.map((s:any,idx:number)=>{
             const sc=secColor(s.type)
