@@ -55,17 +55,36 @@ export async function POST(req: NextRequest) {
     }
 
     // Build Shotstack timeline
-    const videoClips = clips.map((clip: any, i: number) => ({
-      asset: {
-        type: 'video',
-        src: `https://stream.mux.com/${clip.item.mux_playback_id}/capped-1080p.mp4`,
-        trim: clip.start,
-        volume: clip.muted ? 0 : 1,
-      },
-      start: clips.slice(0, i).reduce((acc: number, c: any) => acc + c.duration, 0),
-      length: clip.duration,
-    }))
+      // Calculate voiceover duration from sections word counts
+    const spokenWords=sections.map((s:any)=>s.spokenWords||"")
+    const wordCounts=spokenWords.map((s:string)=>s.trim().split(/\s+/).filter(Boolean).length)
+    const totalWords=wordCounts.reduce((a:number,b:number)=>a+b,0)||1
 
+    // If voiceover exists, size each clip to match its section's voice duration
+    // Otherwise use the clip's natural duration
+    const totalVoiceDur=ad.voiceover_url?clips.reduce((acc:number,c:any)=>acc+c.duration,0):0
+
+    const videoClips = clips.map((clip: any, i: number) => {
+      const sectionDur = ad.voiceover_url && totalWords > 0
+        ? (wordCounts[i] / totalWords) * totalVoiceDur
+        : clip.duration
+      const safeDur = Math.max(0.5, sectionDur)
+      return {
+        asset: {
+          type: 'video',
+          src: `https://stream.mux.com/${clip.item.mux_playback_id}/capped-1080p.mp4`,
+          trim: clip.start,
+          volume: clip.muted ? 0 : 1,
+        },
+        start: clips.slice(0, i).reduce((acc: number, c: any, ci: number) => {
+          const wd = ad.voiceover_url && totalWords > 0
+            ? (wordCounts[ci] / totalWords) * totalVoiceDur
+            : c.duration
+          return acc + Math.max(0.5, wd)
+        }, 0),
+        length: safeDur,
+      }
+    })
     const tracks: any[] = [{ clips: videoClips }]
     const totalDuration = clips.reduce((acc: number, c: any) => acc + c.duration, 0)
 

@@ -403,9 +403,20 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     if(playing)v.play().catch(()=>{})
   },[clipIdx])
 
+ function getSectionDuration(idx:number){
+    const voiceDur=voiceRef.current?.duration||0
+    if(!voiceDur)return cur?.end&&cur?.start!=null?cur.end-cur.start:5
+    const spokenWords=clips.map((c:any)=>c.spoken||"")
+    const wordCounts=spokenWords.map((s:string)=>s.trim().split(/\s+/).filter(Boolean).length)
+    const totalWords=wordCounts.reduce((a:number,b:number)=>a+b,0)||1
+    return(wordCounts[idx]/totalWords)*voiceDur
+  }
+
   function onTimeUpdate(){
-    const v=vidRef.current;if(!v||!cur?.end)return
-    if(v.currentTime>=cur.end){
+    const v=vidRef.current;if(!v||!cur)return
+    const sectionDur=getSectionDuration(clipIdx)
+    const clipPlayTime=v.currentTime-cur.start
+    if(clipPlayTime>=sectionDur){
       if(clipIdx<clips.length-1)setClipIdx(i=>i+1)
       else{v.pause();setPlaying(false);setClipIdx(0);voiceRef.current?.pause();musicRef.current?.pause()}
     }
