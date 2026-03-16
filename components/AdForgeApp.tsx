@@ -366,41 +366,94 @@ function MusicPicker({suggestedMood,onSave}:any){
 }
 
 // ── Stitched Preview ──────────────────────────────────────────────────────
-function StitchedPreview({sections,libraryItems}:any){
+function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
   const [clipIdx,setClipIdx]=useState(0)
   const [playing,setPlaying]=useState(false)
   const vidRef=useRef<HTMLVideoElement>(null)
-  const clips=(sections||[]).map((s:any)=>{const item=s.selectedClipId?libraryItems.find((i:Item)=>i.id===s.selectedClipId):null;if(!item?.mux_playback_id)return null;return{item,start:item.start_seconds||0,end:item.end_seconds,label:s.type,spoken:s.spokenWords||""}}).filter(Boolean)
+  const voiceRef=useRef<HTMLAudioElement>(null)
+  const musicRef=useRef<HTMLAudioElement>(null)
+
+  const clips=(sections||[]).map((s:any)=>{
+    const item=s.selectedClipId?libraryItems.find((i:Item)=>i.id===s.selectedClipId):null
+    if(!item?.mux_playback_id)return null
+    return{item,start:item.start_seconds||0,end:item.end_seconds,label:s.type,spoken:s.spokenWords||"",muted:s.muted||false}
+  }).filter(Boolean)
+
   const cur=clips[clipIdx]
-  useEffect(()=>{const v=vidRef.current;if(!v||!cur)return;v.src=`https://stream.mux.com/${cur.item.mux_playback_id}/capped-1080p.mp4`;function seek(){v!.currentTime=cur!.start}if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true});if(playing)v.play().catch(()=>{})},[clipIdx])
-  function onTimeUpdate(){const v=vidRef.current;if(!v||!cur?.end)return;if(v.currentTime>=cur.end){if(clipIdx<clips.length-1)setClipIdx(i=>i+1);else{v.pause();setPlaying(false);setClipIdx(0)}}}
-  function toggle(){const v=vidRef.current;if(!v)return;if(playing){v.pause();setPlaying(false)}else{v.play();setPlaying(true)}}
+
+  useEffect(()=>{
+    const v=vidRef.current;if(!v||!cur)return
+    v.src=`https://stream.mux.com/${cur.item.mux_playback_id}/capped-1080p.mp4`
+    function seek(){if(v)v.currentTime=cur!.start}
+    if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true})
+    if(playing)v.play().catch(()=>{})
+  },[clipIdx])
+
+  function onTimeUpdate(){
+    const v=vidRef.current;if(!v||!cur?.end)return
+    if(v.currentTime>=cur.end){
+      if(clipIdx<clips.length-1)setClipIdx(i=>i+1)
+      else{v.pause();setPlaying(false);setClipIdx(0);voiceRef.current?.pause();musicRef.current?.pause()}
+    }
+  }
+
+  function toggle(){
+    const v=vidRef.current;if(!v)return
+    if(playing){
+      v.pause();voiceRef.current?.pause();musicRef.current?.pause();setPlaying(false)
+    } else {
+      v.play().catch(()=>{})
+      if(voiceRef.current){voiceRef.current.currentTime=0;voiceRef.current.play().catch(()=>{})}
+      if(musicRef.current){musicRef.current.currentTime=0;musicRef.current.volume=0.2;musicRef.current.play().catch(()=>{})}
+      setPlaying(true)
+    }
+  }
+
   if(clips.length===0)return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:32,textAlign:"center",color:C.muted}}><div style={{fontSize:28,marginBottom:8}}>🎬</div><div style={{fontSize:13}}>Assign clips to sections to preview the full ad</div></div>
+
   const sc=secColor(cur?.label)
+
   return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
+    {/* Hidden audio elements */}
+    {voiceoverUrl&&<audio ref={voiceRef} src={voiceoverUrl} style={{display:"none"}}/>}
+    {musicUrl&&<audio ref={musicRef} src={musicUrl} style={{display:"none"}} loop/>}
+
     <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10}}>
       <div style={{fontWeight:700,fontSize:14}}>🎬 Full Ad Preview</div>
       <span style={{fontSize:12,color:C.muted}}>{clips.length} clips · section {clipIdx+1}</span>
+      {(voiceoverUrl||musicUrl)&&<div style={{display:"flex",gap:6}}>
+        {voiceoverUrl&&<span style={{fontSize:10,color:C.green,background:"#22c55e11",padding:"2px 7px",borderRadius:99,border:"1px solid #22c55e33"}}>🎙️ Voiceover</span>}
+        {musicUrl&&<span style={{fontSize:10,color:C.accent,background:C.accentSoft,padding:"2px 7px",borderRadius:99,border:"1px solid "+C.accent+"33"}}>🎵 Music</span>}
+      </div>}
       <div style={{flex:1}}/>
       <span style={{background:sc?.bg,color:sc?.color,border:"1px solid "+sc?.bd,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5}}>{cur?.label}</span>
     </div>
+
     <div style={{display:"grid",gridTemplateColumns:"1fr 260px"}}>
       <div style={{position:"relative",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:320}}>
-        <video ref={vidRef} playsInline preload="metadata" muted style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
-        {!playing&&<div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}><div style={{width:52,height:52,borderRadius:"50%",background:"#000a",border:"2px solid #fff4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>▶</div></div>}
+        <video ref={vidRef} playsInline preload="metadata" muted={cur?.muted||false} style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
+        {!playing&&<div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+          <div style={{width:52,height:52,borderRadius:"50%",background:"#000a",border:"2px solid #fff4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>▶</div>
+          {(voiceoverUrl||musicUrl)&&<div style={{position:"absolute",bottom:16,fontSize:11,color:"#fff",background:"#000a",padding:"3px 10px",borderRadius:99}}>{[voiceoverUrl?"🎙️ Voiceover":"",musicUrl?"🎵 Music":""].filter(Boolean).join(" + ")} will play</div>}
+        </div>}
       </div>
       <div style={{borderLeft:"1px solid "+C.border,overflowY:"auto",maxHeight:480}}>
         <div style={{padding:"8px 10px",borderBottom:"1px solid "+C.border,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>Timeline</div>
-        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>setClipIdx(i)} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
+        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false)}} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
           <div style={{width:34,position:"relative",paddingTop:"60px",flexShrink:0,borderRadius:5,overflow:"hidden",background:"#111",border:"1px solid "+(active?C.accent:C.border)}}>{clip.item.mux_playback_id&&<img src={muxThumb(clip.item.mux_playback_id,clip.item.thumbnail_time||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>}</div>
-          <div style={{flex:1,minWidth:0}}><div style={{background:sc2.bg,color:sc2.color,fontSize:8,fontWeight:800,padding:"1px 5px",borderRadius:3,display:"inline-block",marginBottom:3}}>{clip.label}</div><div style={{fontSize:10,color:active?C.text:C.muted,lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{clip.spoken||clip.item.title}</div></div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{background:sc2.bg,color:sc2.color,fontSize:8,fontWeight:800,padding:"1px 5px",borderRadius:3,display:"inline-block",marginBottom:3}}>{clip.label}</div>
+            {clip.muted&&<span style={{fontSize:8,color:"#ef4444",marginLeft:4}}>🔇</span>}
+            <div style={{fontSize:10,color:active?C.text:C.muted,lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{clip.spoken||clip.item.title}</div>
+          </div>
         </div>})}
       </div>
     </div>
+
     <div style={{padding:"10px 16px",borderTop:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10}}>
-      <button onClick={()=>setClipIdx(i=>Math.max(0,i-1))} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
-      <button onClick={toggle} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>{playing?"⏸ Pause":"▶ Play All"}</button>
-      <button onClick={()=>setClipIdx(i=>Math.min(clips.length-1,i+1))} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
+      <button onClick={()=>{setClipIdx(i=>Math.max(0,i-1));setPlaying(false)}} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
+      <button onClick={toggle} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>{playing?"⏸ Pause":"▶ Play Full Ad"}</button>
+      <button onClick={()=>{setClipIdx(i=>Math.min(clips.length-1,i+1));setPlaying(false)}} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
       <span style={{fontSize:11,color:C.muted,marginLeft:"auto"}}>{clipIdx+1} / {clips.length}</span>
     </div>
   </div>
@@ -644,9 +697,19 @@ function ClipSegmentPlayer({playbackId,start,end,muted}:{playbackId:string,start
 function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productName,voiceoverUrl}:any){
   const [pickerIdx,setPickerIdx]=useState<number|null>(null)
   const [fillingIdx,setFillingIdx]=useState<number|null>(null)
-  const [mutedClips,setMutedClips]=useState<Record<number,boolean>>({})
-  const [allMuted,setAllMuted]=useState(!!voiceoverUrl)
-
+  const [mutedClips,setMutedClips]=useState<Record<number,boolean>>(()=>{
+    if(!voiceoverUrl)return{}
+    const m:Record<number,boolean>={}
+    ;(sections||[]).forEach((_:any,i:number)=>{m[i]=true})
+    return m
+  })
+const [allMuted,setAllMuted]=useState(!!voiceoverUrl)
+  // Bake initial mute state into sections when voiceover is present
+  useEffect(()=>{
+    if(voiceoverUrl&&sections.length>0&&!sections[0].hasOwnProperty('muted')){
+      onChange(sections.map((s:any)=>({...s,muted:true})))
+    }
+  },[voiceoverUrl])
   function updM(idx:number,obj:any){onChange(sections.map((s:any,i:number)=>i===idx?{...s,...obj}:s))}
   function upd(idx:number,key:string,val:any){onChange(sections.map((s:any,i:number)=>i===idx?{...s,[key]:val}:s))}
   function addRow(){onChange([...sections,{id:Date.now(),type:"BODY",spokenWords:"",visualDirection:"",matchedClipIds:[],selectedClipId:null,autoSelected:false}])}
@@ -979,7 +1042,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [genMeta,setGenMeta]=useState<any>(null)
   const [generating,setGenerating]=useState(false)
   const [matching,setMatching]=useState(false)
-  const [step,setStep]=useState<"voiceover"|"script"|"music"|"preview">("voiceover")
+  const [step,setStep]=useState<"script"|"audio"|"clips"|"forge">("script")
   const [voiceoverUrl,setVoiceoverUrl]=useState<string|null>(null)
   const [voiceoverVoice,setVoiceoverVoice]=useState<string|null>(null)
   const [musicUrl,setMusicUrl]=useState<string|null>(null)
@@ -1003,7 +1066,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
       let secs=(data.sections||[]).map((s:any,i:number)=>({...s,id:Date.now()+i,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
       if(items.length>0)secs=await matchClips(secs,items)
       setSuggestedMood(data.suggested_music_mood||"Uplifting")
-      setSections(secs);setGenMeta({form,productName:prod?.name||"General"});setView("review");setStep("voiceover")
+      setSections(secs);setGenMeta({form,productName:prod?.name||"General"});setView("review");setStep("script")
     }catch(e){alert("Error generating script.");console.error(e)}
     setGenerating(false)
   }
@@ -1053,7 +1116,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
 
   async function handleDeleteScript(id:string){const supabase=createClient();await supabase.from("scripts").delete().eq("id",id);onSaveScripts(scripts.filter((s:Script)=>s.id!==id));setView("list")}
 
-  const reviewSteps=[{id:"voiceover",label:"1. Voiceover"},{id:"script",label:"2. Script & Clips"},{id:"music",label:"3. Music"},{id:"preview",label:"4. Preview & Export"}]
+  const reviewSteps=[{id:"script",label:"1. Script"},{id:"audio",label:"2. Audio"},{id:"clips",label:"3. Clip Matching"},{id:"forge",label:"4. Forge"}]
 
   // ── Choose Mode ──
   if(view==="chooseMode")return<div style={{maxWidth:640,margin:"0 auto",padding:60}}>
@@ -1136,64 +1199,63 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
         {reviewSteps.map((s,i)=><button key={s.id} onClick={()=>setStep(s.id as any)} style={{flex:1,padding:"12px 8px",background:step===s.id?C.accent:"transparent",color:step===s.id?"#fff":C.muted,border:"none",cursor:"pointer",fontSize:12,fontWeight:step===s.id?700:500,borderRight:i<reviewSteps.length-1?"1px solid "+C.border:"none"}}>{s.label}{s.id==="voiceover"&&voiceoverUrl?" ✓":""}{s.id==="music"&&musicUrl?" ✓":""}</button>)}
       </div>
 
-      {step==="voiceover"&&<div style={{maxWidth:640,margin:"0 auto"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <button onClick={()=>setView("generate")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Edit Parameters</button>
-          <Btn onClick={()=>setStep("script")} style={{background:C.accent,color:"#fff"}}>Next: Clips →</Btn>
-        </div>
-        <div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,marginBottom:16}}>💡 Generate your voiceover first — then select clips while listening for context. Or skip if you don't need one.</div>
-        <VoiceoverGenerator sections={sections} savedVoiceoverUrl={voiceoverUrl} onSave={(url:string|null,voice:string|null)=>{setVoiceoverUrl(url);setVoiceoverVoice(voice);setStep("script")}} onSkip={()=>setStep("script")}/>
-      </div>}
-
+      {/* Step 1: Script */}
       {step==="script"&&<>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-          <button onClick={()=>setStep("voiceover")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Voiceover</button>
+          <button onClick={()=>setView("generate")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Edit Parameters</button>
+          <Btn onClick={()=>setStep("audio")} style={{background:C.accent,color:"#fff"}}>Next: Audio →</Btn>
+        </div>
+        <Card style={{padding:0,overflow:"hidden",marginBottom:20}}>
+          <ScriptTable sections={sections} onChange={setSections} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} voiceoverUrl={null}/>
+        </Card>
+      </>}
+
+      {/* Step 2: Audio — voiceover + music on one page */}
+      {step==="audio"&&<div style={{maxWidth:640,margin:"0 auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <button onClick={()=>setStep("script")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Back to Script</button>
+          <Btn onClick={()=>setStep("clips")} style={{background:C.accent,color:"#fff"}}>Next: Match Clips →</Btn>
+        </div>
+        <VoiceoverGenerator sections={sections} savedVoiceoverUrl={voiceoverUrl} onSave={(url:string|null,voice:string|null)=>{setVoiceoverUrl(url);setVoiceoverVoice(voice)}} onSkip={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}}/>
+        <div style={{marginTop:16}}>
+          <MusicPicker suggestedMood={suggestedMood} onSave={(url:string|null,name:string|null)=>{setMusicUrl(url);setMusicName(name)}}/>
+        </div>
+      </div>}
+
+      {/* Step 3: Clip Matching */}
+      {step==="clips"&&<>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+          <button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Audio</button>
           <div style={{display:"flex",gap:10}}>
             <Btn onClick={async()=>{setMatching(true);const u=await(async()=>{try{return await matchClips(sections,items)}catch{return sections}})();setSections(u);setMatching(false)}} disabled={matching||items.length===0} style={{background:matching?C.border:C.accentSoft,color:matching?C.muted:C.accent,border:"1px solid "+C.accent+"44"}}>{matching?"🔍 Matching…":"🔄 Re-match"}</Btn>
-            <Btn onClick={()=>setStep("music")} style={{background:C.accent,color:"#fff"}}>Next: Music →</Btn>
+            <Btn onClick={()=>setStep("forge")} style={{background:C.accent,color:"#fff"}}>Next: Forge →</Btn>
           </div>
         </div>
-        {voiceoverUrl&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:10,padding:"10px 16px",marginBottom:12,fontSize:13,color:"#4ade80",display:"flex",alignItems:"center",gap:10}}>🎙️ Voiceover — <audio src={voiceoverUrl} controls style={{height:28,flex:1}}/></div>}
         {autoCount>0&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:13,color:"#4ade80"}}>✦ AI auto-selected {autoCount} clip{autoCount!==1?"s":""} — swap any below.</div>}
         <Card style={{padding:0,overflow:"hidden",marginBottom:20}}>
           <ScriptTable sections={sections} onChange={setSections} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} voiceoverUrl={voiceoverUrl}/>
         </Card>
-        <StitchedPreview sections={sections} libraryItems={items}/>
+        <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl}/>
       </>}
 
-      {step==="music"&&<div style={{maxWidth:640,margin:"0 auto"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <button onClick={()=>setStep("script")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Back to Clips</button>
-          <Btn onClick={()=>setStep("preview")} style={{background:C.accent,color:"#fff"}}>Next: Preview →</Btn>
+      {/* Step 4: Forge */}
+      {step==="forge"&&<div style={{maxWidth:860,margin:"0 auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+          <button onClick={()=>setStep("clips")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Back to Clips</button>
+          <div style={{display:"flex",gap:10}}>
+            <Btn onClick={()=>handleSaveForged("draft")} style={{background:C.surface,color:C.text,border:"1px solid "+C.border}}>💾 Save Draft</Btn>
+            <Btn onClick={()=>handleSaveForged("complete")} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Mark Complete & Save</Btn>
+          </div>
         </div>
-        <MusicPicker suggestedMood={suggestedMood} onSave={(url:string|null,name:string|null)=>{setMusicUrl(url);setMusicName(name);setStep("preview")}}/>
-      </div>}
-
-      {step==="preview"&&<div style={{maxWidth:860,margin:"0 auto"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-                <button onClick={()=>setStep("music")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Back to Music</button>
-                <div style={{display:"flex",gap:10}}>
-                  <Btn onClick={()=>handleSaveForged("draft")} style={{background:C.surface,color:C.text,border:"1px solid "+C.border}}>💾 Save Draft</Btn>
-                  <Btn onClick={()=>handleSaveForged("complete")} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Mark Complete</Btn>
-                </div>
-              </div>
-              <div style={{marginBottom:20}}>
-                <Label>Ad Name (optional)</Label>
-                <input value={adTitle} onChange={e=>setAdTitle(e.target.value)}
-                  placeholder={`e.g. ${(STAGE_COLORS[form.awarenessStage]?"":"ProblemAware_")}${form.contentType||"UGC"}_${form.adLength?.replace(" seconds","s")||"30s"}_v1`}
-                  style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
-                <div style={{fontSize:11,color:C.muted,marginTop:5}}>Leave blank to auto-name e.g. <strong style={{color:C.text}}>{form.awarenessStage?.replace("_"," ")||"ProblemAware"}_{form.contentType||"UGC"}_{form.adLength?.replace(" seconds","s")||"30s"}_v1</strong></div>
-              </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
-          <Card><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>🎙️ Voiceover</div>{voiceoverUrl?<><audio src={voiceoverUrl} controls style={{width:"100%",height:36,marginBottom:6}}/><div style={{fontSize:12,color:C.green}}>✓ {voiceoverVoice}</div><button onClick={()=>setStep("voiceover")} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline",padding:0,marginTop:4}}>Change</button></>:<div style={{fontSize:13,color:C.muted}}>No voiceover — <button onClick={()=>setStep("voiceover")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,textDecoration:"underline",padding:0}}>add one</button></div>}</Card>
-          <Card><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>🎵 Music</div>{musicUrl?<><audio src={musicUrl} controls style={{width:"100%",height:36,marginBottom:6}}/><div style={{fontSize:12,color:C.green}}>✓ {musicName}</div><button onClick={()=>setStep("music")} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline",padding:0,marginTop:4}}>Change</button></>:<div style={{fontSize:13,color:C.muted}}>No music — <button onClick={()=>setStep("music")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,textDecoration:"underline",padding:0}}>add some</button></div>}</Card>
+        <div style={{marginBottom:16}}>
+          <Label>Ad Name (optional)</Label>
+          <input value={adTitle} onChange={e=>setAdTitle(e.target.value)} placeholder={`e.g. ProblemAware_${form.contentType||"UGC"}_${(form.adLength||"30s").replace(" seconds","s")}_v1`} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
         </div>
-        <StitchedPreview sections={sections} libraryItems={items}/>
-        <ExportVideo sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl} onSave={async()=>{
-          const title=genMeta?.productName?`${genMeta.productName} — ${form.contentType||"Ad"}`:`${brand.name||"Ad"} — ${new Date().toLocaleDateString()}`
-          const savedAd=await onSaveForgedAd({title,status:"complete",mode:"script",sections,voiceover_url:voiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName}})
-          return savedAd?.id||null
-        }}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+          <Card pad={12}><div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover</div>{voiceoverUrl?<><audio src={voiceoverUrl} controls style={{width:"100%",height:32}}/><div style={{fontSize:11,color:C.green,marginTop:4}}>✓ {voiceoverVoice}</div><button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.muted,fontSize:10,cursor:"pointer",textDecoration:"underline",padding:0}}>Change</button></>:<div style={{fontSize:12,color:C.muted}}>None — <button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,textDecoration:"underline",padding:0}}>add one</button></div>}</Card>
+          <Card pad={12}><div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music</div>{musicUrl?<><audio src={musicUrl} controls style={{width:"100%",height:32}}/><div style={{fontSize:11,color:C.green,marginTop:4}}>✓ {musicName}</div><button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.muted,fontSize:10,cursor:"pointer",textDecoration:"underline",padding:0}}>Change</button></>:<div style={{fontSize:12,color:C.muted}}>None — <button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,textDecoration:"underline",padding:0}}>add some</button></div>}</Card>
+        </div>
+        <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl}/>
       </div>}
     </div>
   }
@@ -1215,11 +1277,11 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
           <div style={{fontSize:13,color:C.muted}}>Saved {selected.created_at?new Date(selected.created_at).toLocaleDateString():""}</div>
         </div>
         <div style={{display:"flex",gap:10}}>
-          <Btn onClick={()=>{setSections(disp);setView("review");setStep("voiceover")}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44"}}>Edit Script</Btn>
+          <Btn onClick={()=>{setSections(disp);setView("review");setStep("script")}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44"}}>Edit Script</Btn>
           <Btn onClick={async()=>{
             const fresh=disp.map((s:any)=>({...s,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
             const matched=items.length>0?await matchClips(fresh,items):fresh
-            setSections(matched);setView("review");setStep("voiceover")
+            setSections(matched);setView("review");setStep("audio")
           }} style={{background:C.green+"22",color:C.green,border:"1px solid "+C.green+"44"}}>↺ Reuse Script</Btn>
           <Btn onClick={()=>handleDeleteScript(selected.id!)} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433"}}>Delete</Btn>
         </div>
