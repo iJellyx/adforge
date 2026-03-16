@@ -450,11 +450,29 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
       </div>
     </div>
 
-    <div style={{padding:"10px 16px",borderTop:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10}}>
-      <button onClick={()=>{setClipIdx(i=>Math.max(0,i-1));setPlaying(false)}} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
-      <button onClick={toggle} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>{playing?"⏸ Pause":"▶ Play Full Ad"}</button>
-      <button onClick={()=>{setClipIdx(i=>Math.min(clips.length-1,i+1));setPlaying(false)}} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
-      <span style={{fontSize:11,color:C.muted,marginLeft:"auto"}}>{clipIdx+1} / {clips.length}</span>
+    <div style={{padding:"10px 16px",borderTop:"1px solid "+C.border}}>
+      {/* Timeline scrubber */}
+      <div style={{display:"flex",gap:2,marginBottom:10}}>
+        {clips.map((clip:any,i:number)=>{
+          const sc2=secColor(clip.label)
+          const active=i===clipIdx
+          return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false)}} title={clip.label} style={{flex:1,height:6,borderRadius:3,background:active?sc2.color:sc2.bg,cursor:"pointer",border:active?"1px solid "+sc2.color:"1px solid transparent",transition:"all 0.15s"}}/>
+        })}
+      </div>
+      {/* Section labels */}
+      <div style={{display:"flex",gap:2,marginBottom:10}}>
+        {clips.map((clip:any,i:number)=>{
+          const sc2=secColor(clip.label)
+          const active=i===clipIdx
+          return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false)}} style={{flex:1,textAlign:"center",fontSize:7,fontWeight:800,color:active?sc2.color:C.muted,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap"}}>{clip.label?.substring(0,4)}</div>
+        })}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <button onClick={()=>{setClipIdx(i=>Math.max(0,i-1));setPlaying(false)}} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
+        <button onClick={toggle} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>{playing?"⏸ Pause":"▶ Play Full Ad"}</button>
+        <button onClick={()=>{setClipIdx(i=>Math.min(clips.length-1,i+1));setPlaying(false)}} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
+        <span style={{fontSize:11,color:C.muted,marginLeft:"auto"}}>{clipIdx+1} / {clips.length}</span>
+      </div>
     </div>
   </div>
 }
@@ -1128,7 +1146,16 @@ Return ONLY valid JSON array:
 
  async function handleSaveForged(status:"draft"|"complete"){
   const stageWords=(form.awarenessStage||"problem_aware").split("_").map((w:string)=>w.charAt(0).toUpperCase()+w.slice(1)).join("")
-  const autoName=`${stageWords}_${form.contentType||"UGC"}_${(form.adLength||"30 seconds").replace(" seconds","s")}_v1`
+  const baseAutoName=`${stageWords}_${form.contentType||"UGC"}_${(form.adLength||"30 seconds").replace(" seconds","s")}`
+  // Find existing ads with same base name and increment version
+  const supabaseCheck=createClient()
+  const{data:existingAds}=await supabaseCheck.from("forged_ads").select("title").ilike("title",`${baseAutoName}%`)
+  let version=1
+  if(existingAds&&existingAds.length>0){
+    const versions=existingAds.map((a:any)=>{const m=a.title.match(/_v(\d+)$/);return m?parseInt(m[1]):1})
+    version=Math.max(...versions)+1
+  }
+  const autoName=`${baseAutoName}_v${version}`
   const title=adTitle.trim()||autoName
   let finalVoiceoverUrl=voiceoverUrl
   if(voiceoverUrl&&voiceoverUrl.startsWith("blob:")){
@@ -1288,6 +1315,7 @@ Return ONLY valid JSON array:
         <div style={{marginTop:16}}>
           <MusicPicker suggestedMood={suggestedMood} onSave={(url:string|null,name:string|null)=>{setMusicUrl(url);setMusicName(name)}}/>
         </div>
+        <Btn onClick={()=>setStep("clips")} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:15,borderRadius:12,marginTop:16}}>Next: Match Clips →</Btn>
       </div>}
 
       {/* Step 3: Clip Matching */}
@@ -1712,6 +1740,28 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
     {/* Empty state */}
     {ads.length===0&&<Card style={{textAlign:"center",padding:60}}><div style={{fontSize:40,marginBottom:12}}>⚡</div><STitle mb={6}>No forged ads yet</STitle><div style={{color:C.muted,fontSize:13}}>Create an ad from the Scripts tab and save it here.</div></Card>}
     {ads.length>0&&filtered.length===0&&<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:28,marginBottom:8}}>🔍</div><div style={{color:C.muted,fontSize:14}}>No ads match your filters.<br/><button onClick={()=>{setSearch("");setActiveTag(null);setRenderFilter(null)}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,textDecoration:"underline",marginTop:8}}>Clear all filters</button></div></Card>}
+
+{/* Pending renders section */}
+    {ads.filter(a=>!a.render_status||a.render_status==="pending"||a.render_status==="failed").length>0&&<div style={{marginBottom:20,border:"1px solid #f59e0b44",borderRadius:14,overflow:"hidden"}}>
+      <div style={{background:"#f59e0b11",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #f59e0b33"}}>
+        <div style={{width:10,height:10,borderRadius:"50%",background:C.yellow,flexShrink:0}}/>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:700,fontSize:15,color:C.yellow}}>⏳ Waiting to Render</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:1}}>These ads are saved but haven't been rendered to MP4 yet</div>
+        </div>
+        <Btn onClick={autoRenderAll} disabled={autoRendering} style={{background:C.yellow,color:"#000",fontWeight:700,fontSize:12,padding:"7px 14px"}}>{autoRendering?"⏳ Starting…":"🎬 Render All"}</Btn>
+      </div>
+      <div style={{padding:16,background:C.bg,display:"flex",flexDirection:"column",gap:8}}>
+        {ads.filter(a=>!a.render_status||a.render_status==="pending"||a.render_status==="failed").map(ad=><div key={ad.id} style={{display:"flex",alignItems:"center",gap:12,background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:"10px 14px"}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:600,fontSize:13,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ad.title}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}{ad.render_status==="failed"?<span style={{color:"#ef4444",marginLeft:8}}>❌ Last render failed</span>:""}</div>
+          </div>
+          <Btn onClick={async()=>{await fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:ad.id})});onRefresh()}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px",flexShrink:0}}>🎬 Render</Btn>
+          <Btn onClick={()=>setPreviewId(ad.id)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"6px 10px",flexShrink:0}}>Open</Btn>
+        </div>)}
+      </div>
+    </div>}
 
     {/* Stage folders */}
     {allStages.map(stageKey=>{
