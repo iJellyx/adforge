@@ -1294,11 +1294,13 @@ Return ONLY valid JSON:
     const hooks=data.hooks||[]
     // Build 3 complete section arrays — each with a different hook, same body
     const bodyBections=sections.filter((s:any)=>s.type!=="HOOK")
-    const variations=hooks.map((hook:any)=>[
-      {...(sections.find((s:any)=>s.type==="HOOK")||sections[0]),spokenWords:hook.spokenWords,visualDirection:hook.visualDirection,hookType:hook.type,voiceover_url:null},
+    const originalHook=sections.find((s:any)=>s.type==="HOOK")||sections[0]
+    const originalVariation=[{...originalHook,hookType:"Original",voiceover_url:null},...bodyBections]
+    const aiVariations=hooks.map((hook:any)=>[
+      {...originalHook,spokenWords:hook.spokenWords,visualDirection:hook.visualDirection,hookType:hook.type,voiceover_url:null},
       ...bodyBections
     ])
-    setHookVariations(variations)
+    setHookVariations([originalVariation,...aiVariations])
   }catch(e){console.error(e);alert("Failed to generate hook variations")}
   setGeneratingHooks(false)
 }
@@ -1408,7 +1410,7 @@ Return ONLY valid JSON:
               const isActive=sections[0]?.spokenWords===hook.spokenWords
               return<div key={vi} style={{background:isActive?C.accentSoft:C.card,border:"2px solid "+(isActive?C.accent:C.border),borderRadius:12,padding:14,cursor:"pointer"}} onClick={()=>setSections(variation)}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <span style={{background:C.accent+"22",color:C.accent,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99}}>Hook {vi+1} — {hook.hookType}</span>
+                  <span style={{background:vi===0?"#ffffff22":C.accent+"22",color:vi===0?C.text:C.accent,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99}}>Hook {vi+1}{vi===0?" — Original":` — ${hook.hookType}`}</span>
                   {isActive&&<span style={{color:C.accent,fontSize:11,fontWeight:700}}>✓ Selected</span>}
                 </div>
                 <div style={{fontSize:13,lineHeight:1.6,color:C.text}}>"{hook.spokenWords}"</div>
