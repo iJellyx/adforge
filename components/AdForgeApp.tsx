@@ -1161,6 +1161,8 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [adTitle,setAdTitle]=useState("")
   const [hookVariations,setHookVariations]=useState<any[][]>([])
   const [selectedHooks,setSelectedHooks]=useState<number[]>([0])
+  const [activeHookIdx,setActiveHookIdx]=useState(0)
+  const [hookSections,setHookSections]=useState<Record<number,any[]>>({})
   const [generatingHooks,setGeneratingHooks]=useState(false)
   const [form,setForm]=useState({productId:"",awarenessStage:"problem_aware",contentType:"UGC",adLength:"30 seconds",customerAvatar:"",useAvatarId:"",painPoints:"",desires:"",objections:"",request:""})
   function setF(k:string,v:string){setForm(x=>({...x,[k]:v}))}
@@ -1269,13 +1271,15 @@ Return ONLY valid JSON array:
     return savedAd
   }
 
-  if(hooksToSave&&hooksToSave.length>1){
-    for(let i=0;i<hooksToSave.length;i++){
-      await saveOneAd(hooksToSave[i],selectedHooks[i])
+  if(selectedHooks.length>1){
+    for(let i=0;i<selectedHooks.length;i++){
+      const hookSec=hookSections[i]||hookVariations[selectedHooks[i]]||sections
+      await saveOneAd(hookSec,selectedHooks[i])
     }
   } else {
     await saveOneAd(sections)
   }
+
   setAdTitle("")
   onGoToForged()
 }
@@ -1434,7 +1438,10 @@ Return ONLY valid JSON:
               </div>
             })}
           </div>
-          <div style={{fontSize:11,color:C.muted}}>Click a hook to select it. Selected hooks will each become a separate ad when you reach the Forge step.</div>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginTop:8}}>
+            <div style={{fontSize:11,color:C.muted,flex:1}}>Click hooks to select. All selected hooks will become separate ads.</div>
+            {selectedHooks.length>0&&<Btn onClick={()=>{setSections(hookVariations[selectedHooks[0]]);setStep("audio")}} style={{background:C.accent,color:"#fff",fontSize:12,padding:"7px 14px"}}>Proceed with {selectedHooks.length} hook{selectedHooks.length>1?"s":""} →</Btn>}
+          </div>
         </div>}
 
         {/* Main script */}
@@ -1488,16 +1495,28 @@ Return ONLY valid JSON:
 
       {/* Step 3: Clip Matching */}
       {step==="clips"&&<>
+        {/* Hook switcher */}
+        {selectedHooks.length>1&&<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <span style={{fontSize:13,fontWeight:600,color:C.muted}}>Previewing:</span>
+          {selectedHooks.map((hi:number,i:number)=>{
+            const hook=hookVariations[hi]?.[0]
+            const isActive=activeHookIdx===i
+            return<button key={hi} onClick={()=>{setActiveHookIdx(i);setSections(hookSections[i]||hookVariations[hi]||sections)}} style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,border:"1px solid "+(isActive?C.accent:C.border),borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:isActive?700:500}}>
+              {hi===0?"Original":hook?.hookType||`Hook ${i+1}`}{isActive?" ✓":""}
+            </button>
+          })}
+          <span style={{fontSize:11,color:C.muted}}>— swap to preview different hooks</span>
+        </div>}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
           <button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Audio</button>
           <div style={{display:"flex",gap:10}}>
-            <Btn onClick={async()=>{setMatching(true);const u=await(async()=>{try{return await matchClips(sections,items)}catch{return sections}})();setSections(u);setMatching(false)}} disabled={matching||items.length===0} style={{background:matching?C.border:C.accentSoft,color:matching?C.muted:C.accent,border:"1px solid "+C.accent+"44"}}>{matching?"🔍 Matching…":"🔄 Re-match"}</Btn>
+            <Btn onClick={async()=>{setMatching(true);const u=await(async()=>{try{return await matchClips(sections,items)}catch{return sections}})();setSections(u);setHookSections(prev=>({...prev,[activeHookIdx]:u}));setMatching(false)}} disabled={matching||items.length===0} style={{background:matching?C.border:C.accentSoft,color:matching?C.muted:C.accent,border:"1px solid "+C.accent+"44"}}>{matching?"🔍 Matching…":"🔄 Re-match"}</Btn>
             <Btn onClick={()=>setStep("forge")} style={{background:C.accent,color:"#fff"}}>Next: Forge →</Btn>
           </div>
         </div>
         {autoCount>0&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:13,color:"#4ade80"}}>✦ AI auto-selected {autoCount} clip{autoCount!==1?"s":""} — swap any below.</div>}
         <Card style={{padding:0,overflow:"hidden",marginBottom:20}}>
-          <ScriptTable sections={sections} onChange={setSections} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} voiceoverUrl={voiceoverUrl}/>
+          <ScriptTable sections={sections} onChange={(s:any[])=>{setSections(s);setHookSections(prev=>({...prev,[activeHookIdx]:s}))}} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} voiceoverUrl={voiceoverUrl}/>
         </Card>
         <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl}/>
       </>}
@@ -1508,7 +1527,7 @@ Return ONLY valid JSON:
           <button onClick={()=>setStep("clips")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Back to Clips</button>
           <div style={{display:"flex",gap:10}}>
             <Btn onClick={()=>handleSaveForged("draft")} style={{background:C.surface,color:C.text,border:"1px solid "+C.border}}>💾 Save Draft</Btn>
-            <Btn onClick={()=>handleSaveForged("complete")} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Mark Complete & Save</Btn>
+            <Btn onClick={()=>handleSaveForged("complete")} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Save {selectedHooks.length>1?`${selectedHooks.length} Hook Variations`:"& Complete"}</Btn>
           </div>
         </div>
         <div style={{marginBottom:16}}>
