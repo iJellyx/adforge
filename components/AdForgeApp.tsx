@@ -382,16 +382,17 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
 
   const cur=clips[clipIdx]
 
-  useEffect(()=>{
-    // Pre-calculate cumulative start times for each clip using item duration_seconds
+   useEffect(()=>{
+    // Use clip segment duration (end - start), not full video duration
     let elapsed=0
     const times=clips.map((c:any)=>{
       const t=elapsed
-      const dur=c.item.duration_seconds||(c.end&&c.start!=null?c.end-c.start:5)
-      elapsed+=dur
+      const segDur=(c.end!=null&&c.start!=null&&c.end>c.start)?(c.end-c.start):3
+      elapsed+=segDur
       return t
     })
     clipStartTimesRef.current=times
+    console.log("Clip voice times:",times)
   },[clips.length])
 
   useEffect(()=>{
