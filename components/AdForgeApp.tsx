@@ -397,13 +397,22 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     }
   }
 
+  function getVoiceTime(idx:number){
+    // Calculate cumulative duration of all clips before this index
+    return clips.slice(0,idx).reduce((acc:number,c:any)=>{
+      const dur=c.end&&c.start!=null?c.end-c.start:5
+      return acc+dur
+    },0)
+  }
+
   function toggle(){
     const v=vidRef.current;if(!v)return
     if(playing){
       v.pause();voiceRef.current?.pause();musicRef.current?.pause();setPlaying(false)
     } else {
       v.play().catch(()=>{})
-      if(voiceRef.current){voiceRef.current.currentTime=0;voiceRef.current.play().catch(()=>{})}
+      const voiceTime=getVoiceTime(clipIdx)
+      if(voiceRef.current){voiceRef.current.currentTime=voiceTime;voiceRef.current.play().catch(()=>{})}
       if(musicRef.current){musicRef.current.currentTime=0;musicRef.current.volume=0.2;musicRef.current.play().catch(()=>{})}
       setPlaying(true)
     }
@@ -439,7 +448,11 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
       </div>
       <div style={{borderLeft:"1px solid "+C.border,overflowY:"auto",maxHeight:480}}>
         <div style={{padding:"8px 10px",borderBottom:"1px solid "+C.border,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>Timeline</div>
-        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false)}} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
+        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>{
+          setClipIdx(i);setPlaying(false);
+          if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}
+          if(musicRef.current){musicRef.current.pause()}
+        }} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
           <div style={{width:34,position:"relative",paddingTop:"60px",flexShrink:0,borderRadius:5,overflow:"hidden",background:"#111",border:"1px solid "+(active?C.accent:C.border)}}>{clip.item.mux_playback_id&&<img src={muxThumb(clip.item.mux_playback_id,clip.item.thumbnail_time||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>}</div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{background:sc2.bg,color:sc2.color,fontSize:8,fontWeight:800,padding:"1px 5px",borderRadius:3,display:"inline-block",marginBottom:3}}>{clip.label}</div>
@@ -456,7 +469,11 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
         {clips.map((clip:any,i:number)=>{
           const sc2=secColor(clip.label)
           const active=i===clipIdx
-          return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false)}} title={clip.label} style={{flex:1,height:6,borderRadius:3,background:active?sc2.color:sc2.bg,cursor:"pointer",border:active?"1px solid "+sc2.color:"1px solid transparent",transition:"all 0.15s"}}/>
+          return<div key={i} onClick={()=>{
+            setClipIdx(i);setPlaying(false);
+            if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}
+            if(musicRef.current){musicRef.current.pause()}
+          }} title={clip.label} style={{flex:1,height:6,borderRadius:3,background:active?sc2.color:sc2.bg,cursor:"pointer",border:active?"1px solid "+sc2.color:"1px solid transparent",transition:"all 0.15s"}}/>
         })}
       </div>
       {/* Section labels */}
@@ -464,7 +481,11 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
         {clips.map((clip:any,i:number)=>{
           const sc2=secColor(clip.label)
           const active=i===clipIdx
-          return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false)}} style={{flex:1,textAlign:"center",fontSize:7,fontWeight:800,color:active?sc2.color:C.muted,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap"}}>{clip.label?.substring(0,4)}</div>
+          return<div key={i} onClick={()=>{
+            setClipIdx(i);setPlaying(false);
+            if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}
+            if(musicRef.current){musicRef.current.pause()}
+          }} style={{flex:1,textAlign:"center",fontSize:7,fontWeight:800,color:active?sc2.color:C.muted,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap"}}>{clip.label?.substring(0,4)}</div>
         })}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
