@@ -1035,8 +1035,8 @@ function LibraryTab({items,onRefresh,view,setView}:{items:Item[],onRefresh:()=>v
 }
 
 // ── Scripts Tab ───────────────────────────────────────────────────────────
-function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged}:any){
-  const [view,setView]=useState("list")  // list | chooseMode | generate | broll | review | detail
+function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode}:any){
+  const [view,setView]=useState(startAtChooseMode?"chooseMode":"list")  // list | chooseMode | generate | broll | review | detail
   const [selected,setSelected]=useState<Script|null>(null)
   const [sections,setSections]=useState<any[]>([])
   const [genMeta,setGenMeta]=useState<any>(null)
@@ -1816,6 +1816,7 @@ export default function AdForgeApp(){
   const [forgedAds,setForgedAds]=useState<ForgedAd[]>([])
   const [brand,setBrand]=useState<BrandProfile>({...DEFAULT_BRAND})
   const [products,setProducts]=useState<Product[]>([])
+  const [scriptsStartMode,setScriptsStartMode]=useState(false)
   const [loading,setLoading]=useState(true)
 
   const loadData=useCallback(async()=>{
@@ -1866,7 +1867,7 @@ export default function AdForgeApp(){
         {tabBtn("brand","🏷️ Brand")}
         <div style={{flex:1}}/>
         {tab==="library"&&libView!=="add"&&<Btn onClick={()=>setLibView("add")} style={{background:C.surface,color:C.text,border:"1px solid "+C.border,margin:"8px 0",fontSize:12,padding:"7px 14px"}}>+ Add Content</Btn>}
-        <Btn onClick={()=>{setTab("scripts");}} style={{background:C.accent,color:"#fff",margin:"8px 0",fontSize:12,padding:"7px 14px",marginLeft:8}}>⚡ Create Ad</Btn>
+        <Btn onClick={()=>{setScriptsStartMode(true);setTab("scripts");}} style={{background:C.accent,color:"#fff",margin:"8px 0",fontSize:12,padding:"7px 14px",marginLeft:8}}>⚡ Create Ad</Btn>
         <button onClick={handleSignOut} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:12,marginLeft:16}}>Sign out</button>
       </div>
     </div>
@@ -1876,3 +1877,4 @@ export default function AdForgeApp(){
     {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
   </div>
 }
+
