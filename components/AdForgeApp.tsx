@@ -1160,6 +1160,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [suggestedMood,setSuggestedMood]=useState("Uplifting")
   const [adTitle,setAdTitle]=useState("")
   const [hookVariations,setHookVariations]=useState<any[][]>([])
+  const [selectedHooks,setSelectedHooks]=useState<number[]>([0])
   const [generatingHooks,setGeneratingHooks]=useState(false)
   const [form,setForm]=useState({productId:"",awarenessStage:"problem_aware",contentType:"UGC",adLength:"30 seconds",customerAvatar:"",useAvatarId:"",painPoints:"",desires:"",objections:"",request:""})
   function setF(k:string,v:string){setForm(x=>({...x,[k]:v}))}
@@ -1239,33 +1240,41 @@ Return ONLY valid JSON array:
 
  async function handleSaveForged(status:"draft"|"complete"){
   const stageWords=(form.awarenessStage||"problem_aware").split("_").map((w:string)=>w.charAt(0).toUpperCase()+w.slice(1)).join("")
-  const baseAutoName=`${stageWords}_${form.contentType||"UGC"}_${(form.adLength||"30 seconds").replace(" seconds","s")}`
-  // Find existing ads with same base name and increment version
-  const supabaseCheck=createClient()
-  const{data:existingAds}=await supabaseCheck.from("forged_ads").select("title").ilike("title",`${baseAutoName}%`)
-  let version=1
-  if(existingAds&&existingAds.length>0){
-    const versions=existingAds.map((a:any)=>{const m=a.title.match(/_v(\d+)$/);return m?parseInt(m[1]):1})
-    version=Math.max(...versions)+1
+  const hooksToSave=hookVariations.length>0&&selectedHooks.length>0?selectedHooks.map(i=>hookVariations[i]):null
+
+  async function saveOneAd(secs:any[],hookNum?:number){
+    const hookSuffix=hookNum!=null&&hookVariations.length>1?`_Hook${hookNum+1}`:""
+    const baseAutoName=`${stageWords}_${form.contentType||"UGC"}_${(form.adLength||"30 seconds").replace(" seconds","s")}${hookSuffix}`
+    const supabaseCheck=createClient()
+    const{data:existingAds}=await supabaseCheck.from("forged_ads").select("title").ilike("title",`${baseAutoName}%`)
+    let version=1
+    if(existingAds&&existingAds.length>0){const versions=existingAds.map((a:any)=>{const m=a.title.match(/_v(\d+)$/);return m?parseInt(m[1]):1});version=Math.max(...versions)+1}
+    const title=adTitle.trim()||`${baseAutoName}_v${version}`
+    let finalVoiceoverUrl=voiceoverUrl
+    if(voiceoverUrl&&voiceoverUrl.startsWith("blob:")){
+      try{
+        const blob=await fetch(voiceoverUrl).then(r=>r.blob())
+        const file=new File([blob],"voiceover.mp3",{type:"audio/mpeg"})
+        const fd=new FormData();fd.append("file",file)
+        const res=await fetch("/api/voiceover/upload",{method:"POST",body:fd})
+        const d=await res.json()
+        if(d.url)finalVoiceoverUrl=d.url
+      }catch(e){console.error("Voiceover upload failed:",e)}
+    }
+    const adData={title,status,mode:"script" as const,sections:secs,voiceover_url:finalVoiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName,hookVariation:hookNum!=null?hookNum+1:null}}
+    const savedAd=await onSaveForgedAd(adData)
+    if(savedAd?.id){
+      fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(e=>console.error("Background render error:",e))
+    }
+    return savedAd
   }
-  const autoName=`${baseAutoName}_v${version}`
-  const title=adTitle.trim()||autoName
-  let finalVoiceoverUrl=voiceoverUrl
-  if(voiceoverUrl&&voiceoverUrl.startsWith("blob:")){
-    try{
-      const blob=await fetch(voiceoverUrl).then(r=>r.blob())
-      const file=new File([blob],"voiceover.mp3",{type:"audio/mpeg"})
-      const fd=new FormData()
-      fd.append("file",file)
-      const res=await fetch("/api/voiceover/upload",{method:"POST",body:fd})
-      const d=await res.json()
-      if(d.url)finalVoiceoverUrl=d.url
-    }catch(e){console.error("Voiceover upload failed:",e)}
-  }
-  const adData={title,status,mode:"script" as const,sections,voiceover_url:finalVoiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName}}
-  const savedAd=await onSaveForgedAd(adData)
-  if(savedAd?.id){
-    fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(e=>console.error("Background render error:",e))
+
+  if(hooksToSave&&hooksToSave.length>1){
+    for(let i=0;i<hooksToSave.length;i++){
+      await saveOneAd(hooksToSave[i],selectedHooks[i])
+    }
+  } else {
+    await saveOneAd(sections)
   }
   setAdTitle("")
   onGoToForged()
@@ -1396,43 +1405,36 @@ Return ONLY valid JSON:
           <button onClick={()=>setView("generate")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Edit Parameters</button>
           <div style={{display:"flex",gap:10}}>
             <Btn onClick={generateHookVariations} disabled={generatingHooks||sections.length===0} style={{background:generatingHooks?C.border:C.accentSoft,color:generatingHooks?C.muted:C.accent,border:"1px solid "+C.accent+"44"}}>{generatingHooks?"⏳ Generating…":"⚡ Generate 3 Hook Variations"}</Btn>
-            <Btn onClick={()=>setStep("audio")} style={{background:C.accent,color:"#fff"}}>Next: Audio →</Btn>
+            <Btn onClick={()=>{
+              if(hookVariations.length>0&&selectedHooks.length>0){
+                setSections(hookVariations[selectedHooks[0]])
+              }
+              setStep("audio")
+            }} style={{background:C.accent,color:"#fff"}}>Next: Audio →</Btn>
           </div>
         </div>
         <div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,marginBottom:16}}>✏️ Review and edit your script below. Use "Generate 3 Hook Variations" to create testable hook options.</div>
 
         {/* Hook variations */}
         {hookVariations.length>0&&<div style={{marginBottom:20}}>
-          <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>⚡ Hook Variations — original + 3 AI variations</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontWeight:700,fontSize:15}}>⚡ Hook Variations — select to use</div>
+            <div style={{fontSize:12,color:C.muted}}>{selectedHooks.length} selected</div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginBottom:8}}>
             {hookVariations.map((variation:any[],vi:number)=>{
               const hook=variation[0]
-              const isActive=sections[0]?.spokenWords===hook.spokenWords
-              return<div key={vi} style={{background:isActive?C.accentSoft:C.card,border:"2px solid "+(isActive?C.accent:C.border),borderRadius:12,padding:14,cursor:"pointer"}} onClick={()=>setSections(variation)}>
+              const isSelected=selectedHooks.includes(vi)
+              return<div key={vi} onClick={()=>setSelectedHooks(prev=>prev.includes(vi)?prev.filter(x=>x!==vi):[...prev,vi])} style={{background:isSelected?C.accentSoft:C.card,border:"2px solid "+(isSelected?C.accent:C.border),borderRadius:12,padding:14,cursor:"pointer",transition:"all 0.15s"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <span style={{background:vi===0?"#ffffff22":C.accent+"22",color:vi===0?C.text:C.accent,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99}}>Hook {vi+1}{vi===0?" — Original":` — ${hook.hookType}`}</span>
-                  {isActive&&<span style={{color:C.accent,fontSize:11,fontWeight:700}}>✓ Selected</span>}
+                  <span style={{background:vi===0?"#ffffff22":C.accent+"22",color:vi===0?C.text:C.accent,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99}}>{vi===0?"Original":`Hook ${vi+1} — ${hook.hookType}`}</span>
+                  {isSelected&&<span style={{color:C.accent,fontSize:14}}>✓</span>}
                 </div>
-                <div style={{fontSize:13,lineHeight:1.6,color:C.text}}>"{hook.spokenWords}"</div>
+                <textarea value={hook.spokenWords||""} onChange={e=>{e.stopPropagation();setHookVariations(prev=>prev.map((v:any[],i:number)=>i===vi?[{...v[0],spokenWords:e.target.value},...v.slice(1)]:v))}} onClick={e=>e.stopPropagation()} style={{width:"100%",background:"transparent",border:"none",resize:"none",color:C.text,fontSize:12,lineHeight:1.6,outline:"none",fontFamily:"inherit",minHeight:60,boxSizing:"border-box" as const,cursor:"text"}}/>
               </div>
             })}
           </div>
-          <div style={{display:"flex",gap:10}}>
-            <Btn onClick={async()=>{
-              for(let i=0;i<hookVariations.length;i++){
-                const stageWords=(form.awarenessStage||"problem_aware").split("_").map((w:string)=>w.charAt(0).toUpperCase()+w.slice(1)).join("")
-                const baseAutoName=`${stageWords}_${form.contentType||"UGC"}_${(form.adLength||"30 seconds").replace(" seconds","s")}_Hook${i+1}`
-                const supabaseCheck=createClient()
-                const{data:existingAds}=await supabaseCheck.from("forged_ads").select("title").ilike("title",`${baseAutoName}%`)
-                let version=1
-                if(existingAds&&existingAds.length>0){const versions=existingAds.map((a:any)=>{const m=a.title.match(/_v(\d+)$/);return m?parseInt(m[1]):1});version=Math.max(...versions)+1}
-                const title=`${baseAutoName}_v${version}`
-                const savedAd=await onSaveForgedAd({title,status:"complete",mode:"script",sections:hookVariations[i],voiceover_url:null,voiceover_voice:null,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName,hookVariation:i+1,hookType:hookVariations[i][0]?.hookType}})
-                if(savedAd?.id){fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(console.error)}
-              }
-              onGoToForged()
-            }} style={{background:C.green,color:"#000",fontWeight:700,flex:1}}>💾 Save All {hookVariations.length} Hook Variations</Btn>
-          </div>
+          <div style={{fontSize:11,color:C.muted}}>Click a hook to select it. Selected hooks will each become a separate ad when you reach the Forge step.</div>
         </div>}
 
         {/* Main script */}
