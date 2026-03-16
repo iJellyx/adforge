@@ -242,72 +242,107 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl,onSave}:any){
 }
 
 // ── Voiceover Generator ───────────────────────────────────────────────────
-function VoiceoverGenerator({sections,savedVoiceoverUrl,onSave,onSkip}:any){
+function VoiceoverGenerator({sections,onSave,onSkip}:any){
   const [voices,setVoices]=useState<any[]>([])
   const [selectedVoice,setSelectedVoice]=useState("")
   const [loading,setLoading]=useState(false)
   const [generating,setGenerating]=useState(false)
-  const [audioUrl,setAudioUrl]=useState<string|null>(savedVoiceoverUrl||null)
-  const audioRef=useRef<HTMLAudioElement>(null)
+  const [progress,setProgress]=useState(0)
   const [error,setError]=useState("")
   const [voiceSearch,setVoiceSearch]=useState("")
-
-  const fullScript=(sections||[]).map((s:any)=>s.spokenWords||"").filter(Boolean).join(" ")
-
-  useEffect(()=>{
-    return()=>{
-      if(audioRef.current){audioRef.current.pause();audioRef.current.currentTime=0}
-    }
-  },[])
+  const [sectionAudios,setSectionAudios]=useState<Record<number,string>>({})
 
   useEffect(()=>{
     setLoading(true)
     fetch("/api/elevenlabs/voices").then(r=>r.json()).then(d=>{
       if(d.voices&&d.voices.length>0){setVoices(d.voices);setSelectedVoice(d.voices[0].id)}
-      else setError(d.error||"Check your ELEVENLABS_API_KEY in Vercel Settings — it should start with sk_")
+      else setError(d.error||"Check your ELEVENLABS_API_KEY in Vercel Settings")
     }).catch(()=>setError("Could not connect to ElevenLabs")).finally(()=>setLoading(false))
   },[])
 
-  async function generate(){
-    if(!selectedVoice||!fullScript)return
-    setGenerating(true);setError("")
+  const sectionsWithWords=(sections||[]).filter((s:any)=>s.spokenWords?.trim())
+  const selectedVoiceObj=voices.find(v=>v.id===selectedVoice)
+  const allGenerated=sectionsWithWords.length>0&&sectionsWithWords.every((_:any,i:number)=>sectionAudios[i])
+
+  async function generateAll(){
+    if(!selectedVoice||!sectionsWithWords.length)return
+    setGenerating(true);setError("");setProgress(0)
+    const newAudios:Record<number,string>={}
     try{
-      const res=await fetch("/api/elevenlabs/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:fullScript,voiceId:selectedVoice})})
-      if(!res.ok){const t=await res.text();throw new Error(`ElevenLabs error: ${res.status} — check API key in Vercel Settings`)}
-      const blob=await res.blob()
-      setAudioUrl(URL.createObjectURL(blob))
+      for(let i=0;i<sectionsWithWords.length;i++){
+        const sec=sectionsWithWords[i]
+        setProgress(Math.round((i/sectionsWithWords.length)*90))
+        const res=await fetch("/api/elevenlabs/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:sec.spokenWords,voiceId:selectedVoice})})
+        if(!res.ok)throw new Error(`ElevenLabs error: ${res.status}`)
+        const blob=await res.blob()
+        // Upload to Supabase Storage
+        const file=new File([blob],`vo_section_${i}_${Date.now()}.mp3`,{type:"audio/mpeg"})
+        const fd=new FormData();fd.append("file",file)
+        const upRes=await fetch("/api/voiceover/upload",{method:"POST",body:fd})
+        const upData=await upRes.json()
+        if(upData.url)newAudios[i]=upData.url
+        else newAudios[i]=URL.createObjectURL(blob)
+      }
+      setSectionAudios(newAudios)
+      setProgress(100)
     }catch(e:any){setError(e.message)}
     setGenerating(false)
   }
 
   const filteredVoices=voices.filter(v=>!voiceSearch||v.name.toLowerCase().includes(voiceSearch.toLowerCase())||(v.gender||"").toLowerCase().includes(voiceSearch.toLowerCase())||(v.accent||"").toLowerCase().includes(voiceSearch.toLowerCase()))
-  const selectedVoiceObj=voices.find(v=>v.id===selectedVoice)
 
   return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20}}>
-    <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>🎙️ AI Voiceover</div>
-    <div style={{fontSize:13,color:C.muted,marginBottom:16}}>Optional — generate a voiceover using ElevenLabs, or skip if your video already has audio.</div>
+    <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>🎙️ AI Voiceover — Per Section</div>
+    <div style={{fontSize:13,color:C.muted,marginBottom:16}}>Generates a separate voiceover for each script section — perfectly synced to each clip.</div>
     {loading&&<div style={{color:C.muted,fontSize:13,padding:"20px 0",textAlign:"center"}}>Loading voices…</div>}
     {!loading&&error&&voices.length===0&&<div style={{background:"#ef444422",border:"1px solid #ef444433",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#ef4444",marginBottom:12}}>{error}</div>}
     {!loading&&voices.length>0&&<>
       <div style={{marginBottom:12}}>
-        <Label>Search Voices</Label>
+        <Label>Select Voice</Label>
         <input value={voiceSearch} onChange={e=>setVoiceSearch(e.target.value)} placeholder="Filter by name, gender, accent…" style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const,marginBottom:8}}/>
-        <div style={{maxHeight:180,overflowY:"auto",border:"1px solid "+C.border,borderRadius:10}}>
+        <div style={{maxHeight:160,overflowY:"auto",border:"1px solid "+C.border,borderRadius:10}}>
           {filteredVoices.map((v:any)=><div key={v.id} onClick={()=>setSelectedVoice(v.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",background:selectedVoice===v.id?C.accentSoft:"transparent",borderBottom:"1px solid "+C.border}}>
             <div style={{width:16,height:16,borderRadius:"50%",border:"2px solid "+(selectedVoice===v.id?C.accent:C.border),background:selectedVoice===v.id?C.accent:"transparent",flexShrink:0}}/>
             <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13,color:selectedVoice===v.id?C.accent:C.text}}>{v.name}</div><div style={{fontSize:10,color:C.muted}}>{[v.gender,v.age,v.accent].filter(Boolean).join(" · ")}</div></div>
-            {v.preview_url&&<button onClick={e=>{e.stopPropagation();new Audio(v.preview_url).play()}} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11}}>▶ Preview</button>}
+            {v.preview_url&&<button onClick={e=>{e.stopPropagation();new Audio(v.preview_url).play()}} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11}}>▶</button>}
           </div>)}
         </div>
       </div>
-      <div style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"10px 12px",fontSize:12,color:C.muted,marginBottom:14,maxHeight:60,overflowY:"auto",lineHeight:1.6}}>
-        <strong style={{color:C.text}}>Script:</strong> {fullScript||"No spoken words yet."}
+
+      {/* Section preview */}
+      <div style={{marginBottom:14}}>
+        <Label>Script Sections ({sectionsWithWords.length} sections to voice)</Label>
+        <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:180,overflowY:"auto"}}>
+          {sectionsWithWords.map((s:any,i:number)=>{
+            const sc=secColor(s.type)
+            const hasAudio=!!sectionAudios[i]
+            return<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.surface,borderRadius:8,border:"1px solid "+(hasAudio?C.green:C.border)}}>
+              <span style={{background:sc.bg,color:sc.color,fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:4,flexShrink:0}}>{s.type}</span>
+              <div style={{flex:1,fontSize:11,color:C.muted,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{s.spokenWords}</div>
+              {hasAudio?<audio src={sectionAudios[i]} controls style={{height:24,width:120}}/>:<span style={{fontSize:10,color:C.muted}}>Not generated</span>}
+              {hasAudio&&<span style={{color:C.green,fontSize:12}}>✓</span>}
+            </div>
+          })}
+        </div>
       </div>
+
+      {generating&&<div style={{marginBottom:12}}>
+        <div style={{height:5,background:C.border,borderRadius:4,overflow:"hidden",marginBottom:6}}><div style={{height:"100%",width:progress+"%",background:C.accent,borderRadius:4,transition:"width 0.3s"}}/></div>
+        <div style={{fontSize:11,color:C.muted}}>Generating section {Math.ceil(progress/100*sectionsWithWords.length)+1} of {sectionsWithWords.length}…</div>
+      </div>}
       {error&&<div style={{background:"#ef444422",border:"1px solid #ef444433",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#ef4444",marginBottom:12}}>{error}</div>}
-      {audioUrl&&<div style={{marginBottom:14}}><Label>Generated Voiceover{selectedVoiceObj?` — ${selectedVoiceObj.name}`:""}</Label><audio ref={audioRef} src={audioUrl} controls style={{width:"100%",height:40}}/></div>}
+
       <div style={{display:"flex",gap:10}}>
-        <Btn onClick={generate} disabled={generating||!fullScript||!selectedVoice} style={{background:generating?C.border:C.accent,color:"#fff",flex:1}}>{generating?"⏳ Generating…":"🎙️ Generate Voiceover"}</Btn>
-        {audioUrl&&<Btn onClick={()=>onSave(audioUrl,selectedVoiceObj?.name||selectedVoice)} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Use This</Btn>}
+        <Btn onClick={generateAll} disabled={generating||!sectionsWithWords.length||!selectedVoice} style={{background:generating?C.border:C.accent,color:"#fff",flex:1}}>{generating?"⏳ Generating…":allGenerated?"🔄 Regenerate All":"🎙️ Generate Voiceovers"}</Btn>
+        {allGenerated&&<Btn onClick={()=>{
+          // Save section voiceover URLs into sections array
+          const updatedSections=(sections||[]).map((s:any,i:number)=>{
+            const secIdx=sectionsWithWords.findIndex((_:any,si:number)=>sectionsWithWords[si]===s)
+            return sectionAudios[secIdx]?{...s,voiceover_url:sectionAudios[secIdx]}:s
+          })
+          const combinedUrl=Object.values(sectionAudios)[0] as string
+          onSave(updatedSections,selectedVoiceObj?.name||selectedVoice,combinedUrl)
+        }} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Use These</Btn>}
       </div>
     </>}
     <div style={{textAlign:"center",marginTop:12}}><button onClick={onSkip} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:12,textDecoration:"underline"}}>Skip — my video already has audio</button></div>
@@ -377,7 +412,7 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
   const clips=(sections||[]).map((s:any)=>{
     const item=s.selectedClipId?libraryItems.find((i:Item)=>i.id===s.selectedClipId):null
     if(!item?.mux_playback_id)return null
-    return{item,start:item.start_seconds||0,end:item.end_seconds,label:s.type,spoken:s.spokenWords||"",muted:s.muted||false}
+    return{item,start:item.start_seconds||0,end:item.end_seconds,label:s.type,spoken:s.spokenWords||"",muted:s.muted||false,voiceover_url:s.voiceover_url||null}
   }).filter(Boolean)
 
   const cur=clips[clipIdx]
@@ -417,8 +452,12 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     const sectionDur=getSectionDuration(clipIdx)
     const clipPlayTime=v.currentTime-cur.start
     if(clipPlayTime>=sectionDur){
-      if(clipIdx<clips.length-1)setClipIdx(i=>i+1)
-      else{v.pause();setPlaying(false);setClipIdx(0);voiceRef.current?.pause();musicRef.current?.pause()}
+      voiceRef.current?.pause()
+      if(clipIdx<clips.length-1){
+        setClipIdx(i=>i+1)
+      } else {
+        v.pause();setPlaying(false);setClipIdx(0);musicRef.current?.pause()
+      }
     }
   }
 
@@ -434,20 +473,27 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
       v.pause();voiceRef.current?.pause();musicRef.current?.pause();setPlaying(false)
     } else {
       v.play().catch(()=>{})
-      const voiceTime=getVoiceTime(clipIdx)
-      if(voiceRef.current){voiceRef.current.currentTime=voiceTime;voiceRef.current.play().catch(()=>{})}
+      if(voiceRef.current){voiceRef.current.currentTime=0;voiceRef.current.play().catch(()=>{})}
       if(musicRef.current){musicRef.current.currentTime=0;musicRef.current.volume=0.2;musicRef.current.play().catch(()=>{})}
       setPlaying(true)
     }
   }
+
+  useEffect(()=>{
+    if(playing&&voiceRef.current){
+      voiceRef.current.currentTime=0
+      voiceRef.current.play().catch(()=>{})
+    }
+  },[clipIdx])
 
   if(clips.length===0)return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:32,textAlign:"center",color:C.muted}}><div style={{fontSize:28,marginBottom:8}}>🎬</div><div style={{fontSize:13}}>Assign clips to sections to preview the full ad</div></div>
 
   const sc=secColor(cur?.label)
 
   return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
-    {/* Hidden audio elements */}
-    {voiceoverUrl&&<audio ref={voiceRef} src={voiceoverUrl} style={{display:"none"}}/>}
+    {/* Hidden audio elements — per section voiceover */}
+    {cur?.voiceover_url&&<audio ref={voiceRef} key={cur.voiceover_url} src={cur.voiceover_url} style={{display:"none"}}/>}
+    {voiceoverUrl&&!cur?.voiceover_url&&<audio ref={voiceRef} src={voiceoverUrl} style={{display:"none"}}/>}
     {musicUrl&&<audio ref={musicRef} src={musicUrl} style={{display:"none"}} loop/>}
 
     <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10}}>
@@ -1355,7 +1401,7 @@ Return ONLY valid JSON array:
           ✅ Both audio tracks selected — ready to match clips!
         </div>}
 
-        <VoiceoverGenerator sections={sections} savedVoiceoverUrl={voiceoverUrl} onSave={(url:string|null,voice:string|null)=>{setVoiceoverUrl(url);setVoiceoverVoice(voice)}} onSkip={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}}/>
+                <VoiceoverGenerator sections={sections} onSave={(updatedSections:any[],voice:string,combinedUrl:string)=>{setSections(updatedSections);setVoiceoverVoice(voice);setVoiceoverUrl(combinedUrl)}} onSkip={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}}/>
         <div style={{marginTop:16}}>
           <MusicPicker suggestedMood={suggestedMood} onSave={(url:string|null,name:string|null)=>{setMusicUrl(url);setMusicName(name)}}/>
         </div>

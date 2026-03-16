@@ -88,12 +88,27 @@ export async function POST(req: NextRequest) {
     const tracks: any[] = [{ clips: videoClips }]
     const totalDuration = clips.reduce((acc: number, c: any) => acc + c.duration, 0)
 
-    if (ad.voiceover_url) {
+    const sectionsWithVoice=(ad.sections||[]).filter((s:any)=>s.voiceover_url&&s.selectedClipId)
+    if(sectionsWithVoice.length>0){
+      let voiceStart=0
+      const voiceClips:any[]=[]
+      for(const section of sectionsWithVoice){
+        const matchedClip=clips.find((c:any)=>c.item.id===section.selectedClipId)
+        if(!matchedClip)continue
+        voiceClips.push({
+          asset:{type:'audio',src:section.voiceover_url,volume:1},
+          start:voiceStart,
+          length:matchedClip.duration,
+        })
+        voiceStart+=matchedClip.duration
+      }
+      if(voiceClips.length>0)tracks.push({clips:voiceClips})
+    } else if(ad.voiceover_url){
       tracks.push({
-        clips: [{
-          asset: { type: 'audio', src: ad.voiceover_url, volume: 1 },
-          start: 0,
-          length: totalDuration,
+        clips:[{
+          asset:{type:'audio',src:ad.voiceover_url,volume:1},
+          start:0,
+          length:totalDuration,
         }]
       })
     }
