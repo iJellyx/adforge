@@ -351,19 +351,43 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
 
       {/* Section preview */}
       <div style={{marginBottom:14}}>
-        <Label>Script Sections ({sectionsWithWords.length} sections to voice)</Label>
-        <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:180,overflowY:"auto"}}>
-          {sectionsWithWords.map((s:any,i:number)=>{
-            const sc=secColor(s.type)
-            const hasAudio=!!sectionAudios[i]
-            return<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.surface,borderRadius:8,border:"1px solid "+(hasAudio?C.green:C.border)}}>
-              <span style={{background:sc.bg,color:sc.color,fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:4,flexShrink:0}}>{s.type}</span>
-              <div style={{flex:1,fontSize:11,color:C.muted,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{s.spokenWords}</div>
-              {hasAudio?<audio src={sectionAudios[i]} controls style={{height:24,width:120}}/>:<span style={{fontSize:10,color:C.muted}}>Not generated</span>}
-              {hasAudio&&<span style={{color:C.green,fontSize:12}}>✓</span>}
+        {allHookSections&&allHookSections.length>1
+          ?<>
+            <Label>Voiceovers to generate across {allHookSections.length} hook variations</Label>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {allHookSections.map((hookSecs:any[],hi:number)=>{
+                const hookSec=hookSecs.find((s:any)=>s.type==="HOOK")
+                const isFirst=hi===0
+                const bodySections=hookSecs.filter((s:any)=>s.type!=="HOOK")
+                return<div key={hi} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,overflow:"hidden"}}>
+                  <div style={{padding:"8px 12px",background:isFirst?"#ffffff08":C.accentSoft,borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:11,fontWeight:700,color:isFirst?C.text:C.accent}}>{isFirst?"Original Hook":"Hook "+(hi+1)+" — AI Variation"}</span>
+                    {allHookResults&&<span style={{color:C.green,fontSize:12,marginLeft:"auto"}}>✓ Generated</span>}
+                  </div>
+                  <div style={{padding:"8px 12px"}}>
+                    <div style={{fontSize:12,color:C.text,marginBottom:6,fontStyle:"italic"}}>"{hookSec?.spokenWords?.substring(0,80)}…"</div>
+                    {hi===0&&<div style={{fontSize:10,color:C.muted}}>+ {bodySections.length} body sections shared across all variations</div>}
+                    {hi>0&&<div style={{fontSize:10,color:C.muted}}>Hook audio unique · Body audio shared from Hook 1</div>}
+                  </div>
+                </div>
+              })}
             </div>
-          })}
-        </div>
+          </>
+          :<>
+            <Label>Script Sections ({sectionsWithWords.length} sections to voice)</Label>
+            <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:180,overflowY:"auto"}}>
+              {sectionsWithWords.map((s:any,i:number)=>{
+                const sc=secColor(s.type)
+                const hasAudio=!!sectionAudios[i]
+                return<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.surface,borderRadius:8,border:"1px solid "+(hasAudio?C.green:C.border)}}>
+                  <span style={{background:sc.bg,color:sc.color,fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:4,flexShrink:0}}>{s.type}</span>
+                  <div style={{flex:1,fontSize:11,color:C.muted,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{s.spokenWords}</div>
+                  {hasAudio?<audio src={sectionAudios[i]} controls style={{height:24,width:120}}/>:<span style={{fontSize:10,color:C.muted}}>Not generated</span>}
+                  {hasAudio&&<span style={{color:C.green,fontSize:12}}>✓</span>}
+                </div>
+              })}
+            </div>
+          </>}
       </div>
 
       {generating&&<div style={{marginBottom:12}}>
