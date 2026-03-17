@@ -251,6 +251,7 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
   const [error,setError]=useState("")
   const [voiceSearch,setVoiceSearch]=useState("")
   const [sectionAudios,setSectionAudios]=useState<Record<number,string>>({})
+  const [allHookResults,setAllHookResults]=useState<any[][]|null>(null)
 
   useEffect(()=>{
     setLoading(true)
@@ -313,7 +314,7 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
         setSectionAudios(newAudios)
         setProgress(100)
         const combinedUrl=allUpdatedHooks[0].find((s:any)=>s.voiceover_url)?.voiceover_url||""
-        onSave(allUpdatedHooks[0],selectedVoiceObj?.name||selectedVoice,combinedUrl,allUpdatedHooks)
+        setAllHookResults(allUpdatedHooks)
         setGenerating(false)
         return
       }
@@ -373,10 +374,15 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
 
       <div style={{display:"flex",gap:10}}>
         <Btn onClick={generateAll} disabled={generating||!sectionsWithWords.length||!selectedVoice} style={{background:generating?C.border:C.accent,color:"#fff",flex:1}}>{generating?"⏳ Generating…":allGenerated?"🔄 Regenerate All":"🎙️ Generate Voiceovers"}</Btn>
-        {allGenerated&&<Btn onClick={()=>{
-          const updatedSections=sectionsWithWords.map((s:any,i:number)=>sectionAudios[i]?{...s,voiceover_url:sectionAudios[i]}:s)
-          const combinedUrl=Object.values(sectionAudios)[0] as string
-          onSave(updatedSections,selectedVoiceObj?.name||selectedVoice,combinedUrl,null)
+        {(allGenerated||allHookResults)&&<Btn onClick={()=>{
+          if(allHookResults){
+            const combinedUrl=allHookResults[0].find((s:any)=>s.voiceover_url)?.voiceover_url||""
+            onSave(allHookResults[0],selectedVoiceObj?.name||selectedVoice,combinedUrl,allHookResults)
+          } else {
+            const updatedSections=sectionsWithWords.map((s:any,i:number)=>sectionAudios[i]?{...s,voiceover_url:sectionAudios[i]}:s)
+            const combinedUrl=Object.values(sectionAudios)[0] as string
+            onSave(updatedSections,selectedVoiceObj?.name||selectedVoice,combinedUrl,null)
+          }
         }} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Use These</Btn>}
       </div>
     </>}
