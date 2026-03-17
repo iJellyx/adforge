@@ -242,7 +242,7 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl,onSave}:any){
 }
 
 // ── Voiceover Generator ───────────────────────────────────────────────────
-function VoiceoverGenerator({sections,onSave,onSkip}:any){
+function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
   const [voices,setVoices]=useState<any[]>([])
   const [selectedVoice,setSelectedVoice]=useState("")
   const [loading,setLoading]=useState(false)
@@ -267,28 +267,67 @@ function VoiceoverGenerator({sections,onSave,onSkip}:any){
   async function generateAll(){
     if(!selectedVoice||!sectionsWithWords.length)return
     setGenerating(true);setError("");setProgress(0)
-    const newAudios:Record<number,string>={}
+
+    async function generateAndUpload(text:string,idx:number,total:number):Promise<string>{
+      setProgress(Math.round((idx/total)*90))
+      const res=await fetch("/api/elevenlabs/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,voiceId:selectedVoice})})
+      if(!res.ok)throw new Error(`ElevenLabs error: ${res.status}`)
+      const blob=await res.blob()
+      const file=new File([blob],`vo_${idx}_${Date.now()}.mp3`,{type:"audio/mpeg"})
+      const fd=new FormData();fd.append("file",file)
+      const upRes=await fetch("/api/voiceover/upload",{method:"POST",body:fd})
+      const upData=await upRes.json()
+      return upData.url||URL.createObjectURL(blob)
+    }
+
     try{
+      if(allHookSections&&allHookSections.length>1){
+        // Generate voiceovers for all hook variations
+        // Body sections are shared — generate once
+        const bodySections=sectionsWithWords.filter((s:any)=>s.type!=="HOOK")
+        const bodyAudios:Record<number,string>={}
+        for(let i=0;i<bodySections.length;i++){
+          const sec=bodySections[i]
+          const bodyIdx=sectionsWithWords.findIndex((s:any)=>s===sec)
+          bodyAudios[bodyIdx]=await generateAndUpload(sec.spokenWords,i,bodySections.length+allHookSections.length)
+        }
+
+        // Generate hook voiceover for each variation separately
+        const allUpdatedHooks:any[][]=[]
+        for(let hi=0;hi<allHookSections.length;hi++){
+          const hookVariationSecs=allHookSections[hi]
+          const hookSec=hookVariationSecs.find((s:any)=>s.type==="HOOK")
+          const hookAudio=hookSec?await generateAndUpload(hookSec.spokenWords,bodySections.length+hi,bodySections.length+allHookSections.length):null
+
+          // Build updated sections for this hook variation
+          const updatedSecs=hookVariationSecs.map((s:any,si:number)=>{
+            if(s.type==="HOOK")return{...s,voiceover_url:hookAudio}
+            const bodyIdx=sectionsWithWords.findIndex((bs:any)=>bs.spokenWords===s.spokenWords)
+            return{...s,voiceover_url:bodyAudios[bodyIdx]||null}
+          })
+          allUpdatedHooks.push(updatedSecs)
+        }
+
+        const newAudios:Record<number,string>={}
+        allUpdatedHooks[0].forEach((s:any,i:number)=>{if(s.voiceover_url)newAudios[i]=s.voiceover_url})
+        setSectionAudios(newAudios)
+        setProgress(100)
+        const combinedUrl=allUpdatedHooks[0].find((s:any)=>s.voiceover_url)?.voiceover_url||""
+        onSave(allUpdatedHooks[0],selectedVoiceObj?.name||selectedVoice,combinedUrl,allUpdatedHooks)
+        setGenerating(false)
+        return
+      }
+
+      // Single hook — original flow
+      const newAudios:Record<number,string>={}
       for(let i=0;i<sectionsWithWords.length;i++){
-        const sec=sectionsWithWords[i]
-        setProgress(Math.round((i/sectionsWithWords.length)*90))
-        const res=await fetch("/api/elevenlabs/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:sec.spokenWords,voiceId:selectedVoice})})
-        if(!res.ok)throw new Error(`ElevenLabs error: ${res.status}`)
-        const blob=await res.blob()
-        // Upload to Supabase Storage
-        const file=new File([blob],`vo_section_${i}_${Date.now()}.mp3`,{type:"audio/mpeg"})
-        const fd=new FormData();fd.append("file",file)
-        const upRes=await fetch("/api/voiceover/upload",{method:"POST",body:fd})
-        const upData=await upRes.json()
-        if(upData.url)newAudios[i]=upData.url
-        else newAudios[i]=URL.createObjectURL(blob)
+        newAudios[i]=await generateAndUpload(sectionsWithWords[i].spokenWords,i,sectionsWithWords.length)
       }
       setSectionAudios(newAudios)
       setProgress(100)
     }catch(e:any){setError(e.message)}
     setGenerating(false)
   }
-
   const filteredVoices=voices.filter(v=>!voiceSearch||v.name.toLowerCase().includes(voiceSearch.toLowerCase())||(v.gender||"").toLowerCase().includes(voiceSearch.toLowerCase())||(v.accent||"").toLowerCase().includes(voiceSearch.toLowerCase()))
 
   return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20}}>
@@ -335,13 +374,9 @@ function VoiceoverGenerator({sections,onSave,onSkip}:any){
       <div style={{display:"flex",gap:10}}>
         <Btn onClick={generateAll} disabled={generating||!sectionsWithWords.length||!selectedVoice} style={{background:generating?C.border:C.accent,color:"#fff",flex:1}}>{generating?"⏳ Generating…":allGenerated?"🔄 Regenerate All":"🎙️ Generate Voiceovers"}</Btn>
         {allGenerated&&<Btn onClick={()=>{
-          // Save section voiceover URLs into sections array
-          const updatedSections=(sections||[]).map((s:any,i:number)=>{
-            const secIdx=sectionsWithWords.findIndex((_:any,si:number)=>sectionsWithWords[si]===s)
-            return sectionAudios[secIdx]?{...s,voiceover_url:sectionAudios[secIdx]}:s
-          })
+          const updatedSections=sectionsWithWords.map((s:any,i:number)=>sectionAudios[i]?{...s,voiceover_url:sectionAudios[i]}:s)
           const combinedUrl=Object.values(sectionAudios)[0] as string
-          onSave(updatedSections,selectedVoiceObj?.name||selectedVoice,combinedUrl)
+          onSave(updatedSections,selectedVoiceObj?.name||selectedVoice,combinedUrl,null)
         }} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Use These</Btn>}
       </div>
     </>}
@@ -1464,6 +1499,7 @@ Return ONLY valid JSON:
       {step==="audio"&&<div style={{maxWidth:640,margin:"0 auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <button onClick={()=>setStep("script")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Back to Script</button>
+          <div style={{fontSize:10,color:C.muted}}>hooks: {hookVariations.length} selected: {selectedHooks.join(",")}</div>
           <Btn onClick={()=>setStep("clips")} style={{background:C.accent,color:"#fff"}}>Next: Match Clips →</Btn>
         </div>
 
@@ -1486,7 +1522,16 @@ Return ONLY valid JSON:
           ✅ Both audio tracks selected — ready to match clips!
         </div>}
 
-                <VoiceoverGenerator sections={sections} onSave={(updatedSections:any[],voice:string,combinedUrl:string)=>{setSections(updatedSections);setVoiceoverVoice(voice);setVoiceoverUrl(combinedUrl)}} onSkip={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}}/>
+                <VoiceoverGenerator sections={sections} allHookSections={selectedHooks.length>1?selectedHooks.map(hi=>hookVariations[hi]||sections):null} onSave={(updatedSections:any[],voice:string,combinedUrl:string,allUpdatedHooks?:any[][])=>{
+          setSections(updatedSections)
+          setVoiceoverVoice(voice)
+          setVoiceoverUrl(combinedUrl)
+          if(allUpdatedHooks){
+            const newHookSections:Record<number,any[]>={}
+            selectedHooks.forEach((hi,i)=>{newHookSections[i]=allUpdatedHooks[i]||updatedSections})
+            setHookSections(newHookSections)
+          }
+        }} onSkip={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}}/>
         <div style={{marginTop:16}}>
           <MusicPicker suggestedMood={suggestedMood} onSave={(url:string|null,name:string|null)=>{setMusicUrl(url);setMusicName(name)}}/>
         </div>
@@ -1501,7 +1546,22 @@ Return ONLY valid JSON:
           {selectedHooks.map((hi:number,i:number)=>{
             const hook=hookVariations[hi]?.[0]
             const isActive=activeHookIdx===i
-            return<button key={hi} onClick={()=>{setActiveHookIdx(i);setSections(hookSections[i]||hookVariations[hi]||sections)}} style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,border:"1px solid "+(isActive?C.accent:C.border),borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:isActive?700:500}}>
+            return<button key={hi} onClick={async()=>{
+  setActiveHookIdx(i)
+  const existingSecs=hookSections[i]
+  if(existingSecs){
+    setSections(existingSecs)
+  } else {
+    const hookSecs=hookVariations[selectedHooks[i]]||sections
+    setMatching(true)
+    const matched=items.length>0?await matchClips(hookSecs,items).catch(()=>hookSecs):hookSecs
+    setSections(matched)
+    setHookSections(prev=>({...prev,[i]:matched}))
+    setMatching(false)
+  }
+}}
+
+style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,border:"1px solid "+(isActive?C.accent:C.border),borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:isActive?700:500}}>
               {hi===0?"Original":hook?.hookType||`Hook ${i+1}`}{isActive?" ✓":""}
             </button>
           })}
