@@ -10,7 +10,7 @@ type Item = {
   mux_playback_id?: string; mux_status?: string
   duration_seconds?: number; start_seconds?: number; end_seconds?: number
   thumbnail_time?: number; analysis?: any; clip_ids?: string[]
-  created_at?: string
+  clip_role?: string; created_at?: string
 }
 type Script = { id: string; product_name?: string; metadata?: any; sections?: any[]; created_at?: string }
 type BrandProfile = { id?: string; name: string; website: string; description: string; voice: string; target_customer: string; reviews: string; additional_info: string; customer_avatars: CustomerAvatar[] }
@@ -941,7 +941,11 @@ function toggleMuteClip(idx:number){
                 {selectedClip&&<button onClick={()=>toggleMuteClip(idx)} style={{position:"absolute",bottom:8,left:8,background:"#000a",border:"none",color:"#fff",borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:11}}>{isMuted?"🔇":"🔊"}</button>}
                 {row.autoSelected&&selectedClip&&<div style={{position:"absolute",top:6,left:6,background:C.green,color:"#000",fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4}}>✦ AI</div>}
               </div>
-              {selectedClip&&<div style={{fontSize:10,color:C.text,fontWeight:600,lineHeight:1.3,marginBottom:6,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{selectedClip.title}</div>}
+              {selectedClip&&<div style={{marginBottom:6}}>
+                <div style={{fontSize:10,color:C.text,fontWeight:600,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{selectedClip.title}</div>
+                {selectedClip.clip_role&&<span style={{background:"#6c63ff22",color:C.accent,fontSize:8,fontWeight:700,padding:"1px 5px",borderRadius:3,marginTop:2,display:"inline-block"}}>{selectedClip.clip_role}</span>}
+                {row.matchReason&&<div style={{fontSize:9,color:C.muted,marginTop:2,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>💡 {row.matchReason}</div>}
+              </div>}
               {!readOnly&&selectedClip&&<button onClick={()=>setPickerIdx(idx)} style={{width:"100%",background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8}}>⇄ Swap</button>}
               {!readOnly&&!selectedClip&&(row.matchedClipIds||[]).length>0&&<button onClick={()=>setPickerIdx(idx)} style={{width:"100%",background:C.yellow+"22",border:"1px solid "+C.yellow+"44",color:C.yellow,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8}}>+ Pick ({row.matchedClipIds.length} matched)</button>}
               {alternatives.length>0&&<div><div style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>Alternatives</div><div style={{display:"flex",gap:5}}>{alternatives.map((alt:Item)=><div key={alt.id} title={alt.title} onClick={()=>!readOnly&&updM(idx,{selectedClipId:alt.id,autoSelected:false})} style={{flex:1,position:"relative",paddingTop:"177.78%",background:"#111",borderRadius:6,overflow:"hidden",cursor:readOnly?"default":"pointer",border:"2px solid "+(alt.id===row.selectedClipId?C.accent:C.border)}}>{alt.mux_playback_id?<img src={muxThumb(alt.mux_playback_id,alt.thumbnail_time||alt.start_seconds||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🎬</div>}</div>)}</div></div>}
@@ -1144,8 +1148,38 @@ function LibraryTab({items,onRefresh,view,setView}:{items:Item[],onRefresh:()=>v
       </div>
       <MuxClipPlayer item={selected}/>
       {a.summary&&<Card style={{marginBottom:12}}><Label>Summary</Label><p style={{margin:0,lineHeight:1.7,fontSize:14}}>{a.summary}</p></Card>}
+        {selected.type==="clip"&&<Card style={{marginBottom:12}}>
+        <div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>🎯 Clip Role</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {["hook","problem","solution","social_proof","cta","b_roll","product_demo","reaction","before_after","testimonial"].map(role=>{
+            const active=(selected.clip_role||a.clip_role)===role
+            return<button key={role} onClick={async()=>{
+              const supabase=createClient()
+              await supabase.from("items").update({clip_role:role,analysis:{...a,clip_role:role}}).eq("id",selected.id)
+              setSelected({...selected,clip_role:role,analysis:{...a,clip_role:role}})
+            }} style={{background:active?C.accent:C.surface,color:active?"#fff":C.muted,border:"1px solid "+(active?C.accent:C.border),borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:active?700:400,cursor:"pointer"}}>
+              {role.replace(/_/g," ")}
+            </button>
+          })}
+        </div>
+        {(selected.clip_role||a.clip_role)&&<div style={{fontSize:11,color:C.green,marginTop:8}}>✓ Role set — this clip will be prioritised for {(selected.clip_role||a.clip_role)?.replace(/_/g," ")} sections</div>}
+        {a.quality_score&&<div style={{fontSize:11,color:a.quality_score==="High"?C.green:a.quality_score==="Low"?"#ef4444":C.yellow,marginTop:6}}>AI Quality: {a.quality_score}</div>}
+      </Card>}
       {selected.type!=="clip"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>{[{l:"Tone",v:a.tone},{l:"Ad Potential",v:a.ad_potential,c:adPotColor},{l:"Confidence",v:a.confidence}].map(s=><Card key={s.l} style={{textAlign:"center",padding:14}}><div style={{fontSize:10,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>{s.l}</div><div style={{fontWeight:700,fontSize:14,color:(s as any).c||C.text}}>{s.v||"—"}</div></Card>)}</div>}
-      <Card style={{marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>Scene Tags</div><TagEditor tags={a.scene_tags||[]} onUpdate={t=>updateTags(selected.id,t)}/></Card>
+      <Card style={{marginBottom:12}}>
+  <div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>🎯 Clip Role</div>
+  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+    {["hook","problem","solution","social_proof","cta","b_roll","product_demo","testimonial"].map(role=>{
+      const isActive=(selected.clip_role||selected.analysis?.clip_role)===role
+      return<button key={role} onClick={async()=>{
+        await supabase.from("items").update({clip_role:isActive?null:role}).eq("id",selected.id)
+        onRefresh()
+        setSelected({...selected,clip_role:isActive?undefined:role})
+      }} style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,border:"1px solid "+(isActive?C.accent:C.border),borderRadius:99,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:isActive?700:400}}>{role.replace("_"," ")}</button>
+    })}
+  </div>
+  <div style={{fontSize:10,color:C.muted,marginTop:6}}>Assigning a role helps AI match this clip to the right script sections</div>
+</Card>
       {selected.transcript&&<Card style={{marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📝 Auto-Transcript</div><div style={{fontSize:13,lineHeight:1.7,color:C.muted,maxHeight:120,overflowY:"auto"}}>{selected.transcript}</div></Card>}
       {a.key_quotes?.length>0&&<Card style={{marginBottom:12}}><Label>Key Quotes</Label>{a.key_quotes.map((q:string,i:number)=><div key={i} style={{borderLeft:"3px solid "+C.accent,paddingLeft:12,marginBottom:8,fontSize:14,fontStyle:"italic"}}>"{q}"</div>)}</Card>}
       {a.ad_notes&&<Card style={{background:adPotColor+"18",border:"1px solid "+adPotColor+"44",marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:adPotColor,marginBottom:6}}>📢 AD USAGE</div><div style={{fontSize:14,lineHeight:1.6}}>{a.ad_notes}</div></Card>}
@@ -1252,7 +1286,6 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   }
 
   async function matchClips(secs:any[],libItems:Item[]){
-    // Use clips preferentially — they have richer analysis than originals
     const clips=libItems.filter(i=>i.type==="clip"&&i.mux_playback_id)
     const originals=libItems.filter(i=>i.type==="original"&&i.mux_playback_id)
     const matchPool=clips.length>0?clips:originals
@@ -1262,14 +1295,17 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
       const tags=(a.scene_tags||[]).join(", ")
       const useCase=a.use_case||""
       const label=a.label||""
-      const summary=(a.summary||item.description||"").substring(0,100)
-      const transcript=(item.transcript||"").substring(0,80)
-      return `ID:${item.id}|label:${label}|use:${useCase}|tags:${tags}|summary:${summary}|transcript:${transcript}|creator:${item.creator||""}|adPotential:${a.ad_potential||""}`
+      const clipRole=a.clip_role||item.clip_role||""
+      const summary=(a.summary||item.description||"").substring(0,120)
+      const transcript=(item.transcript||"").substring(0,100)
+      const qualityScore=a.quality_score||"Medium"
+      return`ID:${item.id}|role:${clipRole}|label:${label}|use:${useCase}|tags:${tags}|summary:${summary}|transcript:${transcript}|quality:${qualityScore}|creator:${item.creator||""}`
     }).join("\n")
 
-    const scriptDesc=secs.map((s:any,i:number)=>`Section ${i} [${s.type}]: "${(s.spokenWords||"").substring(0,100)}" — visual: ${(s.visualDirection||"").substring(0,60)}`).join("\n")
+    const scriptDesc=secs.map((s:any,i:number)=>`Section ${i} [${s.type}]: spoken="${(s.spokenWords||"").substring(0,120)}" visual="${(s.visualDirection||"").substring(0,60)}"`)
+    .join("\n")
 
-    const prompt=`You are a direct response video editor. Match each script section to the best clip from the library.
+    const prompt=`You are an expert direct response video editor. Match each script section to the BEST clip from the library.
 
 SCRIPT SECTIONS:
 ${scriptDesc}
@@ -1277,32 +1313,35 @@ ${scriptDesc}
 CLIP LIBRARY (${matchPool.length} clips):
 ${libSummary}
 
-Rules:
-- Match based on content relevance: HOOK clips for HOOK sections, product demos for SOLUTION sections, testimonials for SOCIAL PROOF sections etc
-- Use the clip's label, use_case, tags, and transcript to find the best match
-- Each section should get a different clip where possible
-- Return 2-3 alternative clips per section in order of relevance
+MATCHING RULES:
+1. Match by CONTENT RELEVANCE first — if script mentions "coffee stains" find clips with "coffee" or "stained teeth" in tags/transcript
+2. Match by ROLE — HOOK sections get clips with role:hook or label:HOOK, SOLUTION gets role:solution or product demos etc
+3. Match by QUALITY — prefer clips with quality:High over quality:Medium
+4. AVOID using the same clip for multiple sections
+5. For each section provide 3 alternatives in order of relevance
+6. If no good match exists, still provide the closest option
 
 Return ONLY valid JSON array:
-[{"section":0,"clip_ids":["best_id","alt1","alt2"],"best_id":"best_matching_id","reason":"brief reason"},…]`
+[{"section":0,"best_id":"clip_uuid","clip_ids":["best","alt1","alt2"],"match_reason":"why this clip matches","confidence":"High|Medium|Low"},…]`
 
     try{
-      const raw=await callClaude([{role:"user",content:prompt}],1000)
+      const raw=await callClaude([{role:"user",content:prompt}],1200)
       const matches=JSON.parse(raw.replace(/```json|```/g,"").trim())
       const validIds=new Set(libItems.map(i=>i.id))
       return secs.map((s:any,i:number)=>{
         const m=matches.find((x:any)=>x.section===i)
         const bestId=m?.best_id&&validIds.has(m.best_id)?m.best_id:null
         const matchedIds=(m?.clip_ids||[]).filter((id:string)=>validIds.has(id))
-        return{...s,matchedClipIds:matchedIds.length>0?matchedIds:(s.matchedClipIds||[]),selectedClipId:bestId||(s.selectedClipId||null),autoSelected:!!bestId,matchReason:m?.reason||""}
+        return{
+          ...s,
+          matchedClipIds:matchedIds.length>0?matchedIds:(s.matchedClipIds||[]),
+          selectedClipId:bestId||(s.selectedClipId||null),
+          autoSelected:!!bestId,
+          matchReason:m?.match_reason||"",
+          matchConfidence:m?.confidence||"",
+        }
       })
     }catch(e){return secs}
-  }
-
-  async function handleSaveScript(){
-    const supabase=createClient()
-    const{data}=await supabase.from("scripts").insert({product_name:genMeta?.productName||"General",metadata:genMeta?.form||{},sections,created_at:new Date().toISOString()}).select().single()
-    onSaveScripts([...scripts,data]);setSelected(data);setSections(sections);setView("detail")
   }
 
  async function handleSaveForged(status:"draft"|"complete"){
