@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Mux from '@mux/mux-node'
 import Anthropic from '@anthropic-ai/sdk'
 import { createServiceClient } from '@/lib/supabase/server'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function POST(req: NextRequest) {
   const mux = new Mux({
@@ -17,7 +18,6 @@ export async function POST(req: NextRequest) {
   try {
     mux.webhooks.verifySignature(body, headers, process.env.MUX_WEBHOOK_SECRET!)
   } catch {
-    console.log('Webhook signature verification failed')
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 
@@ -26,30 +26,25 @@ export async function POST(req: NextRequest) {
 
   if (event.type === 'video.asset.errored') {
     const itemId = event.data?.meta?.item_id
-    if (itemId) {
-      await supabase.from('items').update({ mux_status: 'errored' }).eq('id', itemId)
-    }
+    if (itemId) await supabase.from('items').update({ mux_status: 'errored' }).eq('id', itemId)
     return NextResponse.json({ ok: true })
   }
 
-  if (event.type !== 'video.asset.ready') {
-    return NextResponse.json({ ok: true })
-  }
+  if (event.type !== 'video.asset.ready') return NextResponse.json({ ok: true })
 
   const asset = event.data
   const itemId = asset.passthrough
   if (!itemId) return NextResponse.json({ ok: true })
 
- const playbackId = asset.playback_ids?.[0]?.id
+  const playbackId = asset.playback_ids?.[0]?.id
   const duration = asset.duration || 30
 
-  // Auto-transcribe using Deepgram
+  // ── Step 1: Deepgram transcription ────────────────────────────────────────
   let autoTranscript = ''
+  let wordTimestamps: any[] = []
   if (playbackId && process.env.DEEPGRAM_API_KEY) {
     try {
-      // Download the MP4 from Mux first, then send as binary to Deepgram
       const mp4Url = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`
-      // MP4 rendition may still be preparing — retry up to 5 times with 30s delays
       let audioFetch: Response | null = null
       for (let attempt = 0; attempt < 5; attempt++) {
         const tryFetch = await fetch(mp4Url)
@@ -59,7 +54,7 @@ export async function POST(req: NextRequest) {
       }
       if (audioFetch) {
         const audioBuffer = await audioFetch.arrayBuffer()
-        const tRes = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true', {
+        const tRes = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true&utterances=true&words=true', {
           method: 'POST',
           headers: {
             'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
@@ -71,19 +66,16 @@ export async function POST(req: NextRequest) {
         if (tRes.ok) {
           const tData = await tRes.json()
           autoTranscript = tData.results?.channels?.[0]?.alternatives?.[0]?.transcript || ''
-          console.log('Deepgram transcript length:', autoTranscript.length)
-        } else {
-          const errText = await tRes.text()
-          console.log('Deepgram error:', tRes.status, errText.substring(0,200))
+          wordTimestamps = tData.results?.channels?.[0]?.alternatives?.[0]?.words || []
+          console.log('Deepgram transcript length:', autoTranscript.length, 'words:', wordTimestamps.length)
         }
-      } else {
-        console.log('MP4 not available after 5 attempts, skipping transcription')
       }
-    } catch (e:any) {
+    } catch (e: any) {
       console.log('Transcription failed:', e.message)
     }
   }
 
+  // ── Step 2: Update item with transcript ───────────────────────────────────
   const { data: item } = await supabase
     .from('items')
     .update({
@@ -99,58 +91,125 @@ export async function POST(req: NextRequest) {
 
   if (!item) return NextResponse.json({ ok: true })
 
+  // ── Step 3: Gemini video analysis ─────────────────────────────────────────
+  let geminiAnalysis = ''
+  if (playbackId && process.env.GOOGLE_AI_API_KEY) {
+    try {
+      const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+      const mp4Url = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`
+      
+      // Fetch video as base64 for Gemini
+      const videoRes = await fetch(mp4Url)
+      if (videoRes.ok) {
+        const videoBuffer = await videoRes.arrayBuffer()
+        const base64Video = Buffer.from(videoBuffer).toString('base64')
+        
+        const geminiPrompt = `You are an expert direct response video analyst for DTC brands. Watch this video carefully and provide a detailed analysis.
+
+Video duration: ${duration} seconds
+Title: ${item.title}
+
+Analyse the video and return a JSON object with these fields:
+{
+  "visual_summary": "detailed description of exactly what is shown visually throughout the video",
+  "scene_changes": [{"time_seconds": 0, "description": "what changes at this moment visually"}],
+  "visual_elements": ["specific visual elements present e.g. 'close-up of yellow teeth', 'product bottle being held', 'before/after split screen'"],
+  "creator_description": "describe the person on screen if any - age range, gender, setting",
+  "product_shots": ["timestamps and descriptions of any product appearances"],
+  "emotional_moments": ["timestamps of high-emotion or reaction moments"],
+  "scene_segments": [
+    {
+      "start_seconds": 0,
+      "end_seconds": 5,
+      "visual_description": "exactly what is shown on screen",
+      "visual_tags": ["specific searchable visual tags"],
+      "scene_type": "talking_head|product_shot|before_after|reaction|demonstration|lifestyle|text_overlay",
+      "ad_value": "High|Medium|Low",
+      "cut_reason": "why this is a natural cut point"
+    }
+  ]
+}
+
+Be extremely specific about visual content. If you see teeth, describe their colour. If you see a product, name what it looks like. Do not generalise.`
+
+        const result = await model.generateContent([
+          { inlineData: { mimeType: 'video/mp4', data: base64Video } },
+          geminiPrompt
+        ])
+        geminiAnalysis = result.response.text()
+        console.log('Gemini analysis length:', geminiAnalysis.length)
+      }
+    } catch (e: any) {
+      console.log('Gemini analysis failed:', e.message)
+    }
+  }
+
+  // ── Step 4: Claude combines transcript + visual analysis ──────────────────
   try {
+    let geminiData: any = {}
+    try {
+      const cleanGemini = geminiAnalysis.replace(/```json|```/g, '').trim()
+      if (cleanGemini) geminiData = JSON.parse(cleanGemini)
+    } catch (e) {
+      console.log('Could not parse Gemini JSON, using raw text')
+    }
+
+    const wordTimingContext = wordTimestamps.length > 0
+      ? `\nWORD-LEVEL TIMESTAMPS:\n${wordTimestamps.slice(0, 100).map((w: any) => `${w.start.toFixed(1)}s: "${w.word}"`).join(', ')}`
+      : ''
+
     const msg = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1400,
+      max_tokens: 2000,
       messages: [{
         role: 'user',
-        content: `You are an expert direct response video editor and ad creative strategist. Your job is to analyse this video and create highly accurate, commercially valuable clips for DTC brand advertising.
+        content: `You are an expert direct response video editor for DTC brands. Combine the transcript, word timestamps, and visual analysis to create highly accurate clip segments.
 
-Title: ${item.title}
-Duration: ${duration}s
-Description: ${item.description || 'not provided'}
-Transcript: ${item.transcript || autoTranscript || 'not provided'}
-Creator: ${item.creator || 'unknown'}
+TITLE: ${item.title}
+DURATION: ${duration}s
+CREATOR: ${item.creator || 'unknown'}
+TRANSCRIPT: ${item.transcript || autoTranscript || 'not provided'}
+${wordTimingContext}
 
-Return ONLY valid JSON — no markdown, no explanation:
+GEMINI VISUAL ANALYSIS:
+${JSON.stringify(geminiData, null, 2) || geminiAnalysis || 'not available'}
+
+Return ONLY valid JSON:
 {
   "content_type": "UGC|Founder Clip|Tutorial|Behind the Scenes|High Production|Testimonial|Product Demo|Talking Head|Other",
   "confidence": "High|Medium|Low",
-  "summary": "2-3 sentence description of what happens in this video",
-  "tone": "describe the emotional tone",
-  "topics": ["specific topics mentioned"],
-  "scene_tags": ["specific visual elements present throughout"],
-  "hook": "the most attention-grabbing line from the video",
-  "key_quotes": ["direct quotes that are powerful for ads"],
+  "summary": "2-3 sentences combining what was said AND shown",
+  "tone": "emotional tone description",
+  "topics": ["specific topics from transcript AND visuals"],
+  "scene_tags": ["specific visual tags from Gemini analysis"],
+  "hook": "most attention-grabbing moment or line",
+  "key_quotes": ["powerful direct quotes from transcript"],
   "ad_potential": "High|Medium|Low",
-  "ad_notes": "specific advice on how to use this in ads",
+  "ad_notes": "specific advice on ad usage based on both transcript and visuals",
   "clip_segments": [
     {
       "label": "HOOK|PROBLEM|AGITATE|SOLUTION|SOCIAL PROOF|CTA|BODY|PRODUCT|REACTION|BEFORE|AFTER|TESTIMONIAL",
       "clip_role": "hook|problem|solution|social_proof|cta|b_roll|product_demo|reaction|before_after|testimonial",
       "start_seconds": 0,
       "end_seconds": 4,
-      "description": "exact words spoken AND visual description of what is on screen",
-      "scene_tags": ["very specific visual tags e.g. 'close-up teeth yellow', 'product bottle hand', 'smiling after result'"],
-      "use_case": "specific ad use e.g. 'strong hook opener showing the problem', 'reaction shot for social proof section'",
+      "description": "combine exact transcript words with visual description",
+      "scene_tags": ["specific visual tags for THIS segment from Gemini"],
+      "use_case": "specific ad use case",
       "quality_score": "High|Medium|Low",
       "avoid_reason": null
     }
   ]
 }
 
-CLIP SEGMENTATION RULES — follow these exactly:
-1. Cover the FULL ${duration}s video — no gaps between segments
-2. Minimum clip length: 1.5 seconds. Maximum: 8 seconds
-3. ALWAYS cut at natural breaks: sentence endings, scene changes, topic shifts, reaction moments
-4. NEVER cut mid-word or mid-sentence unless absolutely necessary
-5. Prefer 2-4 second clips for hooks/reactions, 4-7 seconds for explanations
-6. If two consecutive segments show nearly identical visuals, MERGE them into one
-7. Mark quality_score as Low and set avoid_reason if: clip is mid-sentence, visually unclear, too similar to adjacent clip, or has no ad utility
-8. Create MORE clips for high-value moments (product reveals, reactions, key claims) — up to 12 segments for longer videos
-9. scene_tags MUST be specific enough to match script keywords e.g. if video shows coffee stains say "coffee stained teeth" not just "teeth"
-10. clip_role must reflect what direct response ad section this clip is best suited for`
+CRITICAL RULES:
+1. Use WORD TIMESTAMPS to cut at exact sentence endings — never mid-word or mid-sentence
+2. Use Gemini scene_segments to cut at visual scene changes
+3. Minimum 1.5s per clip, maximum 8s
+4. scene_tags must come from actual Gemini visual analysis — no guessing
+5. Mark quality_score Low if: mid-sentence cut, visually unclear, duplicate of adjacent clip
+6. Prefer cuts where BOTH a sentence ends AND a visual scene changes
+7. Create up to 12 segments for longer videos — more is better than fewer if quality is High`
       }],
     })
 
@@ -163,7 +222,6 @@ CLIP SEGMENTATION RULES — follow these exactly:
                   (s.end_seconds - s.start_seconds) >= 1
     )
 
-    // Filter out low quality segments
     const goodSegments = validSegments.filter((seg: any) => seg.quality_score !== 'Low')
     console.log(`Created ${goodSegments.length} good clips from ${validSegments.length} total segments`)
 
@@ -185,19 +243,19 @@ CLIP SEGMENTATION RULES — follow these exactly:
       analysis: {
         content_type: analysis.content_type,
         summary: seg.description,
-        scene_tags: [...(seg.scene_tags || []), ...(analysis.scene_tags || []).slice(0,2)],
+        scene_tags: seg.scene_tags || [],
         use_case: seg.use_case,
         ad_potential: seg.quality_score === 'High' ? 'High' : analysis.ad_potential,
         tone: analysis.tone,
         hook: seg.label === 'HOOK' ? analysis.hook : null,
-        key_quotes: (analysis.key_quotes || []).filter((q:string)=>
-          (autoTranscript||item.transcript||'').toLowerCase().includes(q.toLowerCase().substring(0,20))
+        key_quotes: (analysis.key_quotes || []).filter((q: string) =>
+          (autoTranscript || item.transcript || '').toLowerCase().includes(q.toLowerCase().substring(0, 20))
         ),
         label: seg.label,
         clip_role: seg.clip_role || null,
         quality_score: seg.quality_score || 'Medium',
         parent_title: item.title,
-        creator_context: item.creator?`${item.creator}${item.creator_age?', '+item.creator_age:''}`:null,
+        creator_context: item.creator ? `${item.creator}${item.creator_age ? ', ' + item.creator_age : ''}` : null,
       },
     }))
 
@@ -210,9 +268,8 @@ CLIP SEGMENTATION RULES — follow these exactly:
       mux_status: 'ready',
     }).eq('id', itemId)
 
-
   } catch (err: any) {
-    console.error('Claude analysis failed:', err.message)
+    console.error('Analysis failed:', err.message)
     await supabase.from('items').update({ mux_status: 'ready' }).eq('id', itemId)
   }
 
