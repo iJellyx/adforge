@@ -19,7 +19,7 @@ type Product = { id?: string; name: string; description: string; benefits: strin
 type ForgedAd = { id: string; title: string; status: 'draft'|'complete'; mode?: 'script'|'broll'; script_id?: string; sections?: any[]; voiceover_url?: string; voiceover_voice?: string; music_url?: string; music_name?: string; render_id?: string; render_url?: string; render_status?: string; notes?: string; star_rating?: number; metadata?: any; created_at?: string; updated_at?: string }
 
 
-const C = { bg:"#0a0a0f",surface:"#13131a",card:"#1a1a24",border:"#2a2a3a",accent:"#6c63ff",accentSoft:"#6c63ff22",text:"#f0f0f5",muted:"#7a7a9a",green:"#22c55e",yellow:"#f59e0b",red:"#ef4444" }
+const C = { bg:"#F4F2FF",surface:"#ffffff",card:"#ffffff",border:"rgba(91,73,255,0.12)",accent:"#5B49FF",accentSoft:"#EDE8FF",text:"#0F1133",muted:"#6B6894",green:"#16A34A",yellow:"#D97706",red:"#DC2626" }
 const GENDERS = ["Male","Female","Non-binary","Other"]
 const AGE_RANGES = ["Under 18","18-24","25-34","35-44","45+"]
 const SEC_TYPES = ["HOOK","PROBLEM","AGITATE","SOLUTION","SOCIAL PROOF","BODY","CTA"]
@@ -30,7 +30,7 @@ const STAGES = [
   {value:"product_aware",label:"Product Aware",desc:"Know your product, haven't bought"},
   {value:"most_aware",label:"Most Aware",desc:"Need a reason to buy now"},
 ]
-const STAGE_COLORS: Record<string,string> = { unaware:"#7c3aed",problem_aware:"#ef4444",solution_aware:"#f59e0b",product_aware:"#3b82f6",most_aware:"#22c55e" }
+const STAGE_COLORS: Record<string,string> = { unaware:"#7C3AED",problem_aware:"#DC2626",solution_aware:"#D97706",product_aware:"#2563EB",most_aware:"#16A34A" }
 const AD_LENGTHS = ["15 seconds","30 seconds","45 seconds","60 seconds","90 seconds"]
 const FORM_CTYPES = ["UGC","Talking Head","Founder Story","Mashup","Testimonial","Problem-Solution","Tutorial","Before & After"]
 const SORTS = ["Newest first","Oldest first","A → Z","Z → A"]
@@ -53,12 +53,12 @@ function muxThumb(playbackId: string, time = 0) { return `https://image.mux.com/
 function muxMp4(playbackId: string) { return `https://stream.mux.com/${playbackId}/high.mp4` }
 function fmt(s?: number) { if(!s&&s!==0)return"0:00"; return`${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,"0")}` }
 function typeColor(t?: string) {
-  const m: Record<string,any> = { "UGC":{bg:"#7c3aed22",color:"#a78bfa"},"Founder Clip":{bg:"#0891b222",color:"#38bdf8"},"Tutorial":{bg:"#15803d22",color:"#4ade80"},"Behind the Scenes":{bg:"#92400e22",color:"#fbbf24"},"High Production":{bg:"#be185d22",color:"#f472b6"},"Testimonial":{bg:"#0369a122",color:"#7dd3fc"},"Product Demo":{bg:"#065f4622",color:"#34d399"},"Clip":{bg:"#92400e22",color:"#fb923c"},"Talking Head":{bg:"#7c3aed22",color:"#c4b5fd"} }
-  return m[t||""]||{bg:"#6c63ff22",color:"#a5b4fc"}
+  const m: Record<string,any> = { "UGC":{bg:"#EDE8FF",color:"#5B49FF"},"Founder Clip":{bg:"#EFF6FF",color:"#2563EB"},"Tutorial":{bg:"#F0FDF4",color:"#16A34A"},"Behind the Scenes":{bg:"#FFFBEB",color:"#D97706"},"High Production":{bg:"#FDF2F8",color:"#9D174D"},"Testimonial":{bg:"#EFF6FF",color:"#1D4ED8"},"Product Demo":{bg:"#ECFDF5",color:"#059669"},"Clip":{bg:"#FFF7ED",color:"#C2410C"},"Talking Head":{bg:"#F5F3FF",color:"#7C3AED"} }
+  return m[t||""]||{bg:"#EDE8FF",color:"#5B49FF"}
 }
 function secColor(t?: string) {
-  const m: Record<string,any> = { "HOOK":{bg:"#ef444418",color:"#f87171",bd:"#ef444430"},"PROBLEM":{bg:"#f59e0b18",color:"#fbbf24",bd:"#f59e0b30"},"AGITATE":{bg:"#f9731618",color:"#fb923c",bd:"#f9731630"},"SOLUTION":{bg:"#22c55e18",color:"#4ade80",bd:"#22c55e30"},"SOCIAL PROOF":{bg:"#3b82f618",color:"#60a5fa",bd:"#3b82f630"},"CTA":{bg:"#6c63ff18",color:"#a5b4fc",bd:"#6c63ff30"},"BODY":{bg:"#92400e18",color:"#fbbf24",bd:"#92400e30"} }
-  return m[t||""]||{bg:"#ffffff0e",color:C.muted,bd:"#ffffff18"}
+  const m: Record<string,any> = { "HOOK":{bg:"#FEF2F2",color:"#DC2626",bd:"#FECACA"},"PROBLEM":{bg:"#FFFBEB",color:"#D97706",bd:"#FCD34D"},"AGITATE":{bg:"#FFF7ED",color:"#C2410C",bd:"#FED7AA"},"SOLUTION":{bg:"#F0FDF4",color:"#16A34A",bd:"#86EFAC"},"SOCIAL PROOF":{bg:"#EFF6FF",color:"#2563EB",bd:"#BFDBFE"},"CTA":{bg:"#EDE8FF",color:"#5B49FF",bd:"#C4B5FD"},"BODY":{bg:"#F9FAFB",color:"#6B7280",bd:"#E5E7EB"} }
+  return m[t||""]||{bg:"#F4F2FF",color:C.muted,bd:C.border}
 }
 function getDurationRange(secs?: number){if(!secs)return"";if(secs<5)return"Under 5s";if(secs<15)return"5–15s";if(secs<30)return"15–30s";if(secs<60)return"30–60s";return"Over 60s"}
 async function callClaude(messages: any[], maxTokens = 1500) {
@@ -67,11 +67,11 @@ async function callClaude(messages: any[], maxTokens = 1500) {
 }
 
 // ── UI Primitives ─────────────────────────────────────────────────────────
-function Btn({onClick,disabled,style,children}:any){return<button onClick={onClick} disabled={disabled} style={{border:"none",borderRadius:9,padding:"9px 18px",fontWeight:600,fontSize:13,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.5:1,...style}}>{children}</button>}
-function Label({children}:any){return<div style={{fontSize:12,fontWeight:600,color:C.muted,marginBottom:5}}>{children}</div>}
-function Card({children,style,pad}:any){return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:pad||20,...style}}>{children}</div>}
-function STitle({children,size,mb}:any){return<div style={{fontWeight:700,fontSize:size||17,marginBottom:mb!=null?mb:16,color:C.text}}>{children}</div>}
-function Chip({label,color}:any){const cl=color||typeColor(label);return<span style={{background:cl.bg,color:cl.color,padding:"3px 9px",borderRadius:99,fontSize:10,fontWeight:700,border:"1px solid #fff1",whiteSpace:"nowrap"}}>{label}</span>}
+function Btn({onClick,disabled,style,children}:any){return<button onClick={onClick} disabled={disabled} style={{border:"none",borderRadius:50,padding:"9px 20px",fontWeight:700,fontSize:13,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.5:1,fontFamily:"inherit",...style}}>{children}</button>}
+function Label({children}:any){return<div style={{fontSize:12,fontWeight:700,color:C.muted,marginBottom:6,letterSpacing:"0.02em"}}>{children}</div>}
+function Card({children,style,pad}:any){return<div style={{background:C.card,border:"1.5px solid "+C.border,borderRadius:16,padding:pad||20,boxShadow:"0 2px 12px rgba(91,73,255,0.06)",...style}}>{children}</div>}
+function STitle({children,size,mb}:any){return<div style={{fontWeight:800,fontSize:size||17,marginBottom:mb!=null?mb:16,color:C.text,letterSpacing:"-0.02em"}}>{children}</div>}
+function Chip({label,color}:any){const cl=color||typeColor(label);return<span style={{background:cl.bg,color:cl.color,padding:"3px 10px",borderRadius:50,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{label}</span>}
 function Input({value,onChange,placeholder,type,textarea,rows,onKeyDown,style}:any){
   const s={background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",boxSizing:"border-box" as const,fontFamily:"inherit",...style}
   if(textarea)return<textarea value={value} onChange={onChange} onKeyDown={onKeyDown} placeholder={placeholder} rows={rows||3} style={{...s,resize:"vertical" as const}}/>
@@ -2256,28 +2256,50 @@ export default function AdForgeApp(){
   const tabBtn=(id:string,label:string)=>{const active=tab===id;return<button style={{padding:"10px 20px",background:"none",border:"none",borderBottom:"2px solid "+(active?C.accent:"transparent"),color:active?C.text:C.muted,fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",whiteSpace:"nowrap"}} onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}}>{label}</button>}
   const draftCount=forgedAds.filter(a=>a.status==="draft").length
 
-  if(loading)return<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"system-ui"}}>Loading…</div>
+  if(loading)return<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
+    <div style={{textAlign:"center"}}>
+      <div style={{fontWeight:800,fontSize:24,color:C.accent,marginBottom:8,letterSpacing:"-0.02em"}}>AdForge</div>
+      <div style={{fontSize:13,color:C.muted}}>Loading your workspace…</div>
+    </div>
+  </div>
 
-  return<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Inter',system-ui,sans-serif",color:C.text}}>
-    <div style={{background:C.surface,borderBottom:"1px solid "+C.border,position:"sticky",top:0,zIndex:50}}>
-      <div style={{padding:"0 20px",display:"flex",alignItems:"center"}}>
-        <div style={{fontWeight:800,fontSize:16,color:C.accent,marginRight:24,padding:"14px 0",letterSpacing:"-0.5px"}}>AdForge</div>
-        {tabBtn("library","📦 Library")}
-        {tabBtn("scripts","✍️ Scripts")}
-        <button style={{padding:"10px 20px",background:"none",border:"none",borderBottom:"2px solid "+(tab==="forged"?C.accent:"transparent"),color:tab==="forged"?C.text:C.muted,fontWeight:tab==="forged"?700:500,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}} onClick={()=>setTab("forged")}>
-          ⚡ Forged Ads{draftCount>0&&<span style={{background:C.yellow,color:"#000",borderRadius:99,fontSize:9,padding:"1px 5px",fontWeight:800}}>{draftCount}</span>}
-        </button>
-        {tabBtn("brand","🏷️ Brand")}
-        <div style={{flex:1}}/>
-        {tab==="library"&&libView!=="add"&&<Btn onClick={()=>setLibView("add")} style={{background:C.surface,color:C.text,border:"1px solid "+C.border,margin:"8px 0",fontSize:12,padding:"7px 14px"}}>+ Add Content</Btn>}
-       <Btn onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts");}} style={{background:C.accent,color:"#fff",margin:"8px 0",fontSize:12,padding:"7px 14px",marginLeft:8}}>⚡ Create Ad</Btn>
-        <button onClick={handleSignOut} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:12,marginLeft:16}}>Sign out</button>
+  const navItem=(id:string,label:string,icon:string)=>{
+    const active=tab===id
+    return<button onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",margin:"0 8px",borderRadius:10,border:"none",background:active?"rgba(91,73,255,0.12)":"transparent",color:active?C.accent:C.muted,fontWeight:active?700:500,fontSize:13,cursor:"pointer",width:"calc(100% - 16px)",textAlign:"left",fontFamily:"inherit",borderRight:active?"2px solid "+C.accent:"2px solid transparent"}}>
+      <span style={{fontSize:15,flexShrink:0}}>{icon}</span>{label}
+      {id==="forged"&&draftCount>0&&<span style={{background:C.yellow,color:"#fff",borderRadius:99,fontSize:9,padding:"1px 6px",fontWeight:800,marginLeft:"auto"}}>{draftCount}</span>}
+    </button>
+  }
+
+  return<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",color:C.text,display:"flex"}}>
+    {/* Sidebar */}
+    <div style={{width:220,background:"#0F1133",display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0}}>
+      {/* Brand */}
+      <div style={{padding:"20px 16px 16px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
+        <div style={{fontWeight:800,fontSize:20,color:"#fff",letterSpacing:"-0.02em",marginBottom:2}}>Ad<span style={{color:"#7C6FFF"}}>Forge</span></div>
+        {brand.name&&<div style={{fontSize:10,color:"rgba(255,255,255,0.35)",fontWeight:600,letterSpacing:"0.04em",marginTop:2}}>{brand.name}</div>}
+      </div>
+      {/* Nav */}
+      <div style={{padding:"12px 0",flex:1}}>
+        {navItem("library","Library","⬛")}
+        {navItem("forged","Forged Ads","⚡")}
+        {navItem("scripts","Scripts","✍️")}
+        {navItem("brand","Brand","👤")}
+      </div>
+      {/* Create Ad CTA */}
+      <div style={{padding:"12px 16px 20px",borderTop:"1px solid rgba(255,255,255,0.08)"}}>
+        {tab==="library"&&libView!=="add"&&<button onClick={()=>setLibView("add")} style={{width:"100%",background:"rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.7)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:50,padding:"9px",fontFamily:"inherit",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:8}}>+ Add Content</button>}
+        <button onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts")}} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:50,padding:"11px",fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer"}}>✦ Create Ad</button>
+        <button onClick={handleSignOut} style={{width:"100%",background:"none",border:"none",color:"rgba(255,255,255,0.25)",cursor:"pointer",fontSize:11,marginTop:10,fontFamily:"inherit"}}>Sign out</button>
       </div>
     </div>
-    {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView}/>}
-    {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode}/>}
-    {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} onRefresh={loadData}/>}
-    {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
+    {/* Main content */}
+    <div style={{marginLeft:220,flex:1,minHeight:"100vh",background:C.bg}}>
+      {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView}/>}
+      {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode}/>}
+      {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} onRefresh={loadData}/>}
+      {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
+    </div>
   </div>
 }
 
