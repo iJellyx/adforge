@@ -67,7 +67,7 @@ async function callClaude(messages: any[], maxTokens = 1500) {
 }
 
 // ── UI Primitives ─────────────────────────────────────────────────────────
-function Btn({onClick,disabled,style,children}:any){return<button onClick={onClick} disabled={disabled} style={{border:"none",borderRadius:50,padding:"9px 20px",fontWeight:700,fontSize:13,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.5:1,fontFamily:"inherit",...style}}>{children}</button>}
+function Btn({onClick,disabled,style,children}:any){return<button onClick={onClick} disabled={disabled} style={{border:"none",borderRadius:50,padding:"9px 20px",fontWeight:700,fontSize:13,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.4:1,fontFamily:"inherit",transition:"opacity 0.15s",...style}}>{children}</button>}
 function Label({children}:any){return<div style={{fontSize:12,fontWeight:700,color:C.muted,marginBottom:6,letterSpacing:"0.02em"}}>{children}</div>}
 function Card({children,style,pad}:any){return<div style={{background:C.card,border:"1.5px solid "+C.border,borderRadius:16,padding:pad||20,boxShadow:"0 2px 12px rgba(91,73,255,0.06)",...style}}>{children}</div>}
 function STitle({children,size,mb}:any){return<div style={{fontWeight:800,fontSize:size||17,marginBottom:mb!=null?mb:16,color:C.text,letterSpacing:"-0.02em"}}>{children}</div>}
@@ -474,10 +474,15 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
   const musicRef=useRef<HTMLAudioElement>(null)
   const clipStartTimesRef=useRef<number[]>([])
 
-  const clips=(sections||[]).map((s:any)=>{
-    const item=s.selectedClipId?libraryItems.find((i:Item)=>i.id===s.selectedClipId):null
-    if(!item?.mux_playback_id)return null
-    return{item,start:item.start_seconds||0,end:item.end_seconds,label:s.type,spoken:s.spokenWords||"",muted:s.muted||false,voiceover_url:s.voiceover_url||null}
+    const clips=(sections||[]).flatMap((s:any)=>{
+    const segments=s.clipSegments&&s.clipSegments.length>0?s.clipSegments:[{clipId:s.selectedClipId}]
+    const segCount=segments.length
+    return segments.map((seg:any,segIdx:number)=>{
+      const item=seg.clipId?libraryItems.find((i:Item)=>i.id===seg.clipId):null
+      if(!item?.mux_playback_id)return null
+      // Only first segment of a section carries the voiceover
+      return{item,start:item.start_seconds||0,end:item.end_seconds,label:s.type,spoken:segIdx===0?s.spokenWords||"":"",muted:s.muted||false,voiceover_url:segIdx===0?s.voiceover_url||null:null,isFirstInSection:segIdx===0,segCount}
+    }).filter(Boolean)
   }).filter(Boolean)
 
   const cur=clips[clipIdx]
@@ -909,7 +914,19 @@ function toggleMuteClip(idx:number){
   }
 
   return<div>
-    {pickerIdx!==null&&<ClipPickerModal currentId={sections[pickerIdx]?.selectedClipId} matchedIds={sections[pickerIdx]?.matchedClipIds||[]} libraryItems={libraryItems} sectionLabel={sections[pickerIdx]?.type||""} onSelect={(id:string)=>updM(pickerIdx,{selectedClipId:id,autoSelected:false})} onClose={()=>setPickerIdx(null)}/>}
+   {pickerIdx!==null&&<ClipPickerModal 
+    currentId={pickerIdx>=1000?sections[Math.floor(pickerIdx/1000)]?.clipSegments?.[pickerIdx%1000]?.clipId:sections[pickerIdx]?.selectedClipId} 
+    matchedIds={sections[Math.floor(pickerIdx>=1000?pickerIdx/1000:pickerIdx)]?.matchedClipIds||[]} 
+    libraryItems={libraryItems} 
+    sectionLabel={sections[Math.floor(pickerIdx>=1000?pickerIdx/1000:pickerIdx)]?.type||""} 
+    onSelect={(id:string)=>{
+      const secIdx=pickerIdx>=1000?Math.floor(pickerIdx/1000):pickerIdx
+      const segIdx=pickerIdx>=1000?pickerIdx%1000:0
+      const currentSegs=sections[secIdx]?.clipSegments&&sections[secIdx].clipSegments.length>0?sections[secIdx].clipSegments:[{id:`seg-${secIdx}-0`,clipId:sections[secIdx]?.selectedClipId||null}]
+      const newSegs=currentSegs.map((seg:any,si:number)=>si===segIdx?{...seg,clipId:id}:seg)
+      onChange(sections.map((s:any,i:number)=>i===secIdx?{...s,clipSegments:newSegs,selectedClipId:newSegs[0]?.clipId||id,autoSelected:false}:s))
+    }} 
+    onClose={()=>setPickerIdx(null)}/>}
     <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",background:C.surface,borderBottom:"1px solid "+C.border}}>
       <span style={{fontSize:12,color:C.muted,fontWeight:600}}>{sections.length} sections</span>
       {voiceoverUrl&&<div style={{fontSize:11,color:C.green}}>🎙️ Voiceover active</div>}
@@ -936,18 +953,28 @@ function toggleMuteClip(idx:number){
               </div>}
             </div>
             <div style={{background:C.bg,padding:10}}>
-              <div style={{position:"relative",width:"100%",paddingTop:"177.78%",background:"#111",borderRadius:10,overflow:"hidden",marginBottom:8}}>
-                {selectedClip?.mux_playback_id?<div style={{position:"absolute",inset:0}}><ClipSegmentPlayer playbackId={selectedClip.mux_playback_id} start={selectedClip.start_seconds||0} end={selectedClip.end_seconds} muted={isMuted}/></div>:<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6}}><div style={{fontSize:24}}>🎬</div><div style={{fontSize:10,color:C.muted,textAlign:"center",padding:"0 8px"}}>{selectedClip?"Processing…":"No clip assigned"}</div>{!readOnly&&<button onClick={()=>setPickerIdx(idx)} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Pick Clip</button>}</div>}
-                {selectedClip&&<button onClick={()=>toggleMuteClip(idx)} style={{position:"absolute",bottom:8,left:8,background:"#000a",border:"none",color:"#fff",borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:11}}>{isMuted?"🔇":"🔊"}</button>}
-                {row.autoSelected&&selectedClip&&<div style={{position:"absolute",top:6,left:6,background:C.green,color:"#000",fontSize:8,fontWeight:800,padding:"2px 5px",borderRadius:4}}>✦ AI</div>}
-              </div>
-              {selectedClip&&<div style={{marginBottom:6}}>
-                <div style={{fontSize:10,color:C.text,fontWeight:600,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{selectedClip.title}</div>
-                {selectedClip.clip_role&&<span style={{background:"#6c63ff22",color:C.accent,fontSize:8,fontWeight:700,padding:"1px 5px",borderRadius:3,marginTop:2,display:"inline-block"}}>{selectedClip.clip_role}</span>}
-                {row.matchReason&&<div style={{fontSize:9,color:C.muted,marginTop:2,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>💡 {row.matchReason}</div>}
-              </div>}
-              {!readOnly&&selectedClip&&<button onClick={()=>setPickerIdx(idx)} style={{width:"100%",background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8}}>⇄ Swap</button>}
-              {!readOnly&&!selectedClip&&(row.matchedClipIds||[]).length>0&&<button onClick={()=>setPickerIdx(idx)} style={{width:"100%",background:C.yellow+"22",border:"1px solid "+C.yellow+"44",color:C.yellow,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8}}>+ Pick ({row.matchedClipIds.length} matched)</button>}
+              {/* Multi-clip segments */}
+              {(row.clipSegments||[{id:`seg-${idx}-0`,clipId:row.selectedClipId||null}]).map((seg:any,segIdx:number)=>{
+                const segClip=seg.clipId?libraryItems.find((i:Item)=>i.id===seg.clipId):null
+                return<div key={seg.id||segIdx} style={{marginBottom:8,border:"1px solid "+C.border,borderRadius:8,overflow:"hidden",background:C.bg}}>
+                  <div style={{position:"relative",width:"100%",paddingTop:"100%",background:"#E8E6FF",overflow:"hidden"}}>
+                    {segClip?.mux_playback_id?<div style={{position:"absolute",inset:0}}><ClipSegmentPlayer playbackId={segClip.mux_playback_id} start={segClip.start_seconds||0} end={segClip.end_seconds} muted={isMuted}/></div>:<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}><div style={{fontSize:18}}>🎬</div><div style={{fontSize:9,color:C.muted,textAlign:"center",padding:"0 4px"}}>No clip</div></div>}
+                    {segClip&&row.autoSelected&&segIdx===0&&<div style={{position:"absolute",top:4,left:4,background:C.green,color:"#fff",fontSize:7,fontWeight:800,padding:"1px 4px",borderRadius:3}}>AI</div>}
+                    {segClip&&<button onClick={()=>toggleMuteClip(idx)} style={{position:"absolute",bottom:4,left:4,background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:9}}>{isMuted?"🔇":"🔊"}</button>}
+                    {!readOnly&&<button onClick={()=>setPickerIdx(idx*1000+segIdx)} style={{position:"absolute",bottom:4,right:4,background:C.accent,color:"#fff",border:"none",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:9,fontWeight:700}}>⇄</button>}
+                    {!readOnly&&segIdx>0&&<button onClick={()=>{const segs=(row.clipSegments||[]).filter((_:any,si:number)=>si!==segIdx);updM(idx,{clipSegments:segs,selectedClipId:segs[0]?.clipId||null})}} style={{position:"absolute",top:4,right:4,background:"rgba(220,38,38,0.8)",color:"#fff",border:"none",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:9}}>✕</button>}
+                  </div>
+                  {segClip&&<div style={{padding:"4px 6px",fontSize:9,color:C.text,fontWeight:600,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as any}}>{segClip.title}</div>}
+                </div>
+              })}
+              {/* Add clip button */}
+              {!readOnly&&<button onClick={()=>{
+                const currentSegs=row.clipSegments&&row.clipSegments.length>0?row.clipSegments:[{id:`seg-${idx}-0`,clipId:row.selectedClipId||null}]
+                const newSeg={id:`seg-${idx}-${Date.now()}`,clipId:null}
+                updM(idx,{clipSegments:[...currentSegs,newSeg]})
+                setPickerIdx(idx*1000+currentSegs.length)
+              }} style={{width:"100%",background:C.accentSoft,border:"1.5px dashed "+C.accent,color:C.accent,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:10,fontWeight:700,marginBottom:8}}>+ Add clip to section</button>}
+              {!readOnly&&!(row.clipSegments?.length>0||row.selectedClipId)&&(row.matchedClipIds||[]).length>0&&<button onClick={()=>setPickerIdx(idx*1000)} style={{width:"100%",background:"#FFFBEB",border:"1px solid #FCD34D",color:C.yellow,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8}}>+ Pick ({row.matchedClipIds.length} matched)</button>}
               {alternatives.length>0&&<div><div style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>Alternatives</div><div style={{display:"flex",gap:5}}>{alternatives.map((alt:Item)=><div key={alt.id} title={alt.title} onClick={()=>!readOnly&&updM(idx,{selectedClipId:alt.id,autoSelected:false})} style={{flex:1,position:"relative",paddingTop:"177.78%",background:"#111",borderRadius:6,overflow:"hidden",cursor:readOnly?"default":"pointer",border:"2px solid "+(alt.id===row.selectedClipId?C.accent:C.border)}}>{alt.mux_playback_id?<img src={muxThumb(alt.mux_playback_id,alt.thumbnail_time||alt.start_seconds||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🎬</div>}</div>)}</div></div>}
             </div>
             <div style={{padding:"10px 12px",background:C.surface,borderTop:"1px solid "+C.border,flex:1}}>
@@ -1332,10 +1359,15 @@ Return ONLY valid JSON array:
         const m=matches.find((x:any)=>x.section===i)
         const bestId=m?.best_id&&validIds.has(m.best_id)?m.best_id:null
         const matchedIds=(m?.clip_ids||[]).filter((id:string)=>validIds.has(id))
+        // Build clipSegments — start with one segment per section
+        const existingSegments=s.clipSegments&&s.clipSegments.length>0?s.clipSegments:null
+        const newClipSegments=existingSegments||[{id:`seg-${i}-0`,clipId:bestId||(s.selectedClipId||null)}]
+        if(!existingSegments&&bestId)newClipSegments[0].clipId=bestId
         return{
           ...s,
           matchedClipIds:matchedIds.length>0?matchedIds:(s.matchedClipIds||[]),
           selectedClipId:bestId||(s.selectedClipId||null),
+          clipSegments:newClipSegments,
           autoSelected:!!bestId,
           matchReason:m?.match_reason||"",
           matchConfidence:m?.confidence||"",
@@ -1497,7 +1529,7 @@ Return ONLY valid JSON:
       </div>
       <Label>Objections</Label><Input textarea value={form.objections} onChange={(e:any)=>setF("objections",e.target.value)} rows={2}/>
     </Card>
-    <Btn onClick={handleGen} disabled={generating} style={{background:generating?C.border:C.accent,color:"#fff",width:"100%",padding:14,fontSize:16,borderRadius:12}}>{generating?"⏳ Writing script & matching clips…":"✨ Generate Script"}</Btn>
+    <Btn onClick={handleGen} disabled={generating} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:16,borderRadius:12}}>{generating?"⏳ Writing script & matching clips…":"✨ Generate Script"}</Btn>
   </div>
 
   if(view==="review"){
@@ -1643,7 +1675,7 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
             <Btn onClick={()=>setStep("forge")} style={{background:C.accent,color:"#fff"}}>Next: Forge →</Btn>
           </div>
         </div>
-        {autoCount>0&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:13,color:"#4ade80"}}>✦ AI auto-selected {autoCount} clip{autoCount!==1?"s":""} — swap any below.</div>}
+        {autoCount>0&&<div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:13,color:"#15803D",fontWeight:600}}>✦ AI auto-selected {autoCount} clip{autoCount!==1?"s":""} — swap any below.</div>}
         <Card style={{padding:0,overflow:"hidden",marginBottom:20}}>
           <ScriptTable sections={sections} onChange={(s:any[])=>{setSections(s);setHookSections(prev=>({...prev,[activeHookIdx]:s}))}} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} voiceoverUrl={voiceoverUrl}/>
         </Card>
@@ -2281,10 +2313,10 @@ export default function AdForgeApp(){
       </div>
       {/* Nav */}
       <div style={{padding:"12px 0",flex:1}}>
-        {navItem("library","Library","⬛")}
+        {navItem("library","Library","▦")}
         {navItem("forged","Forged Ads","⚡")}
-        {navItem("scripts","Scripts","✍️")}
-        {navItem("brand","Brand","👤")}
+        {navItem("scripts","Scripts","✦")}
+        {navItem("brand","Brand","◉")}
       </div>
       {/* Create Ad CTA */}
       <div style={{padding:"12px 16px 20px",borderTop:"1px solid rgba(255,255,255,0.08)"}}>
