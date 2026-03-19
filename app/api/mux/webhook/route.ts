@@ -75,7 +75,109 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Step 2: Update item with transcript ───────────────────────────────────
+  // ── Step 2: Duplicate detection ───────────────────────────────────────────
+  if (playbackId) {
+    try {
+      // Find existing items with similar duration (±1.5 seconds)
+      const { data: candidates } = await supabase
+        .from('items')
+        .select('id, title, mux_playback_id, duration_seconds, transcript')
+        .eq('type', 'original')
+        .neq('id', itemId)
+        .neq('mux_status', 'errored')
+        .neq('mux_status', 'duplicate')
+        .gte('duration_seconds', duration - 1.5)
+        .lte('duration_seconds', duration + 1.5)
+
+      if (candidates && candidates.length > 0) {
+        console.log(`Found ${candidates.length} duration-match candidates for duplicate check`)
+
+        // Check thumbnail similarity using Gemini for each candidate
+        const newThumbUrl = `https://image.mux.com/${playbackId}/thumbnail.jpg?time=0&width=320`
+
+        for (const candidate of candidates) {
+          if (!candidate.mux_playback_id) continue
+
+          const candidateThumbUrl = `https://image.mux.com/${candidate.mux_playback_id}/thumbnail.jpg?time=0&width=320`
+
+          // Fetch both thumbnails
+          const [newThumbRes, candThumbRes] = await Promise.all([
+            fetch(newThumbUrl),
+            fetch(candidateThumbUrl),
+          ])
+
+          if (!newThumbRes.ok || !candThumbRes.ok) continue
+
+          const [newThumbBuf, candThumbBuf] = await Promise.all([
+            newThumbRes.arrayBuffer(),
+            candThumbRes.arrayBuffer(),
+          ])
+
+          const newThumbB64 = Buffer.from(newThumbBuf).toString('base64')
+          const candThumbB64 = Buffer.from(candThumbBuf).toString('base64')
+
+          // Also compare transcripts if available
+          const transcriptMatch = autoTranscript && candidate.transcript &&
+            autoTranscript.substring(0, 80).toLowerCase().trim() ===
+            candidate.transcript.substring(0, 80).toLowerCase().trim()
+
+          let isDuplicate = false
+
+          if (transcriptMatch) {
+            // Transcripts match — very likely duplicate
+            isDuplicate = true
+            console.log(`Duplicate detected via transcript match: ${candidate.title}`)
+          } else if (process.env.GOOGLE_AI_API_KEY) {
+            // Use Gemini to compare thumbnails
+            try {
+              const { GoogleGenerativeAI } = await import('@google/generative-ai')
+              const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
+              const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+              const result = await model.generateContent([
+                {
+                  inlineData: { mimeType: 'image/jpeg', data: newThumbB64 }
+                },
+                {
+                  inlineData: { mimeType: 'image/jpeg', data: candThumbB64 }
+                },
+                'Are these two video thumbnails from the same video? Answer only YES or NO.'
+              ])
+
+              const answer = result.response.text().trim().toUpperCase()
+              isDuplicate = answer.startsWith('YES')
+              console.log(`Gemini thumbnail comparison: ${answer} (vs "${candidate.title}")`)
+            } catch (geminiErr: any) {
+              console.log('Gemini thumbnail comparison failed:', geminiErr.message)
+            }
+          }
+
+          if (isDuplicate) {
+            // Block this upload — mark as duplicate and delete Mux asset
+            await supabase.from('items').update({
+              mux_status: 'duplicate',
+              mux_asset_id: asset.id,
+              description: `Duplicate of: ${candidate.title} (${candidate.id})`,
+            }).eq('id', itemId)
+
+            // Delete the Mux asset to save storage
+            try {
+              await mux.video.assets.delete(asset.id)
+            } catch (e) {
+              console.log('Could not delete duplicate Mux asset:', asset.id)
+            }
+
+            console.log(`Blocked duplicate upload: itemId ${itemId} is a duplicate of "${candidate.title}"`)
+
+            return NextResponse.json({ ok: true, duplicate: true })
+          }
+        }
+      }
+    } catch (dupErr: any) {
+      console.log('Duplicate check failed, continuing:', dupErr.message)
+    }
+  }
+
   const { data: item } = await supabase
     .from('items')
     .update({
@@ -216,11 +318,46 @@ CRITICAL RULES:
     const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
     const analysis = JSON.parse(text.replace(/```json|```/g, '').trim())
 
-    const validSegments = (analysis.clip_segments || []).filter(
+    // Snap segment boundaries to nearest sentence endings using word timestamps
+    function snapToSentence(targetTime: number, words: any[], mode: 'start'|'end', windowSecs = 1.5): number {
+      if(!words||words.length===0)return targetTime
+      const window=words.filter(w=>Math.abs((mode==='end'?w.end:w.start)-targetTime)<windowSecs)
+      if(mode==='end'){
+        // Find the last word in window that ends a sentence
+        const sentenceEnds=window.filter(w=>/[.!?]$/.test(w.punctuated_word||w.word||""))
+        if(sentenceEnds.length>0)return sentenceEnds[sentenceEnds.length-1].end+0.05
+        // No sentence end found — use the nearest word end
+        const nearest=window.sort((a:any,b:any)=>Math.abs(a.end-targetTime)-Math.abs(b.end-targetTime))[0]
+        return nearest?nearest.end+0.05:targetTime
+      } else {
+        // For start — snap to just after a sentence end, or nearest word start
+        const sentenceStarts=window.filter(w=>{
+          const wIdx=words.indexOf(w);if(wIdx===0)return true
+          const prev=words[wIdx-1];return /[.!?]$/.test(prev.punctuated_word||prev.word||"")
+        })
+        if(sentenceStarts.length>0){
+          const closest=sentenceStarts.sort((a:any,b:any)=>Math.abs(a.start-targetTime)-Math.abs(b.start-targetTime))[0]
+          return closest.start
+        }
+        const nearest=window.sort((a:any,b:any)=>Math.abs(a.start-targetTime)-Math.abs(b.start-targetTime))[0]
+        return nearest?nearest.start:targetTime
+      }
+    }
+
+    const rawSegments = (analysis.clip_segments || []).filter(
       (s: any) => typeof s.start_seconds === 'number' &&
                   typeof s.end_seconds === 'number' &&
                   (s.end_seconds - s.start_seconds) >= 1
     )
+
+    // Snap to sentence boundaries if we have word timestamps
+    const validSegments = wordTimestamps.length > 0
+      ? rawSegments.map((s: any) => ({
+          ...s,
+          start_seconds: snapToSentence(s.start_seconds, wordTimestamps, 'start'),
+          end_seconds: snapToSentence(s.end_seconds, wordTimestamps, 'end'),
+        })).filter((s:any) => s.end_seconds - s.start_seconds >= 1)
+      : rawSegments
 
     const goodSegments = validSegments.filter((seg: any) => seg.quality_score !== 'Low')
     console.log(`Created ${goodSegments.length} good clips from ${validSegments.length} total segments`)
