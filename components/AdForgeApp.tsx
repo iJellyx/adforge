@@ -477,11 +477,27 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     const clips=(sections||[]).flatMap((s:any)=>{
     const segments=s.clipSegments&&s.clipSegments.length>0?s.clipSegments:[{clipId:s.selectedClipId}]
     const segCount=segments.length
+    // Get voiceover duration for this section to auto-size clips
+    const sectionVoUrl=s.voiceover_url||null
     return segments.map((seg:any,segIdx:number)=>{
       const item=seg.clipId?libraryItems.find((i:Item)=>i.id===seg.clipId):null
       if(!item?.mux_playback_id)return null
-      // Only first segment of a section carries the voiceover
-      return{item,start:item.start_seconds||0,end:item.end_seconds,label:s.type,spoken:segIdx===0?s.spokenWords||"":"",muted:s.muted||false,voiceover_url:segIdx===0?s.voiceover_url||null:null,isFirstInSection:segIdx===0,segCount}
+      // Use manual trim if set, otherwise fall back to item defaults
+      const trimStart=seg.trimStart??item.start_seconds??0
+      const trimEnd=seg.trimEnd??item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||5)
+      return{
+        item,
+        start:trimStart,
+        end:trimEnd,
+        label:s.type,
+        spoken:segIdx===0?s.spokenWords||"":"",
+        muted:s.muted||false,
+        voiceover_url:segIdx===0?sectionVoUrl:null,
+        sectionVoUrl,
+        isFirstInSection:segIdx===0,
+        segCount,
+        segIdx,
+      }
     }).filter(Boolean)
   }).filter(Boolean)
 
@@ -520,14 +536,19 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
 
   function onTimeUpdate(){
     const v=vidRef.current;if(!v||!cur)return
-    const sectionDur=getSectionDuration(clipIdx)
+    const clipDur=cur.end&&cur.start!=null?(cur.end-cur.start):5
     const clipPlayTime=v.currentTime-cur.start
-    if(clipPlayTime>=sectionDur){
-      voiceRef.current?.pause()
+    if(clipPlayTime>=clipDur){
       if(clipIdx<clips.length-1){
+        const next=clips[clipIdx+1]
+        // If next clip is in same section, DON'T pause voiceover — let it keep playing
+        if(next?.sectionVoUrl!==cur.sectionVoUrl||next?.isFirstInSection){
+          voiceRef.current?.pause()
+        }
         setClipIdx(i=>i+1)
       } else {
-        v.pause();setPlaying(false);setClipIdx(0);musicRef.current?.pause()
+        v.pause();setPlaying(false);setClipIdx(0)
+        voiceRef.current?.pause();musicRef.current?.pause()
       }
     }
   }
@@ -551,7 +572,7 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
   }
 
   useEffect(()=>{
-    if(playing&&voiceRef.current){
+    if(playing&&cur?.isFirstInSection&&voiceRef.current){
       voiceRef.current.currentTime=0
       voiceRef.current.play().catch(()=>{})
     }
@@ -872,10 +893,46 @@ function ClipSegmentPlayer({playbackId,start,end,muted}:{playbackId:string,start
   )
 }
 
+// ── Trim Slider ───────────────────────────────────────────────────────────
+function TrimSlider({item,trimStart,trimEnd,onUpdate}:any){
+  const dur=item.duration_seconds||30
+  const start=trimStart??item.start_seconds??0
+  const end=trimEnd??item.end_seconds??dur
+  const vidRef=useRef<HTMLVideoElement>(null)
+  const [scrub,setScrub]=useState(start)
+
+  function preview(t:number){
+    const v=vidRef.current;if(!v)return
+    v.currentTime=t;setScrub(t)
+  }
+
+  return<div style={{background:C.bg,border:"1.5px solid "+C.border,borderRadius:10,padding:10,marginBottom:6}}>
+    <div style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Trim clip</div>
+    <div style={{position:"relative",paddingTop:"56.25%",background:"#111",borderRadius:7,overflow:"hidden",marginBottom:8}}>
+      <video ref={vidRef} src={`https://stream.mux.com/${item.mux_playback_id}/capped-1080p.mp4`} playsInline preload="metadata" muted style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>
+    </div>
+    <div style={{marginBottom:6}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.muted,marginBottom:3}}>
+        <span>In: {start.toFixed(1)}s</span>
+        <span>Out: {end.toFixed(1)}s</span>
+        <span>Dur: {(end-start).toFixed(1)}s</span>
+      </div>
+      <input type="range" min={0} max={dur} step={0.1} value={start} onChange={e=>{const v=parseFloat(e.target.value);preview(v);onUpdate({trimStart:v,trimEnd:Math.max(v+0.5,end)})}} style={{width:"100%",accentColor:C.accent,marginBottom:4}}/>
+      <input type="range" min={0} max={dur} step={0.1} value={end} onChange={e=>{const v=parseFloat(e.target.value);preview(v);onUpdate({trimStart:Math.min(start,v-0.5),trimEnd:v})}} style={{width:"100%",accentColor:"#DC2626"}}/>
+    </div>
+    <div style={{display:"flex",gap:4}}>
+      <button onClick={()=>onUpdate({trimStart:item.start_seconds??0,trimEnd:item.end_seconds??dur})} style={{flex:1,background:C.accentSoft,color:C.accent,border:"none",borderRadius:6,padding:"4px",cursor:"pointer",fontSize:9,fontWeight:700}}>Reset</button>
+      <button onClick={()=>preview(start)} style={{flex:1,background:C.surface,color:C.muted,border:"1.5px solid "+C.border,borderRadius:6,padding:"4px",cursor:"pointer",fontSize:9}}>Preview In</button>
+      <button onClick={()=>preview(end-0.5)} style={{flex:1,background:C.surface,color:C.muted,border:"1.5px solid "+C.border,borderRadius:6,padding:"4px",cursor:"pointer",fontSize:9}}>Preview Out</button>
+    </div>
+  </div>
+}
+
 // ── Script Table (Horizontal) ─────────────────────────────────────────────
 function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productName,voiceoverUrl}:any){
   const [pickerIdx,setPickerIdx]=useState<number|null>(null)
   const [fillingIdx,setFillingIdx]=useState<number|null>(null)
+  const [trimmingIdx,setTrimmingIdx]=useState<string|null>(null)
   const [mutedClips,setMutedClips]=useState<Record<number,boolean>>(()=>{
     if(!voiceoverUrl)return{}
     const m:Record<number,boolean>={}
@@ -962,9 +1019,11 @@ function toggleMuteClip(idx:number){
                     {segClip&&row.autoSelected&&segIdx===0&&<div style={{position:"absolute",top:4,left:4,background:C.green,color:"#fff",fontSize:7,fontWeight:800,padding:"1px 4px",borderRadius:3}}>AI</div>}
                     {segClip&&<button onClick={()=>toggleMuteClip(idx)} style={{position:"absolute",bottom:4,left:4,background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:9}}>{isMuted?"🔇":"🔊"}</button>}
                     {!readOnly&&<button onClick={()=>setPickerIdx(idx*1000+segIdx)} style={{position:"absolute",bottom:4,right:4,background:C.accent,color:"#fff",border:"none",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:9,fontWeight:700}}>⇄</button>}
+                    {segClip&&!readOnly&&<button onClick={()=>setTrimmingIdx(trimmingIdx===`${idx}-${segIdx}`?null:`${idx}-${segIdx}`)} style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.6)",color:"#fff",border:"none",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:8,fontWeight:700}}>✂️</button>}
                     {!readOnly&&segIdx>0&&<button onClick={()=>{const segs=(row.clipSegments||[]).filter((_:any,si:number)=>si!==segIdx);updM(idx,{clipSegments:segs,selectedClipId:segs[0]?.clipId||null})}} style={{position:"absolute",top:4,right:4,background:"rgba(220,38,38,0.8)",color:"#fff",border:"none",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:9}}>✕</button>}
                   </div>
                   {segClip&&<div style={{padding:"4px 6px",fontSize:9,color:C.text,fontWeight:600,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as any}}>{segClip.title}</div>}
+                  {trimmingIdx===`${idx}-${segIdx}`&&segClip&&<div style={{padding:"4px 6px"}}><TrimSlider item={segClip} trimStart={seg.trimStart} trimEnd={seg.trimEnd} onUpdate={(updates:any)=>{const currentSegs=row.clipSegments||[{id:`seg-${idx}-0`,clipId:row.selectedClipId}];const newSegs=currentSegs.map((s:any,si:number)=>si===segIdx?{...s,...updates}:s);updM(idx,{clipSegments:newSegs})}}/></div>}
                 </div>
               })}
               {/* Add clip button */}
