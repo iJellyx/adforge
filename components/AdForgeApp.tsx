@@ -1459,7 +1459,35 @@ function LibraryTab({items,onRefresh,view,setView}:{items:Item[],onRefresh:()=>v
   async function uploadSingle(idx:number){
     const entry=uploadQueue[idx]
     if(!entry||!entry.title?.trim())return
+    updateQueue(idx,{status:"uploading",progress:2,msg:"Checking for duplicates…"})
+
+    // Duplicate detection — check duration + file size against existing items
+    try{
+      const fileSizeMB=entry.file.size/1024/1024
+      // Get video duration from file
+      const videoDuration=await new Promise<number>((resolve)=>{
+        const vid=document.createElement("video")
+        vid.preload="metadata"
+        vid.onloadedmetadata=()=>{URL.revokeObjectURL(vid.src);resolve(vid.duration)}
+        vid.onerror=()=>resolve(0)
+        vid.src=URL.createObjectURL(entry.file)
+      })
+      if(videoDuration>0){
+        const possibleDupes=items.filter((item:Item)=>{
+          if(!item.duration_seconds)return false
+          const durDiff=Math.abs(item.duration_seconds-videoDuration)
+          return durDiff<1.5 // within 1.5 seconds = likely same video
+        })
+        if(possibleDupes.length>0){
+          const dupeTitle=possibleDupes[0].title
+          const proceed=window.confirm(`"${entry.title}" appears to be a duplicate of "${dupeTitle}" (same duration: ${videoDuration.toFixed(1)}s). Upload anyway?`)
+          if(!proceed){updateQueue(idx,{status:"pending",progress:0,msg:""});return}
+        }
+      }
+    }catch(e){/* continue with upload if check fails */}
+
     updateQueue(idx,{status:"uploading",progress:5,msg:"Creating record…"})
+
     try{
       const res=await fetch("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:entry.file.name,contentType:entry.file.type,metadata:{title:entry.title,creator:entry.creator,creatorAge:entry.creatorAge,creatorGender:entry.creatorGender}})})
       const{itemId,uploadUrl,error}=await res.json()
