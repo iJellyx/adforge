@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No items found' }, { status: 400 })
     }
 
-    // Build clips
+      // Build clips
     const clips = sections
       .map((s: any) => {
         const item = items.find((i: any) => i.id === s.selectedClipId)
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     if (!clips.length) {
       return NextResponse.json({ error: 'No valid clips' }, { status: 400 })
     }
-
+    
     // Build Shotstack timeline
       // Calculate voiceover duration from sections word counts
     const spokenWords=sections.map((s:any)=>s.spokenWords||"")
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
         asset: {
           type: 'video',
           src: `https://stream.mux.com/${clip.item.mux_playback_id}/capped-1080p.mp4`,
-          trim: clip.start,
+          trim: clip.trimStart??clip.start,
           volume: clip.muted ? 0 : 1,
         },
         start: clips.slice(0, i).reduce((acc: number, c: any, ci: number) => {
