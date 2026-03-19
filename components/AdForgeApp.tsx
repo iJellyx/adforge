@@ -474,14 +474,42 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
   const musicRef=useRef<HTMLAudioElement>(null)
   const clipStartTimesRef=useRef<number[]>([])
 
-    const clips=(sections||[]).flatMap((s:any)=>{
+    const clips=(sections||[]).flatMap((s:any,sectionIdx:number)=>{
     const segments=s.clipSegments&&s.clipSegments.length>0?s.clipSegments:[{clipId:s.selectedClipId}]
-    const segCount=segments.length
-    return segments.map((seg:any,segIdx:number)=>{
-      const item=seg.clipId?libraryItems.find((i:Item)=>i.id===seg.clipId):null
+    const validSegs=segments.filter((seg:any)=>seg.clipId&&libraryItems.find((i:Item)=>i.id===seg.clipId))
+    const segCount=validSegs.length
+    // Calculate natural durations for proportional time distribution
+    const naturalDurs=validSegs.map((seg:any)=>{
+      const item=libraryItems.find((i:Item)=>i.id===seg.clipId)
+      const start=seg.trimStart??item?.start_seconds??0
+      const end=seg.trimEnd??item?.end_seconds??(start+(item?.duration_seconds||5))
+      return Math.max(0.5,end-start)
+    })
+    const totalNatural=naturalDurs.reduce((a:number,b:number)=>a+b,0)||1
+    return validSegs.map((seg:any,segIdx:number)=>{
+      const item=libraryItems.find((i:Item)=>i.id===seg.clipId)
       if(!item?.mux_playback_id)return null
-      // Only first segment of a section carries the voiceover
-      return{item,start:item.start_seconds||0,end:item.end_seconds,label:s.type,spoken:segIdx===0?s.spokenWords||"":"",muted:s.muted||false,voiceover_url:segIdx===0?s.voiceover_url||null:null,isFirstInSection:segIdx===0,segCount}
+      const trimStart=seg.trimStart??item.start_seconds??0
+      const trimEnd=seg.trimEnd??item.end_seconds??(trimStart+(item.duration_seconds||5))
+      const naturalDur=naturalDurs[segIdx]
+      const naturalFraction=naturalDur/totalNatural
+      return{
+        item,
+        start:trimStart,
+        end:trimEnd,
+        naturalDur,
+        naturalFraction,
+        sectionIdx,
+        label:s.type,
+        spoken:segIdx===0?s.spokenWords||"":"",
+        muted:s.muted||false,
+        voiceover_url:s.voiceover_url||null,
+        sectionVoUrl:s.voiceover_url||null,
+        isFirstInSection:segIdx===0,
+        isLastInSection:segIdx===segCount-1,
+        segCount,
+        segIdx,
+      }
     }).filter(Boolean)
   }).filter(Boolean)
 
@@ -508,30 +536,36 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     if(playing)v.play().catch(()=>{})
   },[clipIdx])
 
-  function getSectionDuration(idx:number){
+  function getClipPlayDuration(idx:number):number{
     const clip=clips[idx]
-    // If this section has its own voiceover, use that audio's duration
-    if(clip?.voiceover_url&&voiceRef.current?.duration){
-      return voiceRef.current.duration
+    if(!clip)return 3
+    const voiceDur=voiceRef.current?.duration||0
+    if(voiceDur>0&&clip.sectionVoUrl){
+      // Distribute voiceover duration proportionally across clips in this section
+      return voiceDur*clip.naturalFraction
     }
-    // Fallback to clip segment length
-    return clip?.end&&clip?.start!=null?(clip.end-clip.start):5
+    // Fallback to natural clip duration
+    return clip.naturalDur||3
   }
 
   function onTimeUpdate(){
     const v=vidRef.current;if(!v||!cur)return
-    const sectionDur=getSectionDuration(clipIdx)
-    const clipPlayTime=v.currentTime-cur.start
-    if(clipPlayTime>=sectionDur){
-      voiceRef.current?.pause()
+    const clipDur=getClipPlayDuration(clipIdx)
+    const elapsed=v.currentTime-cur.start
+    if(elapsed>=clipDur){
       if(clipIdx<clips.length-1){
+        const next=clips[clipIdx+1]
+        // Only pause voiceover when moving to a NEW section
+        if(next?.sectionIdx!==cur.sectionIdx){
+          voiceRef.current?.pause()
+        }
         setClipIdx(i=>i+1)
       } else {
-        v.pause();setPlaying(false);setClipIdx(0);musicRef.current?.pause()
+        v.pause();setPlaying(false);setClipIdx(0)
+        voiceRef.current?.pause();musicRef.current?.pause()
       }
     }
   }
-
     function getVoiceTime(idx:number){
     const fraction=clipStartTimesRef.current[idx]||0
     const voiceDur=voiceRef.current?.duration||0
@@ -551,10 +585,12 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
   }
 
   useEffect(()=>{
-    if(playing&&voiceRef.current){
+    if(playing&&cur?.isFirstInSection&&voiceRef.current){
+      // Only restart voiceover at start of a new section
       voiceRef.current.currentTime=0
       voiceRef.current.play().catch(()=>{})
     }
+    // For secondary clips in same section, voiceover keeps playing — no action needed
   },[clipIdx])
 
   if(clips.length===0)return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:32,textAlign:"center",color:C.muted}}><div style={{fontSize:28,marginBottom:8}}>🎬</div><div style={{fontSize:13}}>Assign clips to sections to preview the full ad</div></div>
@@ -563,8 +599,8 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
 
   return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
     {/* Hidden audio elements — per section voiceover */}
-    {cur?.voiceover_url&&<audio ref={voiceRef} key={cur.voiceover_url} src={cur.voiceover_url} style={{display:"none"}}/>}
-    {voiceoverUrl&&!cur?.voiceover_url&&<audio ref={voiceRef} src={voiceoverUrl} style={{display:"none"}}/>}
+    {cur?.sectionVoUrl&&<audio ref={voiceRef} key={cur.sectionVoUrl} src={cur.sectionVoUrl} style={{display:"none"}}/>}
+    {voiceoverUrl&&!cur?.sectionVoUrl&&<audio ref={voiceRef} key={voiceoverUrl} src={voiceoverUrl} style={{display:"none"}}/>}
     {musicUrl&&<audio ref={musicRef} src={musicUrl} style={{display:"none"}} loop/>}
 
     <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10}}>
