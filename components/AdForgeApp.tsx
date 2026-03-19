@@ -1417,7 +1417,7 @@ function ClipPickerModal({currentId,matchedIds,libraryItems,sectionLabel,onSelec
 }
 
 // ── Library Tab ───────────────────────────────────────────────────────────
-function LibraryTab({items,onRefresh,view,setView}:{items:Item[],onRefresh:()=>void,view:string,setView:(v:string)=>void}){
+function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{items:Item[],onRefresh:()=>void,view:string,setView:(v:string)=>void,brand:BrandProfile,products:Product[],onGoToBrand:()=>void}){
   const supabase=createClient()
   const [selected,setSelected]=useState<Item|null>(null)
   const [search,setSearch]=useState("")
@@ -1502,8 +1502,20 @@ function LibraryTab({items,onRefresh,view,setView}:{items:Item[],onRefresh:()=>v
         xhr.setRequestHeader("Content-Type",entry.file.type)
         xhr.send(entry.file)
       })
-      updateQueue(idx,{status:"done",progress:100,msg:"Done! ✓"})
-      onRefresh()
+      // Poll briefly to catch duplicate detection
+      let pollAttempts = 0
+      let finalStatus = 'done'
+      while (pollAttempts < 10) {
+        await new Promise(r => setTimeout(r, 3000))
+        const supabase = createClient()
+        const { data: statusCheck } = await supabase.from('items').select('mux_status').eq('id', itemId).single()
+        if (statusCheck?.mux_status === 'duplicate') { finalStatus = 'duplicate'; break }
+        if (statusCheck?.mux_status === 'analysing' || statusCheck?.mux_status === 'ready') break
+        pollAttempts++
+      }
+      updateQueue(idx, {status: finalStatus, progress: 100, msg: finalStatus === 'duplicate' ? 'Duplicate blocked' : 'Done! ✓'})
+      if (finalStatus !== 'duplicate') onRefresh()
+
     }catch(e:any){
       updateQueue(idx,{status:"error",msg:"Failed: "+e.message})
     }
@@ -1551,41 +1563,51 @@ function LibraryTab({items,onRefresh,view,setView}:{items:Item[],onRefresh:()=>v
       <div style={{fontSize:12,color:C.accent}}>✨ AI will auto-transcribe and analyse each video</div>
     </div>
 
-    {/* Upload queue */}
-    {uploadQueue.length>0&&<div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:20}}>
-      {uploadQueue.map((entry:any,idx:number)=><div key={entry.id} style={{background:C.card,border:"1px solid "+(entry.status==="done"?C.green:entry.status==="error"?"#ef4444":C.border),borderRadius:12,padding:16}}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-          {/* Thumbnail preview */}
-          <div style={{width:48,height:48,borderRadius:8,background:"#111",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>
-            {entry.previewUrl?<img src={entry.previewUrl} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🎬"}
+     {/* Upload queue — aggregate view */}
+    {uploadQueue.length>0&&<div style={{marginBottom:20}}>
+      {(()=>{
+        const total=uploadQueue.length
+        const done=uploadQueue.filter((e:any)=>e.status==="done"||e.status==="duplicate").length
+        const errored=uploadQueue.filter((e:any)=>e.status==="error").length
+        const uploading=uploadQueue.filter((e:any)=>e.status==="uploading"||e.status==="processing").length
+        const pending=uploadQueue.filter((e:any)=>e.status==="pending").length
+        const pct=Math.round((done/total)*100)
+        const avgSecsPerVideo=90 // rough estimate inc Gemini analysis
+        const remaining=pending+uploading
+        const secsLeft=remaining*avgSecsPerVideo
+        const minsLeft=Math.ceil(secsLeft/60)
+        const allDone=done+errored===total
+        return<>
+          <div style={{background:C.card,border:"1.5px solid "+C.border,borderRadius:14,padding:20,marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{fontWeight:700,fontSize:15,color:C.text}}>{allDone?"✓ Upload complete":"⏳ Uploading & analysing…"}</div>
+              <div style={{fontSize:13,color:C.muted,fontWeight:600}}>{done}/{total} videos</div>
+            </div>
+            <div style={{height:8,background:C.border,borderRadius:99,overflow:"hidden",marginBottom:8}}>
+              <div style={{height:"100%",width:pct+"%",background:allDone?C.green:C.accent,borderRadius:99,transition:"width 0.5s"}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.muted}}>
+              <span>{allDone?"All videos processed — AI analysis running in background":"AI is transcribing and analysing each video"}</span>
+              {!allDone&&remaining>0&&<span style={{fontWeight:600,color:C.accent}}>~{minsLeft} min{minsLeft!==1?"s":""} left</span>}
+            </div>
+            {errored>0&&<div style={{marginTop:8,fontSize:12,color:C.red}}>⚠️ {errored} video{errored!==1?"s":""} failed</div>}
+            {uploadQueue.filter((e:any)=>e.status==="duplicate").length>0&&<div style={{marginTop:6,fontSize:12,color:C.yellow}}>⚠️ {uploadQueue.filter((e:any)=>e.status==="duplicate").length} duplicate{uploadQueue.filter((e:any)=>e.status==="duplicate").length!==1?"s":""} blocked</div>}
           </div>
-          <div style={{flex:1,minWidth:0}}>
-            {/* Title field */}
-            {entry.status==="pending"||entry.status==="uploading"?<input value={entry.title} onChange={e=>updateQueue(idx,{title:e.target.value})} placeholder="Video title *" style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"6px 10px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const,marginBottom:6}}/> :<div style={{fontWeight:600,fontSize:13,marginBottom:4}}>{entry.title}</div>}
-            {/* Creator + age + gender in one row */}
-            {entry.status==="pending"&&<div style={{display:"flex",gap:6,marginBottom:6}}>
-              <input value={entry.creator} onChange={e=>updateQueue(idx,{creator:e.target.value})} placeholder="Creator name" style={{flex:2,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"5px 8px",color:C.text,fontSize:12,outline:"none"}}/>
-              <select value={entry.creatorAge} onChange={e=>updateQueue(idx,{creatorAge:e.target.value})} style={{flex:1,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"5px 8px",color:C.text,fontSize:12,outline:"none",cursor:"pointer"}}>
-                <option value="">Age</option>{AGE_RANGES.map(a=><option key={a} value={a}>{a}</option>)}
-              </select>
-              <select value={entry.creatorGender} onChange={e=>updateQueue(idx,{creatorGender:e.target.value})} style={{flex:1,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"5px 8px",color:C.text,fontSize:12,outline:"none",cursor:"pointer"}}>
-                <option value="">Gender</option>{GENDERS.map(g=><option key={g} value={g}>{g}</option>)}
-              </select>
-            </div>}
-            {/* Progress */}
-            {(entry.status==="uploading"||entry.status==="processing")&&<div>
-              <div style={{height:4,background:C.border,borderRadius:4,overflow:"hidden",marginBottom:4}}><div style={{height:"100%",width:entry.progress+"%",background:C.accent,borderRadius:4,transition:"width 0.3s"}}/></div>
-              <div style={{fontSize:11,color:C.muted}}>{entry.msg}</div>
-            </div>}
-            {entry.status==="done"&&<div style={{fontSize:12,color:C.green,fontWeight:600}}>✓ Uploaded — AI is analysing in the background (1-3 mins)</div>}
-            {entry.status==="error"&&<div style={{fontSize:12,color:"#ef4444"}}>{entry.msg}</div>}
-          </div>
-          <div style={{display:"flex",gap:6,flexShrink:0}}>
-            {entry.status==="pending"&&<Btn onClick={()=>uploadSingle(idx)} disabled={!entry.title?.trim()} style={{background:C.accent,color:"#fff",fontSize:12,padding:"6px 12px"}}>Upload</Btn>}
-            {entry.status==="pending"&&<Btn onClick={()=>removeFromQueue(idx)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"6px 10px"}}>✕</Btn>}
-          </div>
-        </div>
-      </div>)}
+          {/* Show individual errors only */}
+          {uploadQueue.filter((e:any)=>e.status==="error").map((entry:any,idx:number)=><div key={entry.id} style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:12,color:C.red}}>❌ {entry.title} — {entry.msg}</div>)}
+          {/* Pending uploads that still need a title */}
+          {uploadQueue.filter((e:any)=>e.status==="pending").map((entry:any,idx:number)=>{
+            const realIdx=uploadQueue.indexOf(entry)
+            return<div key={entry.id} style={{background:C.card,border:"1.5px solid "+C.border,borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"center"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <input value={entry.title} onChange={e=>updateQueue(realIdx,{title:e.target.value})} placeholder="Video title *" style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"5px 10px",color:C.text,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
+              </div>
+              <Btn onClick={()=>uploadSingle(realIdx)} disabled={!entry.title?.trim()} style={{background:C.accent,color:"#fff",fontSize:11,padding:"5px 12px"}}>Upload</Btn>
+              <Btn onClick={()=>removeFromQueue(realIdx)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:11,padding:"5px 10px"}}>✕</Btn>
+            </div>
+          })}
+        </>
+      })()}
     </div>}
 
     {/* Upload all button */}
@@ -1593,10 +1615,18 @@ function LibraryTab({items,onRefresh,view,setView}:{items:Item[],onRefresh:()=>v
       ✨ Upload All {uploadQueue.filter((e:any)=>e.status==="pending").length} Videos
     </Btn>}
 
-    {/* Success summary */}
-    {uploadQueue.filter((e:any)=>e.status==="done").length>0&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:10,padding:"12px 16px",fontSize:13,color:C.green,marginBottom:12}}>
-      ✓ {uploadQueue.filter((e:any)=>e.status==="done").length} video{uploadQueue.filter((e:any)=>e.status==="done").length!==1?"s":""} uploaded — AI is transcribing and analysing in the background. Check your library in 1-3 minutes.
-      <button onClick={()=>{onRefresh();setView("grid")}} style={{background:"none",border:"none",color:C.green,cursor:"pointer",fontSize:13,fontWeight:700,textDecoration:"underline",marginLeft:8}}>View Library →</button>
+    {/* While uploading — prompt for brand/product info */}
+    {uploadQueue.some((e:any)=>e.status==="uploading"||e.status==="processing"||e.status==="done")&&<div style={{marginBottom:12}}>
+      {(!brand?.name||!brand?.description)&&<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+        <div style={{fontWeight:700,fontSize:13,color:C.yellow,marginBottom:4}}>💡 While you wait — set up your Brand Profile</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:10}}>Your brand name, voice, and description help AI write better scripts and match clips more accurately.</div>
+       <button onClick={onGoToBrand} style={{background:C.yellow,color:"#fff",border:"none",borderRadius:50,padding:"7px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>Set up Brand →</button>
+      </div>}
+      {brand?.name&&(!products||products.length===0)&&<div style={{background:"#EFF6FF",border:"1.5px solid #BFDBFE",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+        <div style={{fontWeight:700,fontSize:13,color:"#2563EB",marginBottom:4}}>💡 Add your products while you wait</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:10}}>Products let AI create targeted scripts with specific benefits, claims, and pricing.</div>
+       <button onClick={()=>{onRefresh();setView("grid");}} style={{background:"#2563EB",color:"#fff",border:"none",borderRadius:50,padding:"7px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>Add Products →</button>
+      </div>}
     </div>}
   </div>
 
@@ -2756,7 +2786,7 @@ export default function AdForgeApp(){
     </div>
     {/* Main content */}
     <div style={{marginLeft:220,flex:1,minHeight:"100vh",background:C.bg}}>
-      {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView}/>}
+      {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} onGoToBrand={()=>setTab("brand")}/>}
       {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode}/>}
       {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} onRefresh={loadData}/>}
       {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
