@@ -192,6 +192,26 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (!item) return NextResponse.json({ ok: true })
+      // If brand opted out of auto-clipping, do analysis only — no clip creation
+  if (item.auto_clip === false) {
+    console.log('Auto-clip disabled for this item — running analysis only')
+    try {
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+      const msg = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514', max_tokens: 800,
+        messages: [{ role: 'user', content: `Analyse this video. Return ONLY valid JSON:
+{"content_type":"UGC|Tutorial|Testimonial|Other","confidence":"High|Medium|Low","summary":"2-3 sentences","tone":"string","topics":["string"],"scene_tags":["string"],"hook":"string","key_quotes":["string"],"ad_potential":"High|Medium|Low","ad_notes":"string"}
+Title: ${item.title}, Duration: ${duration}s, Transcript: ${autoTranscript||'not provided'}` }]
+      })
+      const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
+      const analysis = JSON.parse(text.replace(/```json|```/g, '').trim())
+      await supabase.from('items').update({ analysis, mux_status: 'ready' }).eq('id', itemId)
+    } catch (e: any) {
+      console.error('Analysis-only failed:', e.message)
+      await supabase.from('items').update({ mux_status: 'ready' }).eq('id', itemId)
+    }
+    return NextResponse.json({ ok: true })
+  }
 
   // ── Step 3: Gemini video analysis ─────────────────────────────────────────
   let geminiAnalysis = ''

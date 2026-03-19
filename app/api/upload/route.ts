@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
         description: metadata.description || '',
         transcript: metadata.transcript || '',
         mux_status: 'pending',
+        auto_clip: metadata.autoClip !== false,
       })
       .select()
       .single()
