@@ -1638,7 +1638,20 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
       <button onClick={()=>{setSelected(null);setView("grid")}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back to Library</button>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:16}}>
         <div><Chip label={selected.type==="clip"?"CLIP":(a.content_type||"Untagged")} color={selected.type==="clip"?typeColor("Clip"):undefined}/><div style={{fontWeight:800,fontSize:22,marginTop:8,marginBottom:4}}>{selected.title}</div><div style={{color:C.muted,fontSize:13,display:"flex",gap:12,flexWrap:"wrap"}}>{selected.duration_seconds&&<span>⏱ {fmt(selected.duration_seconds)}</span>}{selected.creator&&<span>👤 {selected.creator}{selected.creator_age?` · ${selected.creator_age}`:""}</span>}{selected.created_at&&<span>Added {new Date(selected.created_at).toLocaleDateString()}</span>}</div></div>
-        <Btn onClick={()=>handleDelete(selected.id)} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",flexShrink:0}}>Delete</Btn>
+        <Btn onClick={async()=>{
+          if(!window.confirm("Delete this "+(selected.type==="clip"?"clip":"video and all its clips")+"?"))return
+          if(selected.type==="clip"&&selected.parent_id){
+            // Remove from parent's clip_ids
+            const parent=items.find(i=>i.id===selected.parent_id)
+            if(parent?.clip_ids){
+              await supabase.from("items").update({clip_ids:parent.clip_ids.filter((id:string)=>id!==selected.id)}).eq("id",selected.parent_id)
+            }
+            await supabase.from("items").delete().eq("id",selected.id)
+          } else {
+            await handleDelete(selected.id)
+          }
+          onRefresh();setSelected(null);setView("grid")
+        }} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",flexShrink:0}}>Delete</Btn>
       </div>
       <MuxClipPlayer item={selected}/>
       {a.summary&&<Card style={{marginBottom:12}}><Label>Summary</Label><p style={{margin:0,lineHeight:1.7,fontSize:14}}>{a.summary}</p></Card>}
@@ -1677,6 +1690,19 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
       {selected.transcript&&<Card style={{marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📝 Auto-Transcript</div><div style={{fontSize:13,lineHeight:1.7,color:C.muted,maxHeight:120,overflowY:"auto"}}>{selected.transcript}</div></Card>}
       {a.key_quotes?.length>0&&<Card style={{marginBottom:12}}><Label>Key Quotes</Label>{a.key_quotes.map((q:string,i:number)=><div key={i} style={{borderLeft:"3px solid "+C.accent,paddingLeft:12,marginBottom:8,fontSize:14,fontStyle:"italic"}}>"{q}"</div>)}</Card>}
       {a.ad_notes&&<Card style={{background:adPotColor+"18",border:"1px solid "+adPotColor+"44",marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:adPotColor,marginBottom:6}}>📢 AD USAGE</div><div style={{fontSize:14,lineHeight:1.6}}>{a.ad_notes}</div></Card>}
+     {selected.type==="original"&&clips.length===0&&selected.mux_status==="ready"&&<Card style={{marginBottom:12,background:"#FFFBEB",border:"1.5px solid #FCD34D"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:13,color:C.yellow,marginBottom:2}}>⚠️ No clips generated</div>
+            <div style={{fontSize:11,color:C.muted}}>This may have happened due to low AI credits. Re-analyse to generate clips.</div>
+          </div>
+          <Btn onClick={async()=>{
+            await supabase.from("items").update({mux_status:"analysing"}).eq("id",selected.id)
+            await fetch("/api/items/reanalyse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({itemId:selected.id})})
+            onRefresh()
+          }} style={{background:C.yellow,color:"#fff",fontSize:12,padding:"7px 16px"}}>Re-analyse</Btn>
+        </div>
+      </Card>}
       {clips.length>0&&<div style={{marginTop:24}}><STitle>✂️ Auto-Generated Clips ({clips.length})</STitle><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>{clips.map(c=><VideoCard key={c.id} item={c} onClick={()=>setSelected(c)} selectMode={false} isSelected={false} onToggleSelect={()=>{}}/>)}</div></div>}
     </div>
   }

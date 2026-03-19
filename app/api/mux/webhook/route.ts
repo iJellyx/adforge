@@ -407,6 +407,44 @@ CRITICAL RULES:
 
   } catch (err: any) {
     console.error('Analysis failed:', err.message)
+    // Create basic clips from word timestamps if we have them, even without Claude
+    try {
+      if (wordTimestamps.length > 0 && playbackId) {
+        const dur = asset.duration || 30
+        // Split into ~5 second segments at sentence boundaries
+        const segments: any[] = []
+        let segStart = 0
+        for (let i = 0; i < wordTimestamps.length; i++) {
+          const w = wordTimestamps[i]
+          const isPunct = /[.!?]$/.test(w.punctuated_word || w.word || "")
+          const segDur = (w.end || 0) - segStart
+          if ((isPunct && segDur >= 3) || segDur >= 8) {
+            segments.push({ start: segStart, end: w.end || segStart + 5, label: segments.length === 0 ? 'HOOK' : 'BODY' })
+            segStart = w.end || segStart + 5
+          }
+        }
+        if (segStart < dur - 1) segments.push({ start: segStart, end: dur, label: 'CTA' })
+        if (segments.length > 0) {
+          const clipInserts = segments.map((seg: any, i: number) => ({
+            type: 'clip', parent_id: itemId,
+            title: `${item?.title || 'Clip'} — ${seg.label} ${i + 1}`,
+            creator: item?.creator, creator_age: item?.creator_age, creator_gender: item?.creator_gender,
+            mux_playback_id: playbackId, mux_status: 'ready',
+            start_seconds: seg.start, end_seconds: seg.end,
+            thumbnail_time: seg.start + (seg.end - seg.start) / 2,
+            duration_seconds: seg.end - seg.start,
+            analysis: { label: seg.label, quality_score: 'Medium', scene_tags: [], summary: 'Auto-generated clip (basic)' },
+          }))
+          const { data: fallbackClips } = await supabase.from('items').insert(clipInserts).select()
+          const clipIds = (fallbackClips || []).map((c: any) => c.id)
+          await supabase.from('items').update({ mux_status: 'ready', clip_ids: clipIds }).eq('id', itemId)
+          console.log(`Created ${clipIds.length} fallback clips without Claude`)
+          return NextResponse.json({ ok: true })
+        }
+      }
+    } catch (fallbackErr: any) {
+      console.error('Fallback clip creation failed:', fallbackErr.message)
+    }
     await supabase.from('items').update({ mux_status: 'ready' }).eq('id', itemId)
   }
 
