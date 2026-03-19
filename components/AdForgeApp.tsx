@@ -541,11 +541,9 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     if(!clip)return 3
     const voiceDur=voiceRef.current?.duration||0
     if(voiceDur>0&&clip.sectionVoUrl){
-      // Distribute voiceover duration proportionally across clips in this section
-      return voiceDur*clip.naturalFraction
+      return Math.max(1,voiceDur*clip.naturalFraction)
     }
-    // Fallback to natural clip duration
-    return clip.naturalDur||3
+    return Math.max(1,clip.naturalDur||3)
   }
 
   function onTimeUpdate(){
