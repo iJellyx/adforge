@@ -477,27 +477,11 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     const clips=(sections||[]).flatMap((s:any)=>{
     const segments=s.clipSegments&&s.clipSegments.length>0?s.clipSegments:[{clipId:s.selectedClipId}]
     const segCount=segments.length
-    // Get voiceover duration for this section to auto-size clips
-    const sectionVoUrl=s.voiceover_url||null
     return segments.map((seg:any,segIdx:number)=>{
       const item=seg.clipId?libraryItems.find((i:Item)=>i.id===seg.clipId):null
       if(!item?.mux_playback_id)return null
-      // Use manual trim if set, otherwise fall back to item defaults
-      const trimStart=seg.trimStart??item.start_seconds??0
-      const trimEnd=seg.trimEnd??item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||5)
-      return{
-        item,
-        start:trimStart,
-        end:trimEnd,
-        label:s.type,
-        spoken:segIdx===0?s.spokenWords||"":"",
-        muted:s.muted||false,
-        voiceover_url:segIdx===0?sectionVoUrl:null,
-        sectionVoUrl,
-        isFirstInSection:segIdx===0,
-        segCount,
-        segIdx,
-      }
+      // Only first segment of a section carries the voiceover
+      return{item,start:item.start_seconds||0,end:item.end_seconds,label:s.type,spoken:segIdx===0?s.spokenWords||"":"",muted:s.muted||false,voiceover_url:segIdx===0?s.voiceover_url||null:null,isFirstInSection:segIdx===0,segCount}
     }).filter(Boolean)
   }).filter(Boolean)
 
@@ -536,19 +520,14 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
 
   function onTimeUpdate(){
     const v=vidRef.current;if(!v||!cur)return
-    const clipDur=cur.end&&cur.start!=null?(cur.end-cur.start):5
+    const sectionDur=getSectionDuration(clipIdx)
     const clipPlayTime=v.currentTime-cur.start
-    if(clipPlayTime>=clipDur){
+    if(clipPlayTime>=sectionDur){
+      voiceRef.current?.pause()
       if(clipIdx<clips.length-1){
-        const next=clips[clipIdx+1]
-        // If next clip is in same section, DON'T pause voiceover — let it keep playing
-        if(next?.sectionVoUrl!==cur.sectionVoUrl||next?.isFirstInSection){
-          voiceRef.current?.pause()
-        }
         setClipIdx(i=>i+1)
       } else {
-        v.pause();setPlaying(false);setClipIdx(0)
-        voiceRef.current?.pause();musicRef.current?.pause()
+        v.pause();setPlaying(false);setClipIdx(0);musicRef.current?.pause()
       }
     }
   }
@@ -572,7 +551,7 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
   }
 
   useEffect(()=>{
-    if(playing&&cur?.isFirstInSection&&voiceRef.current){
+    if(playing&&voiceRef.current){
       voiceRef.current.currentTime=0
       voiceRef.current.play().catch(()=>{})
     }
@@ -893,168 +872,177 @@ function ClipSegmentPlayer({playbackId,start,end,muted}:{playbackId:string,start
   )
 }
 
-// ── Trim Editor Modal ─────────────────────────────────────────────────────
-function TrimEditorModal({item,trimStart,trimEnd,onSave,onClose}:any){
+// ── Trim Slider ───────────────────────────────────────────────────────────
+function TrimSlider({item,trimStart,trimEnd,onUpdate}:any){
   const dur=item.duration_seconds||30
-  const [inPoint,setInPoint]=useState(trimStart??item.start_seconds??0)
-  const [outPoint,setOutPoint]=useState(trimEnd??item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||5))
-  const [currentTime,setCurrentTime]=useState(inPoint)
+  const start=trimStart??item.start_seconds??0
+  const end=trimEnd??item.end_seconds??dur
+  const vidRef=useRef<HTMLVideoElement>(null)
+  const [scrub,setScrub]=useState(start)
+
+  function preview(t:number){
+    const v=vidRef.current;if(!v)return
+    v.currentTime=t;setScrub(t)
+  }
+
+  return<div style={{background:C.bg,border:"1.5px solid "+C.border,borderRadius:10,padding:10,marginBottom:6}}>
+    <div style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Trim clip</div>
+    <div style={{position:"relative",paddingTop:"56.25%",background:"#111",borderRadius:7,overflow:"hidden",marginBottom:8}}>
+      <video ref={vidRef} src={`https://stream.mux.com/${item.mux_playback_id}/capped-1080p.mp4`} playsInline preload="metadata" muted style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>
+    </div>
+    <div style={{marginBottom:6}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.muted,marginBottom:3}}>
+        <span>In: {start.toFixed(1)}s</span>
+        <span>Out: {end.toFixed(1)}s</span>
+        <span>Dur: {(end-start).toFixed(1)}s</span>
+      </div>
+      <input type="range" min={0} max={dur} step={0.1} value={start} onChange={e=>{const v=parseFloat(e.target.value);preview(v);onUpdate({trimStart:v,trimEnd:Math.max(v+0.5,end)})}} style={{width:"100%",accentColor:C.accent,marginBottom:4}}/>
+      <input type="range" min={0} max={dur} step={0.1} value={end} onChange={e=>{const v=parseFloat(e.target.value);preview(v);onUpdate({trimStart:Math.min(start,v-0.5),trimEnd:v})}} style={{width:"100%",accentColor:"#DC2626"}}/>
+    </div>
+    <div style={{display:"flex",gap:4}}>
+      <button onClick={()=>onUpdate({trimStart:item.start_seconds??0,trimEnd:item.end_seconds??dur})} style={{flex:1,background:C.accentSoft,color:C.accent,border:"none",borderRadius:6,padding:"4px",cursor:"pointer",fontSize:9,fontWeight:700}}>Reset</button>
+      <button onClick={()=>preview(start)} style={{flex:1,background:C.surface,color:C.muted,border:"1.5px solid "+C.border,borderRadius:6,padding:"4px",cursor:"pointer",fontSize:9}}>Preview In</button>
+      <button onClick={()=>preview(end-0.5)} style={{flex:1,background:C.surface,color:C.muted,border:"1.5px solid "+C.border,borderRadius:6,padding:"4px",cursor:"pointer",fontSize:9}}>Preview Out</button>
+    </div>
+  </div>
+}
+
+// ── Trim Editor Modal ─────────────────────────────────────────────────────
+function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,onClose}:any){
+  const fullDur=originalDuration||item.duration_seconds||30
+  // If clip is a sub-clip, the playback ID belongs to the original — use it
+  const playbackId=item.mux_playback_id
+  const [inPt,setInPt]=useState(trimStart??item.start_seconds??0)
+  const [outPt,setOutPt]=useState(trimEnd??item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||5))
+  const [curTime,setCurTime]=useState(inPt)
   const [playing,setPlaying]=useState(false)
   const vidRef=useRef<HTMLVideoElement>(null)
-  const timelineRef=useRef<HTMLDivElement>(null)
-  const [dragging,setDragging]=useState<"in"|"out"|"scrub"|null>(null)
+  const tlRef=useRef<HTMLDivElement>(null)
+  const [drag,setDrag]=useState<"in"|"out"|null>(null)
 
   useEffect(()=>{
     const v=vidRef.current;if(!v)return
-    v.src=`https://stream.mux.com/${item.mux_playback_id}/capped-1080p.mp4`
-    v.addEventListener("loadedmetadata",()=>{v.currentTime=inPoint},{once:true})
+    v.src="https://stream.mux.com/"+item.mux_playback_id+"/capped-1080p.mp4"
+    const onMeta=()=>{if(v)v.currentTime=inPt}
+    v.addEventListener("loadedmetadata",onMeta,{once:true})
   },[])
 
   useEffect(()=>{
     const v=vidRef.current;if(!v)return
     function onUpdate(){
       if(!v)return
-      setCurrentTime(v.currentTime)
-      if(v.currentTime>=outPoint){v.pause();v.currentTime=inPoint;setPlaying(false)}
+      setCurTime(v.currentTime)
+      if(v.currentTime>=outPt){v.pause();v.currentTime=inPt;setPlaying(false)}
     }
     v.addEventListener("timeupdate",onUpdate)
     return()=>v.removeEventListener("timeupdate",onUpdate)
-  },[inPoint,outPoint])
+  },[inPt,outPt])
 
   function seekTo(t:number){
     const v=vidRef.current;if(!v)return
-    const clamped=Math.max(0,Math.min(dur,t))
-    v.currentTime=clamped;setCurrentTime(clamped)
+    const c=Math.max(0,Math.min(fullDur,t))
+    v.currentTime=c;setCurTime(c)
   }
 
   function togglePlay(){
     const v=vidRef.current;if(!v)return
     if(playing){v.pause();setPlaying(false)}
-    else{if(v.currentTime>=outPoint)v.currentTime=inPoint;v.play();setPlaying(true)}
+    else{if(v.currentTime>=outPt)v.currentTime=inPt;v.play();setPlaying(true)}
   }
 
-  function getTimeFromX(e:React.MouseEvent|MouseEvent):number{
-    const rect=timelineRef.current?.getBoundingClientRect();if(!rect)return 0
-    const x=Math.max(0,Math.min(e.clientX-rect.left,rect.width))
-    return(x/rect.width)*dur
+  function getPctFromX(e:MouseEvent|React.MouseEvent):number{
+    const rect=tlRef.current?.getBoundingClientRect();if(!rect)return 0
+    return Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))
   }
 
-  function onTimelineMouseDown(e:React.MouseEvent){
-    const t=getTimeFromX(e)
-    const inDist=Math.abs(t-inPoint/dur*dur)
-    const outDist=Math.abs(t-outPoint)
-    if(inDist<outDist&&inDist<2){setDragging("in")}
-    else if(outDist<=inDist&&outDist<2){setDragging("out")}
-    else{setDragging("scrub");seekTo(t)}
+  function onTlDown(e:React.MouseEvent){
+    const pct=getPctFromX(e);const t=pct*fullDur
+    const inDist=Math.abs(pct-(inPt/fullDur))
+    const outDist=Math.abs(pct-(outPt/fullDur))
+    if(inDist<0.05&&inDist<=outDist)setDrag("in")
+    else if(outDist<0.05)setDrag("out")
+    else seekTo(t)
   }
 
   useEffect(()=>{
-    function onMouseMove(e:MouseEvent){
-      if(!dragging)return
-      const t=getTimeFromX(e)
-      if(dragging==="in"){const v=Math.min(t,outPoint-0.5);setInPoint(Math.max(0,v));seekTo(Math.max(0,v))}
-      else if(dragging==="out"){const v=Math.max(t,inPoint+0.5);setOutPoint(Math.min(dur,v));seekTo(Math.min(dur,v))}
-      else if(dragging==="scrub"){seekTo(t)}
+    function onMove(e:MouseEvent){
+      if(!drag)return
+      const pct=getPctFromX(e);const t=pct*fullDur
+      if(drag==="in"){const v=Math.min(t,outPt-0.5);const clamped=Math.max(0,v);setInPt(clamped);seekTo(clamped)}
+      else{const v=Math.max(t,inPt+0.5);const clamped=Math.min(fullDur,v);setOutPt(clamped);seekTo(clamped)}
     }
-    function onMouseUp(){setDragging(null)}
-    if(dragging){window.addEventListener("mousemove",onMouseMove);window.addEventListener("mouseup",onMouseUp)}
-    return()=>{window.removeEventListener("mousemove",onMouseMove);window.removeEventListener("mouseup",onMouseUp)}
-  },[dragging,inPoint,outPoint,dur])
+    function onUp(){setDrag(null)}
+    if(drag){window.addEventListener("mousemove",onMove);window.addEventListener("mouseup",onUp)}
+    return()=>{window.removeEventListener("mousemove",onMove);window.removeEventListener("mouseup",onUp)}
+  },[drag,inPt,outPt,fullDur])
 
-  const inPct=(inPoint/dur)*100
-  const outPct=(outPoint/dur)*100
-  const curPct=(currentTime/dur)*100
-  const clipDur=outPoint-inPoint
+  const inPct=(inPt/fullDur)*100
+  const outPct=(outPt/fullDur)*100
+  const curPct=(curTime/fullDur)*100
+  const selDur=outPt-inPt
+  const thumbCount=10
 
-  // Generate thumbnail strip
-  const thumbCount=12
-  const thumbs=Array.from({length:thumbCount},(_,i)=>({t:(i/thumbCount)*dur,pct:(i/thumbCount)*100}))
-
-  return<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-    <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1.5px solid "+C.border,borderRadius:20,width:"100%",maxWidth:780,overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.4)"}}>
-
-      {/* Header */}
-      <div style={{padding:"16px 20px",borderBottom:"1.5px solid "+C.border,display:"flex",alignItems:"center",gap:12}}>
+  return<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:20,width:"100%",maxWidth:780,overflow:"hidden"}}>
+      <div style={{padding:"16px 20px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:12}}>
         <div style={{flex:1}}>
           <div style={{fontWeight:800,fontSize:15,color:C.text}}>✂️ Trim Clip</div>
           <div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.title}</div>
         </div>
-        <div style={{background:C.accentSoft,border:"1.5px solid "+C.border,borderRadius:10,padding:"6px 14px",fontSize:12,fontWeight:700,color:C.accent}}>{clipDur.toFixed(1)}s selected</div>
-        <button onClick={onClose} style={{background:"none",border:"1.5px solid "+C.border,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,color:C.muted,fontFamily:"inherit"}}>Cancel</button>
-        <button onClick={()=>onSave({trimStart:inPoint,trimEnd:outPoint})} style={{background:C.accent,color:"#fff",border:"none",borderRadius:50,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Save Trim</button>
+        <div style={{background:C.accentSoft,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:C.accent}}>{selDur.toFixed(1)}s selected</div>
+        <button onClick={onClose} style={{background:"none",border:"1px solid "+C.border,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,color:C.muted,fontFamily:"inherit"}}>Cancel</button>
+        <button onClick={()=>onSave({trimStart:inPt,trimEnd:outPt})} style={{background:C.accent,color:"#fff",border:"none",borderRadius:50,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Save Trim</button>
       </div>
-
-      {/* Video preview */}
-      <div style={{background:"#000",position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <video ref={vidRef} playsInline preload="auto" muted style={{maxHeight:360,width:"100%",objectFit:"contain",display:"block"}} onClick={togglePlay}/>
-        <div onClick={togglePlay} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",pointerEvents:playing?"none":"auto"}}>
-          {!playing&&<div style={{width:56,height:56,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"2px solid rgba(255,255,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,color:"#fff"}}>▶</div>}
-        </div>
-        {/* Time display */}
-        <div style={{position:"absolute",bottom:12,right:12,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:12,fontWeight:700,padding:"4px 10px",borderRadius:6,fontVariantNumeric:"tabular-nums"}}>
-          {currentTime.toFixed(2)}s / {dur.toFixed(1)}s
-        </div>
+      <div style={{background:"#000",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:340,overflow:"hidden"}}>
+        <video ref={vidRef} playsInline preload="auto" muted style={{maxHeight:340,width:"100%",objectFit:"contain",display:"block",cursor:"pointer"}} onClick={togglePlay}/>
+        {!playing&&<div onClick={togglePlay} style={{position:"absolute",width:56,height:56,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"2px solid rgba(255,255,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,color:"#fff",cursor:"pointer"}}>▶</div>}
+        <div style={{position:"absolute",bottom:10,right:12,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:5}}>{curTime.toFixed(1)}s / {fullDur.toFixed(1)}s</div>
       </div>
-
-      {/* Timeline */}
       <div style={{padding:"16px 20px 20px"}}>
-        <div style={{marginBottom:8,display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,fontWeight:600}}>
-          <span style={{color:"#16A34A"}}>▶ In: {inPoint.toFixed(2)}s</span>
-          <span style={{color:C.accent}}>Duration: {clipDur.toFixed(2)}s</span>
-          <span style={{color:"#DC2626"}}>◀ Out: {outPoint.toFixed(2)}s</span>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginBottom:6}}>
+          <span style={{color:C.green,fontWeight:700}}>In: {inPt.toFixed(2)}s</span>
+          <span style={{color:C.accent,fontWeight:700}}>Duration: {selDur.toFixed(2)}s</span>
+          <span style={{color:"#DC2626",fontWeight:700}}>Out: {outPt.toFixed(2)}s</span>
         </div>
-
-        {/* Thumbnail strip + handles */}
-        <div ref={timelineRef} onMouseDown={onTimelineMouseDown} style={{position:"relative",height:64,borderRadius:10,overflow:"visible",cursor:"crosshair",userSelect:"none",marginBottom:12}}>
-
-          {/* Thumbnail strip */}
-          <div style={{position:"absolute",inset:0,borderRadius:10,overflow:"hidden",display:"flex"}}>
-            {thumbs.map(({t,pct})=><div key={pct} style={{flex:1,backgroundImage:`url(${muxThumb(item.mux_playback_id,t)})`,backgroundSize:"cover",backgroundPosition:"center"}}/>)}
+        <div ref={tlRef} onMouseDown={onTlDown} style={{position:"relative",height:60,borderRadius:10,overflow:"hidden",cursor:"crosshair",userSelect:"none",marginBottom:10}}>
+          <div style={{position:"absolute",inset:0,display:"flex"}}>
+            {Array.from({length:thumbCount},(_,ti)=>{
+              const tt=(ti/thumbCount)*fullDur
+              const bg="url("+muxThumb(item.mux_playback_id,tt)+")"
+              return<div key={ti} style={{flex:1,backgroundImage:bg,backgroundSize:"cover",backgroundPosition:"center"}}/>
+            })}
           </div>
-
-          {/* Dark overlay outside selection */}
-          <div style={{position:"absolute",top:0,left:0,width:inPct+"%",height:"100%",background:"rgba(0,0,0,0.6)",borderRadius:"10px 0 0 10px"}}/>
-          <div style={{position:"absolute",top:0,right:0,width:(100-outPct)+"%",height:"100%",background:"rgba(0,0,0,0.6)",borderRadius:"0 10px 10px 0"}}/>
-
-          {/* Selection border */}
-          <div style={{position:"absolute",top:0,left:inPct+"%",width:(outPct-inPct)+"%",height:"100%",border:"2px solid "+C.accent,borderRadius:4,pointerEvents:"none"}}/>
-
-          {/* In handle */}
-          <div style={{position:"absolute",top:-6,left:"calc("+inPct+"% - 8px)",width:16,height:76,background:"#16A34A",borderRadius:4,cursor:"ew-resize",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10}}>
-            <div style={{width:2,height:30,background:"rgba(255,255,255,0.8)",borderRadius:2}}/>
+          <div style={{position:"absolute",top:0,left:0,width:inPct+"%",height:"100%",background:"rgba(0,0,0,0.65)"}}/>
+          <div style={{position:"absolute",top:0,right:0,width:(100-outPct)+"%",height:"100%",background:"rgba(0,0,0,0.65)"}}/>
+          <div style={{position:"absolute",top:0,left:inPct+"%",width:(outPct-inPct)+"%",height:"100%",border:"2px solid "+C.accent,boxSizing:"border-box" as const}}/>
+          <div style={{position:"absolute",top:-4,left:"calc("+inPct+"% - 7px)",width:14,height:68,background:C.green,borderRadius:4,cursor:"ew-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:2,height:24,background:"rgba(255,255,255,0.8)",borderRadius:2}}/>
           </div>
-
-          {/* Out handle */}
-          <div style={{position:"absolute",top:-6,left:"calc("+outPct+"% - 8px)",width:16,height:76,background:"#DC2626",borderRadius:4,cursor:"ew-resize",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10}}>
-            <div style={{width:2,height:30,background:"rgba(255,255,255,0.8)",borderRadius:2}}/>
+          <div style={{position:"absolute",top:-4,left:"calc("+outPct+"% - 7px)",width:14,height:68,background:"#DC2626",borderRadius:4,cursor:"ew-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:2,height:24,background:"rgba(255,255,255,0.8)",borderRadius:2}}/>
           </div>
-
-          {/* Playhead */}
-          <div style={{position:"absolute",top:-4,left:"calc("+curPct+"% - 1px)",width:2,height:72,background:"#fff",borderRadius:2,pointerEvents:"none",zIndex:20}}/>
+          <div style={{position:"absolute",top:0,left:"calc("+curPct+"% - 1px)",width:2,height:"100%",background:"#fff",pointerEvents:"none",zIndex:20}}/>
         </div>
-
-        {/* Time markers */}
         <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.muted,marginBottom:14}}>
-          {Array.from({length:7},(_,i)=><span key={i}>{((i/6)*dur).toFixed(1)}s</span>)}
+          {Array.from({length:6},(_,ti)=><span key={ti}>{((ti/5)*fullDur).toFixed(0)}s</span>)}
         </div>
-
-        {/* Controls */}
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button onClick={()=>seekTo(inPoint)} style={{background:C.surface,border:"1.5px solid "+C.border,color:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>⏮ Go to In</button>
-          <button onClick={togglePlay} style={{background:C.accent,color:"#fff",border:"none",borderRadius:50,padding:"9px 24px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",flex:1}}>{playing?"⏸ Pause":"▶ Play Selection"}</button>
-          <button onClick={()=>seekTo(outPoint-0.1)} style={{background:C.surface,border:"1.5px solid "+C.border,color:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>⏭ Go to Out</button>
-          <button onClick={()=>{setInPoint(item.start_seconds??0);setOutPoint(item.end_seconds??(item.duration_seconds??dur))}} style={{background:"#FEF2F2",border:"1.5px solid #FECACA",color:"#DC2626",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Reset</button>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>seekTo(inPt)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>⏮ In</button>
+          <button onClick={togglePlay} style={{background:C.accent,color:"#fff",border:"none",borderRadius:50,padding:"9px 0",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",flex:1}}>{playing?"⏸ Pause":"▶ Play Selection"}</button>
+          <button onClick={()=>seekTo(outPt-0.1)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Out ⏭</button>
+          <button onClick={()=>{setInPt(item.start_seconds??0);setOutPt(item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||fullDur))}} style={{background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",borderRadius:8,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Reset</button>
         </div>
       </div>
     </div>
   </div>
 }
+
 // ── Script Table (Horizontal) ─────────────────────────────────────────────
 function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productName,voiceoverUrl}:any){
   const [pickerIdx,setPickerIdx]=useState<number|null>(null)
   const [fillingIdx,setFillingIdx]=useState<number|null>(null)
-  const [trimmingIdx,setTrimmingIdx]=useState<string|null>(null)
   const [trimModalData,setTrimModalData]=useState<any>(null)
+  const [trimModal,setTrimModal]=useState<any>(null)
   const [mutedClips,setMutedClips]=useState<Record<number,boolean>>(()=>{
     if(!voiceoverUrl)return{}
     const m:Record<number,boolean>={}
@@ -1097,9 +1085,10 @@ function toggleMuteClip(idx:number){
     item={trimModalData.segClip}
     trimStart={trimModalData.seg.trimStart}
     trimEnd={trimModalData.seg.trimEnd}
+    originalDuration={libraryItems.find((i:Item)=>i.id===trimModalData.segClip.parent_id)?.duration_seconds||trimModalData.segClip.duration_seconds||30}
     onSave={(updates:any)=>{
       const {idx,segIdx}=trimModalData
-      const currentSegs=sections[idx]?.clipSegments||[{id:`seg-${idx}-0`,clipId:sections[idx]?.selectedClipId}]
+      const currentSegs=sections[idx]?.clipSegments&&sections[idx].clipSegments.length>0?sections[idx].clipSegments:[{id:"seg-"+idx+"-0",clipId:sections[idx]?.selectedClipId}]
       const newSegs=currentSegs.map((s:any,si:number)=>si===segIdx?{...s,...updates}:s)
       onChange(sections.map((s:any,i:number)=>i===idx?{...s,clipSegments:newSegs}:s))
       setTrimModalData(null)
@@ -1154,7 +1143,7 @@ function toggleMuteClip(idx:number){
                     {segClip&&row.autoSelected&&segIdx===0&&<div style={{position:"absolute",top:4,left:4,background:C.green,color:"#fff",fontSize:7,fontWeight:800,padding:"1px 4px",borderRadius:3}}>AI</div>}
                     {segClip&&<button onClick={()=>toggleMuteClip(idx)} style={{position:"absolute",bottom:4,left:4,background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:9}}>{isMuted?"🔇":"🔊"}</button>}
                     {!readOnly&&<button onClick={()=>setPickerIdx(idx*1000+segIdx)} style={{position:"absolute",bottom:4,right:4,background:C.accent,color:"#fff",border:"none",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:9,fontWeight:700}}>⇄</button>}
-                    {segClip&&!readOnly&&<button onClick={()=>setTrimModalData({segClip,idx,segIdx,seg})} style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.6)",color:"#fff",border:"none",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:8,fontWeight:700}}>✂️</button>}
+                    {segClip&&!readOnly&&<button onClick={e=>{e.stopPropagation();setTrimModalData({segClip,idx,segIdx,seg})}} style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.65)",color:"#fff",border:"none",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:9,fontWeight:700}}>✂️</button>}
                     {!readOnly&&segIdx>0&&<button onClick={()=>{const segs=(row.clipSegments||[]).filter((_:any,si:number)=>si!==segIdx);updM(idx,{clipSegments:segs,selectedClipId:segs[0]?.clipId||null})}} style={{position:"absolute",top:4,right:4,background:"rgba(220,38,38,0.8)",color:"#fff",border:"none",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:9}}>✕</button>}
                   </div>
                   {segClip&&<div style={{padding:"4px 6px",fontSize:9,color:C.text,fontWeight:600,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as any}}>{segClip.title}</div>}
@@ -1508,79 +1497,37 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   async function matchClips(secs:any[],libItems:Item[]){
     const clips=libItems.filter(i=>i.mux_playback_id)
     const matchPool=clips.length>0?clips:libItems.filter(i=>i.mux_playback_id)
+    const usedIds=new Set<string>()
 
     const libSummary=matchPool.map(item=>{
       const a=item.analysis||{}
-      return`ID:${item.id}|role:${a.clip_role||item.clip_role||""}|label:${a.label||""}|use:${a.use_case||""}|tags:${(a.scene_tags||[]).join(", ")}|summary:${(a.summary||item.description||"").substring(0,100)}|transcript:${(item.transcript||"").substring(0,80)}|quality:${a.quality_score||"Medium"}|type:${item.type}`
+      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|label:"+(a.label||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(", ")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,80)+"|quality:"+(a.quality_score||"Medium")+"|type:"+item.type
     }).join("\n")
 
-    // Break each section into visual sub-phrases for richer clip assignment
-    const sectionBreakdown=secs.map((s:any,i:number)=>{
+    const sectionDesc=secs.map((s:any,i:number)=>{
       const words=(s.spokenWords||"").trim()
-      // Split on punctuation or conjunctions to find natural visual break points
-      const phrases=words.split(/(?<=[.!?,])\s+|(?:\s+(?:and|but|so|then|because|while|as|when|after|before)\s+)/i).filter((p:string)=>p.trim().length>3)
-      return{sectionIdx:i,type:s.type,spokenWords:words,visual:s.visualDirection||"",phrases:phrases.length>1?phrases:[words]}
-    })
+      const visual=(s.visualDirection||"")
+      return "Section "+i+" ["+s.type+"]: spoken=\""+words.substring(0,120)+"\" visual=\""+visual.substring(0,60)+"\""
+    }).join("\n")
 
-    const prompt=`You are an expert direct response video editor for DTC brands. Your job is to match script sections to clips — and determine HOW MANY clips each section needs to best tell the story visually.
-
-SCRIPT SECTIONS:
-${sectionBreakdown.map(s=>`Section ${s.sectionIdx} [${s.type}]: "${s.spokenWords}"
-  Visual direction: ${s.visual||"not specified"}
-  Natural phrases: ${s.phrases.map((p:string,pi:number)=>`(${pi}: "${p}")`).join(", ")}`).join("\n\n")}
-
-CLIP LIBRARY (${matchPool.length} clips):
-${libSummary}
-
-RULES:
-1. Each section can have 1 OR MORE clips — determine the right number based on:
-   - How many distinct visual moments are in the spoken words
-   - Whether the section describes multiple things, actions, or subjects
-   - Pacing — fast sections need more clips, slow emotional sections fewer
-   - A typical 30s ad should have 8-15 total clips across all sections
-2. Match clips by VISUAL CONTENT — if script says "yellow teeth" find a clip showing yellow teeth
-3. Use the clip's transcript, tags, use_case to find the best visual match for each phrase
-4. NEVER use the same clip twice
-5. For each clip slot, provide 2 alternatives
-
-Return ONLY valid JSON array — one entry per CLIP SLOT (not per section):
-[{
-  "section": 0,
-  "slot": 0,
-  "best_id": "clip_uuid",
-  "alt_ids": ["alt1","alt2"],
-  "phrase": "the specific phrase this clip covers",
-  "reason": "why this clip matches this phrase",
-  "suggested_trim_start": null,
-  "suggested_trim_end": null
-}, ...]
-
-Important: multiple entries can share the same section number — that means multiple clips for that section.`
+    const prompt="You are an expert direct response video editor for DTC brands.\n\nAnalyse each script section and determine HOW MANY clips it needs to best tell the story visually.\n\nSCRIPT SECTIONS:\n"+sectionDesc+"\n\nCLIP LIBRARY ("+matchPool.length+" clips):\n"+libSummary+"\n\nRULES:\n1. Each section can use 1-4 clips depending on how many distinct visual moments exist in the spoken words\n2. A 30s ad should have roughly 8-15 total clips across all sections\n3. Match clips by VISUAL CONTENT — if script says yellow teeth, find a clip of yellow teeth\n4. Use clip tags, transcript, use_case to find best visual match\n5. NEVER use the same clip twice across the whole ad\n6. For each clip slot, provide 2 alternatives\n\nReturn ONLY valid JSON array — one entry per CLIP SLOT:\n[{\"section\":0,\"slot\":0,\"best_id\":\"clip_uuid\",\"alt_ids\":[\"alt1\",\"alt2\"],\"phrase\":\"specific phrase this clip covers\",\"reason\":\"why this clip matches\"},...]"
 
     try{
       const raw=await callClaude([{role:"user",content:prompt}],2000)
-      const matches=JSON.parse(raw.replace(/```json|```/g,"").trim())
+      const matches=JSON.parse(raw.replace(/```json/g,"").replace(/```/g,"").trim())
       const validIds=new Set(libItems.map(i=>i.id))
-      const usedIds=new Set<string>()
 
       return secs.map((s:any,i:number)=>{
         const sectionMatches=matches.filter((m:any)=>m.section===i)
-        if(sectionMatches.length===0)return{...s,matchedClipIds:s.matchedClipIds||[],selectedClipId:s.selectedClipId||null,clipSegments:s.clipSegments||[{id:`seg-${i}-0`,clipId:s.selectedClipId||null}]}
+        if(sectionMatches.length===0){
+          return{...s,matchedClipIds:s.matchedClipIds||[],selectedClipId:s.selectedClipId||null,clipSegments:[{id:"seg-"+i+"-0",clipId:s.selectedClipId||null}]}
+        }
 
-        // Build clip segments from matches
         const clipSegments=sectionMatches.map((m:any,si:number)=>{
-          // Find best valid unused clip
           const candidates=[m.best_id,...(m.alt_ids||[])].filter((id:string)=>id&&validIds.has(id)&&!usedIds.has(id))
           const clipId=candidates[0]||null
           if(clipId)usedIds.add(clipId)
-          return{
-            id:`seg-${i}-${si}`,
-            clipId,
-            phrase:m.phrase||"",
-            reason:m.reason||"",
-            trimStart:m.suggested_trim_start||null,
-            trimEnd:m.suggested_trim_end||null,
-          }
+          return{id:"seg-"+i+"-"+si,clipId,phrase:m.phrase||"",reason:m.reason||""}
         }).filter((seg:any)=>seg.clipId)
 
         const allMatchedIds=sectionMatches.flatMap((m:any)=>[m.best_id,...(m.alt_ids||[])]).filter((id:string)=>id&&validIds.has(id))
@@ -1590,15 +1537,13 @@ Important: multiple entries can share the same section number — that means mul
           ...s,
           matchedClipIds:allMatchedIds,
           selectedClipId:firstClipId,
-          clipSegments:clipSegments.length>0?clipSegments:[{id:`seg-${i}-0`,clipId:null}],
+          clipSegments:clipSegments.length>0?clipSegments:[{id:"seg-"+i+"-0",clipId:null}],
           autoSelected:clipSegments.length>0,
           matchReason:sectionMatches[0]?.reason||"",
         }
       })
     }catch(e){console.error("matchClips failed:",e);return secs}
   }
-
-
  async function handleSaveForged(status:"draft"|"complete"){
   const stageWords=(form.awarenessStage||"problem_aware").split("_").map((w:string)=>w.charAt(0).toUpperCase()+w.slice(1)).join("")
   const hooksToSave=hookVariations.length>0&&selectedHooks.length>0?selectedHooks.map(i=>hookVariations[i]):null
