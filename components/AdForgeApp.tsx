@@ -63,14 +63,7 @@ function secColor(t?: string) {
 function getDurationRange(secs?: number){if(!secs)return"";if(secs<5)return"Under 5s";if(secs<15)return"5–15s";if(secs<30)return"15–30s";if(secs<60)return"30–60s";return"Over 60s"}
 async function callClaude(messages: any[], maxTokens = 1500) {
   const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages,maxTokens})})
-  const d=await res.json()
-  if(!res.ok){
-    const msg=d?.error?.message||d?.error||`API error ${res.status}`
-    if(typeof msg==="string"&&msg.toLowerCase().includes("credit"))throw new Error("Anthropic API credits empty — go to console.anthropic.com → Billing to top up.")
-    throw new Error(typeof msg==="string"?msg:`API error ${res.status}`)
-  }
-  if(!d.text)throw new Error("Claude returned an empty response — please try again.")
-  return d.text
+  const d=await res.json();return d.text||""
 }
 
 // ── UI Primitives ─────────────────────────────────────────────────────────
@@ -700,13 +693,13 @@ function AutoMashMode({libraryItems,brand,products,onSaveForgedAd,onGoToForged,o
   )
 
   async function generateMash(){
-    if(usableClips.length<3){alert("Need at least 3 ready clips with transcripts in your library.");return}
-    setGenerating(true)
+    if(usableClips.length<3){setGenError("Need at least 3 ready clips with transcripts in your library.");return}
+    setGenerating(true);setGenError("")
     try{
       const clipSummary=usableClips.map((item:Item)=>{
         const a=item.analysis||{}
         return `ID:${item.id}
-  type:${item.type}|role:${a.clip_role||item.clip_role||a.label||""}
+  type:${item.type}|role:${a.clip_role||item.clip_role||a.label||""}|hero:${a.is_hero?"YES":"no"}
   transcript:"${(item.transcript||"").substring(0,150)}"
   summary:${(a.summary||"").substring(0,100)}
   tags:${(a.scene_tags||[]).join(", ")}
@@ -717,11 +710,14 @@ function AutoMashMode({libraryItems,brand,products,onSaveForgedAd,onGoToForged,o
 
       const stage=STAGES.find(s=>s.value===form.awarenessStage)||STAGES[0]
       const prod=products.find((x:any)=>String(x.id)===String(form.productId))||null
+      const adSeconds=parseInt(form.adLength)||30
+      const targetClips=adSeconds<=15?4:adSeconds<=30?8:adSeconds<=45?10:14
 
       const prompt=`You are an expert direct response video editor. Assemble a complete ${form.adLength} mashup ad from these existing creator clips.
 
 BRAND: ${brand.name||"Unknown"}
 PRODUCT: ${prod?.name||"General"}
+BRAND VOICE: ${brand.voice||""}
 AWARENESS STAGE: ${stage.label} — ${stage.desc}
 STYLE: ${form.style}
 
@@ -729,21 +725,20 @@ AVAILABLE CLIPS:
 ${clipSummary}
 
 RULES:
-1. Select 6-12 clips that together tell a complete direct response story
-2. Structure: HOOK → PROBLEM → AGITATE → SOLUTION → SOCIAL PROOF → CTA
-3. Each selected clip must use its ORIGINAL AUDIO — no voiceover will be added
-4. Choose clips whose spoken words FLOW LOGICALLY when cut together
-5. The transcript of consecutive clips should make narrative sense
-6. Prefer clips with complete sentences — avoid clips that end mid-thought
-7. Each clip should be 2-6 seconds of the original video
-8. Mix creators for variety where it makes sense
-9. The total should be approximately ${form.adLength}
+1. Select approximately ${targetClips} clips that together tell a complete, logical story
+2. DO NOT force a rigid HOOK→PROBLEM→AGITATE→SOLUTION→PROOF→CTA structure — let the available clips and their transcripts determine the best narrative arc
+3. Each selected clip uses its ORIGINAL AUDIO — clips must make sense spoken aloud in sequence
+4. The transcript of consecutive clips must flow naturally — no topic jumps
+5. Prefer clips with complete sentences, avoid clips ending mid-thought
+6. PRIORITISE clips marked hero=YES
+7. Mix creators for variety
+8. Total duration should be approximately ${form.adLength}
 
 Return ONLY valid JSON:
 {
   "sections": [
     {
-      "type": "HOOK|PROBLEM|AGITATE|SOLUTION|SOCIAL PROOF|CTA",
+      "type": "HOOK|PROBLEM|AGITATE|SOLUTION|SOCIAL PROOF|CTA|BODY",
       "selectedClipId": "clip_uuid",
       "clipSegments": [{"id":"seg-0-0","clipId":"clip_uuid","trimStart":null,"trimEnd":null}],
       "spokenWords": "exact transcript words from this clip",
@@ -753,21 +748,31 @@ Return ONLY valid JSON:
     }
   ],
   "suggested_title": "short descriptive title",
-  "narrative_flow": "brief description of the story being told"
+  "narrative_flow": "brief description of the story arc"
 }`
 
-      const raw=await callClaude([{role:"user",content:prompt}],2000)
+      const raw=await callClaude([{role:"user",content:prompt}],2500)
       const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
-      const validIds=new Set(libraryItems.map((i:Item)=>i.id))
+      const validIds=new Set(usableClips.map((i:Item)=>i.id))
       const validSections=(data.sections||[]).filter((s:any)=>s.selectedClipId&&validIds.has(s.selectedClipId))
+
+      if(validSections.length===0){setGenError("No valid clips matched. Make sure your clips have transcripts and are fully processed.");setGenerating(false);return}
+
+      // Step 1.6: Narrative validation
+      const narrativeText=validSections.map((s:any)=>s.spokenWords||"").join(" … ")
+      let narrativeIssue=""
+      try{
+        const checkRaw=await callClaude([{role:"user",content:`Does this ad transcript flow logically and make narrative sense as a direct response ad? Reply with ONLY valid JSON: {"flows":true/false,"issue":"one sentence if it doesn't flow, empty string if it does"}\n\nTranscript: "${narrativeText.substring(0,600)}"`}],200)
+        const checkData=JSON.parse(checkRaw.replace(/```json|```/g,"").trim())
+        if(!checkData.flows&&checkData.issue)narrativeIssue=checkData.issue
+      }catch(e){}
+
       setSections(validSections.map((s:any,i:number)=>({
-        ...s,
-        id:Date.now()+i,
-        matchedClipIds:[s.selectedClipId],
-        autoSelected:true,
+        ...s,id:Date.now()+i,matchedClipIds:[s.selectedClipId],autoSelected:true,
         clipSegments:s.clipSegments||[{id:"seg-"+i+"-0",clipId:s.selectedClipId,trimStart:null,trimEnd:null}],
       })))
       if(data.suggested_title)setAdTitle(data.suggested_title)
+      if(narrativeIssue)setGenError("⚠️ Narrative check: "+narrativeIssue+" — review the sections below before saving.")
       setStep("preview")
     }catch(e:any){setGenError(e.message||"Failed to generate mash — try again")}
     setGenerating(false)
@@ -851,7 +856,7 @@ Return ONLY valid JSON:
         <div style={{fontSize:13,color:C.muted}}>{sections.length} clips assembled · original audio</div>
       </div>
       <div style={{display:"flex",gap:10}}>
-        <Btn onClick={generateMash} disabled={generating} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44"}}>{generating?"⏳ Regenerating…":"🔄 Regenerate"}</Btn>
+        <Btn onClick={()=>{setGenError("");generateMash()}} disabled={generating} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44"}}>{generating?"⏳ Regenerating…":"🔄 Regenerate"}</Btn>
         <Btn onClick={saveMash} disabled={saving} style={{background:C.green,color:"#fff",fontWeight:700}}>{saving?"💾 Saving…":"✓ Save & Render"}</Btn>
       </div>
     </div>
@@ -1557,7 +1562,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
     if(filterDuration.length>0&&!filterDuration.includes(getDurationRange(item.duration_seconds)))return false
     if(!search.trim())return true
     const q=search.toLowerCase(),a=item.analysis||{}
-    return[item.title,item.creator,item.transcript,a.summary,a.tone,...(a.scene_tags||[]),...(a.topics||[]),...(a.key_quotes||[])].some(f=>f&&String(f).toLowerCase().includes(q))
+    return[item.title,item.creator,a.summary,a.tone,...(a.scene_tags||[]),...(a.topics||[])].some(f=>f&&String(f).toLowerCase().includes(q))
   }))
 
   if(view==="add")return<div style={{maxWidth:860,margin:"0 auto",padding:28}}>
@@ -1691,17 +1696,6 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
         </div>
         {(selected.clip_role||a.clip_role)&&<div style={{fontSize:11,color:C.green,marginTop:8}}>✓ Role set — this clip will be prioritised for {(selected.clip_role||a.clip_role)?.replace(/_/g," ")} sections</div>}
         {a.quality_score&&<div style={{fontSize:11,color:a.quality_score==="High"?C.green:a.quality_score==="Low"?"#ef4444":C.yellow,marginTop:6}}>AI Quality: {a.quality_score}</div>}
-        <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid "+C.border,display:"flex",alignItems:"center",gap:12}}>
-          <button onClick={async()=>{
-            const supabase=createClient()
-            const newVal=!(selected as any).is_hero
-            await supabase.from("items").update({analysis:{...a,is_hero:newVal}}).eq("id",selected.id)
-            setSelected({...selected,analysis:{...a,is_hero:newVal}})
-          }} style={{background:a.is_hero?"#FEF08A":C.surface,border:"1.5px solid "+(a.is_hero?"#CA8A04":C.border),color:a.is_hero?"#92400E":C.muted,borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-            {a.is_hero?"⭐ Hero clip":"☆ Mark as hero"}
-          </button>
-          <span style={{fontSize:11,color:C.muted}}>Hero clips are prioritised in every match</span>
-        </div>
       </Card>}
       {selected.type!=="clip"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>{[{l:"Tone",v:a.tone},{l:"Ad Potential",v:a.ad_potential,c:adPotColor},{l:"Confidence",v:a.confidence}].map(s=><Card key={s.l} style={{textAlign:"center",padding:14}}><div style={{fontSize:10,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>{s.l}</div><div style={{fontWeight:700,fontSize:14,color:(s as any).c||C.text}}>{s.v||"—"}</div></Card>)}</div>}
       <Card style={{marginBottom:12}}>
@@ -1801,9 +1795,6 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [sections,setSections]=useState<any[]>([])
   const [genMeta,setGenMeta]=useState<any>(null)
   const [generating,setGenerating]=useState(false)
-  const [genError,setGenError]=useState("")
-  const [genStatus,setGenStatus]=useState("")
-  const [hookScore,setHookScore]=useState<{score:number,reason:string}|null>(null)
   const [matching,setMatching]=useState(false)
   const [step,setStep]=useState<"script"|"audio"|"clips"|"forge">("script")
   const [voiceoverUrl,setVoiceoverUrl]=useState<string|null>(null)
@@ -1817,96 +1808,132 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [activeHookIdx,setActiveHookIdx]=useState(0)
   const [hookSections,setHookSections]=useState<Record<number,any[]>>({})
   const [generatingHooks,setGeneratingHooks]=useState(false)
-  const [quickBrief,setQuickBrief]=useState("")
   const [form,setForm]=useState({productId:"",awarenessStage:"problem_aware",contentType:"UGC",adLength:"30 seconds",customerAvatar:"",useAvatarId:"",painPoints:"",desires:"",objections:"",request:""})
   function setF(k:string,v:string){setForm(x=>({...x,[k]:v}))}
   const savedAvatars=(brand?.customer_avatars||[])
 
-  // Draft persistence
-  useEffect(()=>{
-    try{const saved=localStorage.getItem("adforge_draft");if(saved){const d=JSON.parse(saved);if(d.sections?.length>0){setSections(d.sections);setGenMeta(d.genMeta||null);setVoiceoverUrl(d.voiceoverUrl||null);setVoiceoverVoice(d.voiceoverVoice||null);setMusicUrl(d.musicUrl||null);setMusicName(d.musicName||null);setSuggestedMood(d.suggestedMood||"Uplifting");if(d.form)setForm(d.form);if(d.hookVariations?.length>0)setHookVariations(d.hookVariations);if(d.selectedHooks)setSelectedHooks(d.selectedHooks)}}}catch(e){}
-  },[])
-  useEffect(()=>{
-    if(sections.length>0&&view==="review"){try{localStorage.setItem("adforge_draft",JSON.stringify({sections,genMeta,voiceoverUrl,voiceoverVoice,musicUrl,musicName,suggestedMood,form,step,hookVariations,selectedHooks}))}catch(e){}}
-  },[sections,voiceoverUrl,musicUrl,step])
-  function clearDraft(){try{localStorage.removeItem("adforge_draft")}catch(e){}}
-
   async function handleGen(){
-    setGenerating(true);setGenError("");setGenStatus("✍️ Writing script…");setHookScore(null)
+    setGenerating(true)
     try{
       const prod=products.find((x:Product)=>String((x as any).id)===String(form.productId))||null
       const stage=STAGES.find(s=>s.value===form.awarenessStage)||STAGES[0]
-      let ctx=`BRAND:\nName: ${brand.name||"Unknown"}\nDesc: ${brand.description||""}\nVoice: ${brand.voice||""}\nCustomer: ${brand.target_customer||""}\nReviews: ${brand.reviews||""}\n\n`
-      if(prod)ctx+=`PRODUCT:\nName: ${prod.name}\nDesc: ${prod.description||""}\nBenefits: ${prod.benefits||""}\nClaims: ${prod.claims||""}\n\n`
-      const quickBriefLine=quickBrief.trim()?`\nQUICK BRIEF: "${quickBrief.trim()}" — honour this above all other instructions.\n`:""
-      const prompt=ctx+quickBriefLine+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
-      const raw=await callClaude([{role:"user",content:prompt}],2000)
+
+      // Step 1.2: Build library snapshot — hero clips, key quotes, available roles
+      const readyItems=items.filter(i=>i.mux_status==="ready"&&i.mux_playback_id)
+      const libSnapshot=readyItems.length>0?`\nLIBRARY SNAPSHOT (what clips actually exist to cut to):\n`+readyItems.slice(0,40).map(i=>{
+        const a=i.analysis||{}
+        return `- role:${a.clip_role||i.clip_role||"unset"} | type:${a.content_type||i.type} | tags:${(a.scene_tags||[]).slice(0,4).join(",")} | quote:"${(a.key_quotes||[])[0]||""}" | hero:${a.is_hero?"YES":"no"}`
+      }).join("\n"):""
+
+      let ctx=`BRAND:\nName: ${brand.name||"Unknown"}\nVoice & Tone: ${brand.voice||""}\nTarget Customer: ${brand.target_customer||""}\nKey Reviews: ${brand.reviews||""}\n\n`
+      if(prod)ctx+=`PRODUCT:\nName: ${prod.name}\nDescription: ${prod.description||""}\nKey Benefits: ${prod.benefits||""}\nClaims & Results: ${prod.claims||""}\nDifferentiators: ${prod.differentiators||""}\nIngredients: ${prod.ingredients||""}\n\n`
+
+      // Step 1.1: Dynamic section count/structure based on ad length and content type
+      const adSeconds=parseInt(form.adLength)||30
+      const sectionGuidance=adSeconds<=15
+        ?`This is a ${form.adLength} ad. Use 2–4 sections maximum. Do NOT force all section types — a 15s retargeting ad might be just HOOK + SOLUTION + CTA.`
+        :adSeconds<=30
+        ?`This is a ${form.adLength} ad. Use 4–6 sections. Structure should serve the story — not every section type is needed for every content format.`
+        :adSeconds<=45
+        ?`This is a ${form.adLength} ad. Use 5–7 sections. You can use multiple SOCIAL PROOF or BODY sections if the story warrants it.`
+        :`This is a ${form.adLength} ad. Use 7–10 sections. Longer ads can repeat section types (e.g. two rounds of social proof, extended solution). Let the story breathe.`
+
+      const contentGuidance:Record<string,string>={
+        "UGC":"Raw, authentic feel. Hook should feel native to TikTok/Reels — no polish.",
+        "Talking Head":"Direct to camera. Hook is a bold statement or direct question to the viewer.",
+        "Founder Story":"Personal narrative arc. HOOK → STORY → PROBLEM → WHY I BUILT THIS → SOLUTION → CTA. Skip AGITATE unless it serves the story.",
+        "Testimonial":"Lead with the result, not the problem. HOOK = the outcome they got. Social proof is the whole ad.",
+        "Before & After":"Visual transformation structure. HOOK = before state. SOLUTION = the turn. End with after outcome.",
+        "Problem-Solution":"Classic DR. Open with pain. Agitate hard. Solution as relief.",
+        "Tutorial":"Instructional tone. Hook = promise of what they'll learn. Sections = steps.",
+        "Mashup":"Multiple creators. Each section should feel like a different voice backing up the same claim."
+      }
+
+      // Step 1.5: DR principles injected
+      const drPrinciples=`
+DIRECT RESPONSE COPYWRITING PRINCIPLES — apply these:
+- HOOK: Name a specific pain OR a specific desirable outcome in the first 3 words. Never start generic ("Are you tired of…" is weak. "I couldn't get rid of..." is strong).
+- PROBLEM/AGITATE: Use specificity — a specific consequence, number, or scenario. Vague = ignored.
+- SOLUTION: Lead with the single strongest benefit, not the product name. What does the customer get?
+- SOCIAL PROOF: Must include a real-feeling result ("lost 12lbs", "cleared in 3 days", "saved £200"). Generic testimonials don't convert.
+- CTA: Time or scarcity element. Tell them exactly what to do next.`
+
+      const prompt=ctx+`${libSnapshot}\n\nSCRIPT REQUEST:\nContent Type: ${form.contentType}\nTarget Length: ${form.adLength}\nAwareness Stage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPain Points: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nSpecific Request: ${form.request||""}\n\n${sectionGuidance}\n\nContent Type Guidance: ${contentGuidance[form.contentType]||"Direct response, clear and benefit-led."}\n${drPrinciples}\n\nAVAILABLE SECTION TYPES (use only what serves this specific ad): HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, BODY, CTA\n\nWrite the optimal script for this specific ad. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting","structure_reasoning":"one line explaining why you chose this section structure"}`
+
+      const raw=await callClaude([{role:"user",content:prompt}],2500)
       const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
       let secs=(data.sections||[]).map((s:any,i:number)=>({...s,id:Date.now()+i,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
-      if(items.length>0){setGenStatus("🔍 Matching clips to sections…");secs=await matchClips(secs,items)}
+      if(items.length>0)secs=await matchClips(secs,items)
       setSuggestedMood(data.suggested_music_mood||"Uplifting")
-      // Score the hook
-      const hookSec=secs.find((s:any)=>s.type==="HOOK")
-      if(hookSec?.spokenWords){
-        setGenStatus("🎯 Scoring hook quality…")
-        try{
-          const scoreRaw=await callClaude([{role:"user",content:`Score this HOOK for a direct response ad on a scale of 1-5.\nHook: "${hookSec.spokenWords}"\nBrand: ${brand.name||"Unknown"}, Product: ${prod?.name||"General"}\nScoring criteria: Does it name a specific pain or outcome? Does it create curiosity or urgency? Is it under 15 words? Does it feel like it speaks directly to the target customer?\nReturn ONLY JSON: {"score":4,"reason":"one sentence explanation"}`}],300)
-          const scoreData=JSON.parse(scoreRaw.replace(/```json|```/g,"").trim())
-          if(scoreData.score)setHookScore({score:scoreData.score,reason:scoreData.reason||""})
-        }catch(e){}
-      }
-      setSections(secs);setGenMeta({form,productName:prod?.name||"General"});setView("review");setStep("script")
-    }catch(e:any){setGenError(e.message||"Error generating script — please try again.")}
-    setGenerating(false);setGenStatus("")
+      setSections(secs);setGenMeta({form,productName:prod?.name||"General",structureReasoning:data.structure_reasoning||""});setView("review");setStep("script")
+    }catch(e){alert("Error generating script.");console.error(e)}
+    setGenerating(false)
   }
 
   async function matchClips(secs:any[],libItems:Item[]){
-    const clips=libItems.filter(i=>i.mux_playback_id)
-    const matchPool=clips.length>0?clips:libItems.filter(i=>i.mux_playback_id)
+    // Step 1.4: Quality pre-filter — only use ready clips with role, quality score, or hero flag
+    const allReady=libItems.filter(i=>i.mux_playback_id&&i.mux_status==="ready")
+    const qualityPool=allReady.filter(i=>{
+      const a=i.analysis||{}
+      const hasRole=!!(a.clip_role||i.clip_role)
+      const goodQuality=!a.quality_score||a.quality_score==="High"||a.quality_score==="Medium"
+      const goodPotential=!a.ad_potential||a.ad_potential==="High"||a.ad_potential==="Medium"
+      return a.is_hero||hasRole||(goodQuality&&goodPotential)
+    })
+    const matchPool=qualityPool.length>=3?qualityPool:allReady
     const usedIds=new Set<string>()
+
+    // Step 1.7: Pacing defaults by section type
+    const pacingDefaults:Record<string,{min:number,max:number}>={
+      "HOOK":{min:1.5,max:3},"PROBLEM":{min:2,max:5},"AGITATE":{min:2,max:5},
+      "SOLUTION":{min:3,max:7},"SOCIAL PROOF":{min:3,max:8},"CTA":{min:2,max:4},"BODY":{min:2,max:6}
+    }
+
+    const sectionTypeHints:Record<string,string>={
+      "HOOK":"High energy, pattern interrupt, motion/reaction, under 3s","PROBLEM":"Before-state, relatable struggle, authentic pain",
+      "AGITATE":"Frustration amplified, consequence demonstrated","SOLUTION":"Product in use, transformation, benefit shown clearly",
+      "SOCIAL PROOF":"Real person, result stated, testimonial or reaction","CTA":"Product close-up, urgency, strong ending","BODY":"Supporting lifestyle, product context"
+    }
 
     const libSummary=matchPool.map(item=>{
       const a=item.analysis||{}
-      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|hero:"+(a.is_hero?"YES":"no")+"|label:"+(a.label||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(", ")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,80)+"|quality:"+(a.quality_score||"Medium")+"|type:"+item.type
+      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|hero:"+(a.is_hero?"YES":"no")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(",")+"|summary:"+(a.summary||item.description||"").substring(0,80)+"|transcript:"+(item.transcript||"").substring(0,80)+"|quality:"+(a.quality_score||"Med")
     }).join("\n")
+
+    const hintBlock=secs.map((s:any)=>s.type).filter((t:string,i:number,a:string[])=>a.indexOf(t)===i).map((t:string)=>`${t}: ${sectionTypeHints[t]||""}`).join("\n")
 
     const sectionDesc=secs.map((s:any,i:number)=>{
-      const words=(s.spokenWords||"").trim()
-      const visual=(s.visualDirection||"")
-      return "Section "+i+" ["+s.type+"]: spoken=\""+words.substring(0,120)+"\" visual=\""+visual.substring(0,60)+"\""
+      const pacing=pacingDefaults[s.type]||{min:2,max:6}
+      return "Section "+i+" ["+s.type+"] (ideal: "+pacing.min+"–"+pacing.max+"s): spoken=\""+(s.spokenWords||"").substring(0,100)+"\" visual=\""+(s.visualDirection||"").substring(0,60)+"\""
     }).join("\n")
 
-    const prompt="You are an expert direct response video editor for DTC brands.\n\nAnalyse each script section and determine HOW MANY clips it needs to best tell the story visually.\n\nSECTION TYPE GUIDANCE:\n- HOOK: Short punchy clip (under 5s), high energy, pattern interrupt, grabs attention immediately\n- PROBLEM: Relatable struggle, before-state, emotional pain point demonstration\n- AGITATE: Amplifying frustration, contrast, before/after comparison\n- SOLUTION: Clear product demo, benefit in action, transformation moment\n- SOCIAL PROOF: Testimonial clip, real person reaction, user review\n- CTA: Urgency, product shot, discount reveal, strong call to action\n- BODY: Supporting lifestyle, product in use, general visual enhancement\n\nSCRIPT SECTIONS:\n"+sectionDesc+"\n\nCLIP LIBRARY ("+matchPool.length+" clips):\n"+libSummary+"\n\nRULES:\n1. Each section can use 1-4 clips depending on how many distinct visual moments exist in the spoken words\n2. A 30s ad should have roughly 8-15 total clips across all sections\n3. Match clips by VISUAL CONTENT — if script says yellow teeth, find a clip of yellow teeth\n4. Use clip tags, transcript, use_case AND clip_role to find best visual match\n5. NEVER use the same clip twice across the whole ad\n6. For each clip slot, provide 2 alternatives\n7. Prioritise clips whose clip_role matches the section type\n\nReturn ONLY valid JSON array — one entry per CLIP SLOT:\n[{\"section\":0,\"slot\":0,\"best_id\":\"clip_uuid\",\"alt_ids\":[\"alt1\",\"alt2\"],\"phrase\":\"specific phrase this clip covers\",\"reason\":\"why this clip matches\"},...]"
+    const prompt="Expert DTC video editor. Match clips to script sections.\n\nSECTION VISUAL GUIDES:\n"+hintBlock+"\n\nSCRIPT:\n"+sectionDesc+"\n\nCLIP LIBRARY ("+matchPool.length+" quality clips):\n"+libSummary+"\n\nRULES:\n1. 1-4 clips per section based on distinct visual moments\n2. Match by section type guide AND spoken content\n3. PRIORITISE hero=YES clips and clips whose role matches section type\n4. NEVER reuse a clip\n5. Provide 2 alternatives per slot\n6. Suggest trimStart/trimEnd in seconds to hit the pacing range for that section type\n\nReturn ONLY valid JSON:\n[{\"section\":0,\"slot\":0,\"best_id\":\"uuid\",\"alt_ids\":[\"uuid1\",\"uuid2\"],\"phrase\":\"phrase covered\",\"reason\":\"why\",\"suggestedTrimStart\":null,\"suggestedTrimEnd\":null},...]"
 
     try{
-      const raw=await callClaude([{role:"user",content:prompt}],2000)
+      const raw=await callClaude([{role:"user",content:prompt}],2500)
       const matches=JSON.parse(raw.replace(/```json/g,"").replace(/```/g,"").trim())
       const validIds=new Set(libItems.map(i=>i.id))
 
       return secs.map((s:any,i:number)=>{
         const sectionMatches=matches.filter((m:any)=>m.section===i)
-        if(sectionMatches.length===0){
-          return{...s,matchedClipIds:s.matchedClipIds||[],selectedClipId:s.selectedClipId||null,clipSegments:[{id:"seg-"+i+"-0",clipId:s.selectedClipId||null}]}
-        }
+        if(sectionMatches.length===0)return{...s,matchedClipIds:s.matchedClipIds||[],selectedClipId:s.selectedClipId||null,clipSegments:[{id:"seg-"+i+"-0",clipId:s.selectedClipId||null}]}
 
         const clipSegments=sectionMatches.map((m:any,si:number)=>{
           const candidates=[m.best_id,...(m.alt_ids||[])].filter((id:string)=>id&&validIds.has(id)&&!usedIds.has(id))
           const clipId=candidates[0]||null
           if(clipId)usedIds.add(clipId)
-          return{id:"seg-"+i+"-"+si,clipId,phrase:m.phrase||"",reason:m.reason||""}
+          // Apply pacing trim suggestion
+          const clip=clipId?libItems.find(item=>item.id===clipId):null
+          const pacing=pacingDefaults[s.type]||{min:2,max:6}
+          const clipStart=clip?.start_seconds??0
+          const clipNaturalEnd=clip?.end_seconds??(clipStart+(clip?.duration_seconds||pacing.max))
+          const naturalDur=clipNaturalEnd-clipStart
+          const suggestedEnd=naturalDur>pacing.max?clipStart+pacing.max:null
+          return{id:"seg-"+i+"-"+si,clipId,phrase:m.phrase||"",reason:m.reason||"",trimStart:m.suggestedTrimStart??null,trimEnd:m.suggestedTrimEnd??suggestedEnd}
         }).filter((seg:any)=>seg.clipId)
 
         const allMatchedIds=sectionMatches.flatMap((m:any)=>[m.best_id,...(m.alt_ids||[])]).filter((id:string)=>id&&validIds.has(id))
-        const firstClipId=clipSegments[0]?.clipId||null
-
-        return{
-          ...s,
-          matchedClipIds:allMatchedIds,
-          selectedClipId:firstClipId,
-          clipSegments:clipSegments.length>0?clipSegments:[{id:"seg-"+i+"-0",clipId:null}],
-          autoSelected:clipSegments.length>0,
-          matchReason:sectionMatches[0]?.reason||"",
-        }
+        return{...s,matchedClipIds:allMatchedIds,selectedClipId:clipSegments[0]?.clipId||null,clipSegments:clipSegments.length>0?clipSegments:[{id:"seg-"+i+"-0",clipId:null}],autoSelected:clipSegments.length>0,matchReason:sectionMatches[0]?.reason||""}
       })
     }catch(e){console.error("matchClips failed:",e);return secs}
   }
@@ -1950,7 +1977,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
     await saveOneAd(sections)
   }
 
-  setAdTitle("");clearDraft()
+  setAdTitle("")
   onGoToForged()
 }
 async function generateHookVariations(){
@@ -1958,33 +1985,48 @@ async function generateHookVariations(){
   try{
     const bodyText=sections.filter((s:any)=>s.type!=="HOOK").map((s:any)=>s.spokenWords||"").join(" ")
     const prod=products.find((x:Product)=>String((x as any).id)===String(form.productId))||null
-    const prompt=`Write 3 different HOOK variations for a direct response video ad.
+
+    // Step 1.3: Mine real quotes from library clips as hook candidates
+    const realQuotes=items
+      .filter(i=>i.mux_status==="ready"&&((i.analysis?.key_quotes?.length>0)||(i.analysis?.ad_potential==="High")))
+      .flatMap(i=>(i.analysis?.key_quotes||[]).map((q:string)=>({quote:q,creator:i.creator||"",clip_id:i.id})))
+      .filter(q=>q.quote.trim().length>10&&q.quote.trim().length<120)
+      .slice(0,6)
+
+    const realQuotesBlock=realQuotes.length>0
+      ?`\nREAL CREATOR QUOTES FROM YOUR LIBRARY (these are authentic — consider using one as a hook basis):\n`+realQuotes.map((q,i)=>`${i+1}. "${q.quote}" — ${q.creator}`).join("\n")+"\n"
+      :""
+
+    const prompt=`Write 4 different HOOK variations for a direct response video ad.
 
 Brand: ${brand.name||"Unknown"}
 Product: ${prod?.name||"General"}
 Ad body (stays the same): "${bodyText.substring(0,300)}"
-
-Write 3 hooks using different angles:
-1. Question hook — opens with a provocative question
+Customer Pains: ${form.painPoints||brand.target_customer||""}
+${realQuotesBlock}
+Write 4 hooks using different angles:
+1. Question hook — opens with a provocative question the viewer can't ignore
 2. Bold statement hook — opens with a surprising or bold claim
-3. Pain point hook — opens by naming a specific customer pain
+3. Pain point hook — opens by naming a specific, visceral customer pain
+4. Real quote hook — adapts one of the real creator quotes above into a hook (or write an original if no quotes suit)
+
+RULES: Under 15 words each. First word should NOT be "Are", "Do", "Have", "If". Be specific — no generic statements.
 
 Return ONLY valid JSON:
-{"hooks":[{"type":"Question","spokenWords":"exact hook words","visualDirection":"what is shown"}{"type":"Bold Statement","spokenWords":"exact hook words","visualDirection":"what is shown"},{"type":"Pain Point","spokenWords":"exact hook words","visualDirection":"what is shown"}]}`
+{"hooks":[{"type":"Question","spokenWords":"exact hook words","visualDirection":"what is shown"},{"type":"Bold Statement","spokenWords":"exact hook words","visualDirection":"what is shown"},{"type":"Pain Point","spokenWords":"exact hook words","visualDirection":"what is shown"},{"type":"Real Quote","spokenWords":"exact hook words","visualDirection":"what is shown","source_clip_id":"clip_id_if_from_library"}]}`
 
-    const raw=await callClaude([{role:"user",content:prompt}],600)
+    const raw=await callClaude([{role:"user",content:prompt}],800)
     const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
     const hooks=data.hooks||[]
-    // Build 3 complete section arrays — each with a different hook, same body
     const bodyBections=sections.filter((s:any)=>s.type!=="HOOK")
     const originalHook=sections.find((s:any)=>s.type==="HOOK")||sections[0]
     const originalVariation=[{...originalHook,hookType:"Original",voiceover_url:null},...bodyBections]
     const aiVariations=hooks.map((hook:any)=>[
-      {...originalHook,spokenWords:hook.spokenWords,visualDirection:hook.visualDirection,hookType:hook.type,voiceover_url:null},
+      {...originalHook,spokenWords:hook.spokenWords,visualDirection:hook.visualDirection,hookType:hook.type,voiceover_url:null,sourceClipId:hook.source_clip_id||null},
       ...bodyBections
     ])
     setHookVariations([originalVariation,...aiVariations])
-  }catch(e:any){setGenError(e.message||"Failed to generate hook variations")}
+  }catch(e){console.error(e);alert("Failed to generate hook variations")}
   setGeneratingHooks(false)
 }
 
@@ -2024,11 +2066,6 @@ Return ONLY valid JSON:
       <div><STitle size={22} mb={4}>Script Generator</STitle><div style={{color:C.muted,fontSize:14}}>AI direct response scripts powered by your brand data</div></div>
       <Btn onClick={()=>setView("chooseMode")} style={{background:C.accent,color:"#fff"}}>+ Create New Ad</Btn>
     </div>
-    {sections.length>0&&<div style={{background:C.accentSoft,border:"1.5px solid "+C.accent,borderRadius:12,padding:"14px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:12}}>
-      <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:C.accent}}>📝 Draft in progress — {sections.length} sections</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>You left mid-flow. Resume where you left off.</div></div>
-      <Btn onClick={()=>{setView("review");setStep("script")}} style={{background:C.accent,color:"#fff",fontSize:12,padding:"7px 14px"}}>Resume →</Btn>
-      <Btn onClick={()=>{setSections([]);setGenMeta(null);setVoiceoverUrl(null);setMusicUrl(null);setHookVariations([]);clearDraft()}} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"7px 14px"}}>Discard</Btn>
-    </div>}
     {scripts.length===0?<Card style={{textAlign:"center",padding:60}}><div style={{fontSize:40,marginBottom:12}}>✍️</div><STitle mb={6}>No scripts yet</STitle><Btn onClick={()=>setView("chooseMode")} style={{background:C.accent,color:"#fff",marginTop:8}}>Create First Ad</Btn></Card>
     :<div style={{display:"grid",gap:12}}>{[...scripts].reverse().map((script:Script)=>{
       const m=script.metadata||{},stage=STAGES.find(s=>s.value===m.awarenessStage),sc2=STAGE_COLORS[m.awarenessStage]||C.accent
@@ -2053,11 +2090,7 @@ Return ONLY valid JSON:
   if(view==="generate")return<div style={{maxWidth:740,margin:"0 auto",padding:28}}>
     <button onClick={()=>setView("chooseMode")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back</button>
     <STitle size={22}>New Script</STitle>
-    <Card style={{marginBottom:14,background:"#F0FDF4",border:"1.5px solid #86EFAC"}}>
-      <div style={{fontWeight:700,fontSize:13,color:"#15803D",marginBottom:6}}>⚡ Quick brief</div>
-      <Input textarea value={quickBrief} onChange={(e:any)=>setQuickBrief(e.target.value)} placeholder={'"30s UGC ad for Sarah, 34, dry skin, problem-aware — mention the new serum"'} rows={2}/>
-      <div style={{fontSize:11,color:"#15803D",marginTop:6}}>Describe what you want in plain English — AI will honour this above all parameters below.</div>
-    </Card>
+    <Card style={{marginBottom:14}}><STitle size={14} mb={10}>Quick Request (optional)</STitle><Input textarea value={form.request} onChange={(e:any)=>setF("request",e.target.value)} placeholder={'"30s UGC ad for our serum targeting women with dry skin"'} rows={2}/></Card>
     <Card style={{marginBottom:14}}>
       <STitle size={14} mb={14}>Parameters</STitle>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
@@ -2078,8 +2111,7 @@ Return ONLY valid JSON:
       </div>
       <Label>Objections</Label><Input textarea value={form.objections} onChange={(e:any)=>setF("objections",e.target.value)} rows={2}/>
     </Card>
-    <Btn onClick={()=>{setGenError("");handleGen()}} disabled={generating} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:16,borderRadius:12}}>{generating?`⏳ ${genStatus||"Generating…"}`:"✨ Generate Script"}</Btn>
-    {genError&&<div style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#DC2626",marginTop:12}}>⚠️ {genError}</div>}
+    <Btn onClick={handleGen} disabled={generating} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:16,borderRadius:12}}>{generating?"⏳ Writing script & matching clips…":"✨ Generate Script"}</Btn>
   </div>
 
   if(view==="review"){
@@ -2104,12 +2136,7 @@ Return ONLY valid JSON:
           </div>
         </div>
         <div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,marginBottom:16}}>✏️ Review and edit your script below. Use "Generate 3 Hook Variations" to create testable hook options.</div>
-        {hookScore&&<div style={{background:hookScore.score>=4?"#F0FDF4":hookScore.score>=3?"#FFFBEB":"#FEF2F2",border:"1.5px solid "+(hookScore.score>=4?"#86EFAC":hookScore.score>=3?"#FCD34D":"#FECACA"),borderRadius:10,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
-          <div style={{display:"flex",gap:3}}>{[1,2,3,4,5].map(i=><span key={i} style={{fontSize:14,color:i<=hookScore.score?"#D97706":"#E5E7EB"}}>★</span>)}</div>
-          <div style={{flex:1}}><span style={{fontWeight:700,fontSize:13,color:hookScore.score>=4?"#15803D":hookScore.score>=3?"#92400E":"#DC2626"}}>Hook score {hookScore.score}/5 — </span><span style={{fontSize:13,color:C.muted}}>{hookScore.reason}</span></div>
-          {hookScore.score<4&&<Btn onClick={generateHookVariations} disabled={generatingHooks} style={{background:C.accent,color:"#fff",fontSize:11,padding:"5px 10px"}}>{generatingHooks?"…":"Improve →"}</Btn>}
-        </div>}
-        {genError&&<div style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#DC2626",marginBottom:16}}>⚠️ {genError}</div>}
+        {genMeta?.structureReasoning&&<div style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.muted,marginBottom:12}}>🧠 Structure: {genMeta.structureReasoning}</div>}
 
         {/* Hook variations */}
         {hookVariations.length>0&&<div style={{marginBottom:20}}>
@@ -2368,9 +2395,7 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
     </div>}
 
     {renderStatus==="failed"&&<div>
-      <div style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#DC2626",marginBottom:8}}>❌ Render failed.</div>
-      {(ad as any).render_error&&<div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:8,padding:"8px 12px",fontSize:11,color:C.muted,fontFamily:"monospace",marginBottom:12,wordBreak:"break-all" as const}}>{(ad as any).render_error}</div>}
-      {!(ad as any).render_error&&<div style={{fontSize:12,color:C.muted,marginBottom:12}}>Common causes: missing clips, expired video URLs, or codec issues. Try re-matching clips and re-rendering.</div>}
+      <div style={{background:"#ef444411",border:"1px solid #ef444433",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#ef4444",marginBottom:12}}>❌ Render failed. Try again.</div>
       <Btn onClick={startRender} style={{background:C.accent,color:"#fff",width:"100%",padding:12}}>🔄 Retry Render</Btn>
     </div>}
   </div>
@@ -2486,9 +2511,8 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
     <div style={{padding:"10px 12px",flex:1,display:"flex",flexDirection:"column",gap:5}}>
       <div style={{fontWeight:700,fontSize:12,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{ad.title}</div>
       <div style={{display:"flex",gap:2}} onMouseLeave={()=>setHoverRating(0)}>
-        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={e=>{e.stopPropagation();setHoverRating(star)}} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:13,color:(hoverRating||rating)>=star?"#f59e0b":"rgba(0,0,0,0.15)",transition:"color 0.1s"}}>★</span>)}
+        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={e=>{e.stopPropagation();setHoverRating(star)}} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:13,color:(hoverRating||rating)>=star?"#f59e0b":"#ffffff22",transition:"color 0.1s"}}>★</span>)}
       </div>
-      {ad.metadata?.hook_rate&&<div style={{fontSize:9,color:C.green,fontWeight:700}}>📊 Hook {ad.metadata.hook_rate}% · CPA ${ad.metadata.cpa||"—"}</div>}
       <div style={{fontSize:10,color:C.muted}}>{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}{ad.metadata?.adLength?` · ${ad.metadata.adLength}`:""}</div>
       {(ad as any).notes&&<div style={{fontSize:10,color:C.muted,fontStyle:"italic",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>📝 {(ad as any).notes}</div>}
     </div>
@@ -2508,12 +2532,9 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
   const [selectedIds,setSelectedIds]=useState<string[]>([])
   const [deleting,setDeleting]=useState(false)
   const [autoRendering,setAutoRendering]=useState(false)
-  const [perfModalId,setPerfModalId]=useState<string|null>(null)
-  const [perfForm,setPerfForm]=useState({hook_rate:"",ctr:"",cpa:"",roas:"",spend:"",notes:""})
   const pollRef=useRef<any>(null)
 
   const previewAd=previewId?ads.find(a=>a.id===previewId):null
-  const perfAd=perfModalId?ads.find(a=>a.id===perfModalId):null
 
   // Auto-poll render status every 15 seconds
   useEffect(()=>{
@@ -2537,22 +2558,8 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
   async function markComplete(id:string){await supabase.from("forged_ads").update({status:"complete",updated_at:new Date().toISOString()}).eq("id",id);onRefresh()}
   async function saveNotes(id:string){await supabase.from("forged_ads").update({notes:notesVal}).eq("id",id);setEditingNotes(null);onRefresh()}
 
-  async function cloneAd(ad:ForgedAd){
-    const{id:_id,created_at:_ca,updated_at:_ua,render_id:_ri,render_url:_ru,render_status:_rs,...rest}=ad as any
-    const{data}=await supabase.from("forged_ads").insert({...rest,title:ad.title+" (copy)",status:"draft",updated_at:new Date().toISOString()}).select().single()
-    if(data)onRefresh()
-  }
-
-  async function savePerformance(){
-    if(!perfModalId)return
-    const ad=ads.find(a=>a.id===perfModalId)
-    if(!ad)return
-    const updatedMeta={...ad.metadata,...Object.fromEntries(Object.entries(perfForm).filter(([,v])=>v!==""))}
-    await supabase.from("forged_ads").update({metadata:updatedMeta,notes:perfForm.notes||ad.notes}).eq("id",perfModalId)
-    setPerfModalId(null);onRefresh()
-  }
-
   async function bulkDelete(){
+    if(!window.confirm(`Delete ${selectedIds.length} ad(s)?`))return
     setDeleting(true)
     for(const id of selectedIds){await supabase.from("forged_ads").delete().eq("id",id)}
     setSelectedIds([]);setSelectMode(false);setDeleting(false);onRefresh()
@@ -2646,9 +2653,7 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
                 {(previewAd as any).notes?`📝 ${(previewAd as any).notes}`:"+ Add notes"}
               </div>}
           </div>
-          <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap"}}>
-            <Btn onClick={()=>{cloneAd(previewAd);setPreviewId(null)}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px"}}>⎘ Clone</Btn>
-            <Btn onClick={()=>{setPerfModalId(previewAd.id);setPerfForm({hook_rate:previewAd.metadata?.hook_rate||"",ctr:previewAd.metadata?.ctr||"",cpa:previewAd.metadata?.cpa||"",roas:previewAd.metadata?.roas||"",spend:previewAd.metadata?.spend||"",notes:(previewAd as any).notes||""})}} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontSize:12,padding:"6px 12px"}}>📊 Log Results</Btn>
+          <div style={{display:"flex",gap:8,flexShrink:0}}>
             {previewAd.status==="draft"&&<Btn onClick={()=>{markComplete(previewAd.id);setPreviewId(null)}} style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
             <Btn onClick={()=>{deleteAd(previewAd.id);setPreviewId(null)}} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",fontSize:12,padding:"6px 12px"}}>Delete</Btn>
             <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
@@ -2660,26 +2665,6 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
           {previewAd.music_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls style={{width:"100%",height:36}}/></div>}
         </div>
         <ForgedAdDownload ad={previewAd} onRefresh={onRefresh}/>
-      </div>
-    </div>}
-
-    {/* Performance tracking modal */}
-    {perfAd&&<div onClick={()=>setPerfModalId(null)} style={{position:"fixed",inset:0,background:"#000000ee",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:16,padding:24,maxWidth:480,width:"100%"}}>
-        <div style={{fontWeight:700,fontSize:17,marginBottom:4}}>📊 Log Results — {perfAd.title}</div>
-        <div style={{fontSize:13,color:C.muted,marginBottom:20}}>Record real performance data to track what's working.</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-          <div><Label>Hook Rate (%)</Label><Input value={perfForm.hook_rate} onChange={(e:any)=>setPerfForm(p=>({...p,hook_rate:e.target.value}))} placeholder="e.g. 45"/></div>
-          <div><Label>CTR (%)</Label><Input value={perfForm.ctr} onChange={(e:any)=>setPerfForm(p=>({...p,ctr:e.target.value}))} placeholder="e.g. 2.1"/></div>
-          <div><Label>CPA ($)</Label><Input value={perfForm.cpa} onChange={(e:any)=>setPerfForm(p=>({...p,cpa:e.target.value}))} placeholder="e.g. 24.50"/></div>
-          <div><Label>ROAS</Label><Input value={perfForm.roas} onChange={(e:any)=>setPerfForm(p=>({...p,roas:e.target.value}))} placeholder="e.g. 3.2"/></div>
-          <div><Label>Spend ($)</Label><Input value={perfForm.spend} onChange={(e:any)=>setPerfForm(p=>({...p,spend:e.target.value}))} placeholder="e.g. 500"/></div>
-        </div>
-        <div style={{marginBottom:16}}><Label>Notes</Label><Input textarea value={perfForm.notes} onChange={(e:any)=>setPerfForm(p=>({...p,notes:e.target.value}))} rows={2} placeholder="What worked? What to test next?"/></div>
-        <div style={{display:"flex",gap:10}}>
-          <Btn onClick={savePerformance} style={{background:C.green,color:"#fff",fontWeight:700,flex:1}}>Save Results</Btn>
-          <Btn onClick={()=>setPerfModalId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn>
-        </div>
       </div>
     </div>}
 
