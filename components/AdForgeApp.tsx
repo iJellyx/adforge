@@ -66,8 +66,7 @@ async function callClaude(messages: any[], maxTokens = 1500) {
   const d=await res.json()
   if(!res.ok){
     const msg=d?.error?.message||d?.error||`API error ${res.status}`
-    if(typeof msg==="string"&&msg.toLowerCase().includes("credit"))throw new Error("Anthropic API credits are empty — go to console.anthropic.com → Billing to top up.")
-    if(typeof msg==="string"&&msg.toLowerCase().includes("invalid x-api-key"))throw new Error("Invalid API key — check ANTHROPIC_API_KEY in Vercel settings.")
+    if(typeof msg==="string"&&msg.toLowerCase().includes("credit"))throw new Error("Anthropic API credits empty — go to console.anthropic.com → Billing to top up.")
     throw new Error(typeof msg==="string"?msg:`API error ${res.status}`)
   }
   if(!d.text)throw new Error("Claude returned an empty response — please try again.")
@@ -155,7 +154,7 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl,onSave}:any){
   }).filter(Boolean)
 
   async function doExport(){
-  if(!clips.length){setMsg("No clips assigned — add clips to each section before exporting.");return}
+  if(!clips.length){alert("No clips assigned.");return}
   setExporting(true);setDone(false);setProgress(10);setMsg("Submitting to Shotstack…")
   try{
     const itemIds=clips.map((c:any)=>c.item.id)
@@ -701,7 +700,7 @@ function AutoMashMode({libraryItems,brand,products,onSaveForgedAd,onGoToForged,o
   )
 
   async function generateMash(){
-    if(usableClips.length<3){setGenError("Need at least 3 ready clips with transcripts in your library to Auto-Mash.");return}
+    if(usableClips.length<3){alert("Need at least 3 ready clips with transcripts in your library.");return}
     setGenerating(true)
     try{
       const clipSummary=usableClips.map((item:Item)=>{
@@ -1275,7 +1274,7 @@ function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,onClose
 }
 
 // ── Script Table (Horizontal) ─────────────────────────────────────────────
-function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productName,brandVoice,voiceoverUrl}:any){
+function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productName,voiceoverUrl}:any){
   const [pickerIdx,setPickerIdx]=useState<number|null>(null)
   const [fillingIdx,setFillingIdx]=useState<number|null>(null)
   const [trimModalData,setTrimModalData]=useState<any>(null)
@@ -1313,12 +1312,7 @@ function toggleMuteClip(idx:number){
 
   async function autofillRow(idx:number){
     const row=sections[idx];setFillingIdx(idx)
-    try{
-      const ctx=sections.map((s:any,i:number)=>`[${i===idx?"→ THIS":"  "}] ${s.type}: ${(s.spokenWords||"(empty)").substring(0,60)}`).join("\n")
-      const raw=await callClaude([{role:"user",content:`Write a ${row.type} section for a direct response video ad.\nBrand: ${brandName||"Unknown"}\nProduct: ${productName||"Unknown"}\nBrand voice & tone: ${brandVoice||"persuasive, direct, conversational"}\n\nScript context:\n${ctx}\n\nIMPORTANT: Match the brand voice exactly. Keep copy punchy and direct-response focused.\nReturn ONLY JSON: {"spokenWords":"exact words to be spoken","visualDirection":"what is shown on screen"}`}],500)
-      const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
-      updM(idx,{spokenWords:data.spokenWords||row.spokenWords,visualDirection:data.visualDirection||row.visualDirection})
-    }catch(e){console.error(e)}
+    try{const ctx=sections.map((s:any,i:number)=>`[${i===idx?"→ THIS":"  "}] ${s.type}: ${(s.spokenWords||"(empty)").substring(0,60)}`).join("\n");const raw=await callClaude([{role:"user",content:`Write a ${row.type} section for a direct response video ad.\nBrand: ${brandName||"Unknown"}\nProduct: ${productName||"Unknown"}\n\nContext:\n${ctx}\n\nReturn ONLY JSON: {"spokenWords":"exact words","visualDirection":"what is on screen"}`}],400);const data=JSON.parse(raw.replace(/```json|```/g,"").trim());updM(idx,{spokenWords:data.spokenWords||row.spokenWords,visualDirection:data.visualDirection||row.visualDirection})}catch(e){console.error(e)}
     setFillingIdx(null)
   }
 
@@ -1339,8 +1333,7 @@ function toggleMuteClip(idx:number){
   />}
    {pickerIdx!==null&&<ClipPickerModal 
     currentId={pickerIdx>=1000?sections[Math.floor(pickerIdx/1000)]?.clipSegments?.[pickerIdx%1000]?.clipId:sections[pickerIdx]?.selectedClipId} 
-    matchedIds={sections[Math.floor(pickerIdx>=1000?pickerIdx/1000:pickerIdx)]?.matchedClipIds||[]}
-    matchReason={sections[Math.floor(pickerIdx>=1000?pickerIdx/1000:pickerIdx)]?.matchReason||""}
+    matchedIds={sections[Math.floor(pickerIdx>=1000?pickerIdx/1000:pickerIdx)]?.matchedClipIds||[]} 
     libraryItems={libraryItems} 
     sectionLabel={sections[Math.floor(pickerIdx>=1000?pickerIdx/1000:pickerIdx)]?.type||""} 
     onSelect={(id:string)=>{
@@ -1353,7 +1346,6 @@ function toggleMuteClip(idx:number){
     onClose={()=>setPickerIdx(null)}/>}
     <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",background:C.surface,borderBottom:"1px solid "+C.border}}>
       <span style={{fontSize:12,color:C.muted,fontWeight:600}}>{sections.length} sections</span>
-      {(()=>{const total=sections.reduce((acc:number,s:any)=>{const m=(s.durationEstimate||"").match(/(\d+)/);return acc+(m?parseInt(m[1]):0)},0);return total>0?<span style={{fontSize:12,color:C.accent,fontWeight:600,background:C.accentSoft,padding:"2px 8px",borderRadius:99}}>~{total}s</span>:null})()}
       {voiceoverUrl&&<div style={{fontSize:11,color:C.green}}>🎙️ Voiceover active</div>}
       <div style={{flex:1}}/>
       <button onClick={toggleMuteAll} style={{background:allMuted?"#ef444422":C.accentSoft,border:"1px solid "+(allMuted?"#ef444466":C.accent+"44"),color:allMuted?"#ef4444":C.accent,borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>{allMuted?"🔇 All Muted":"🔊 Mute All"}</button>
@@ -1417,7 +1409,7 @@ function toggleMuteClip(idx:number){
 }
 
 // ── Clip Picker Modal ─────────────────────────────────────────────────────
-function ClipPickerModal({currentId,matchedIds,matchReason,libraryItems,sectionLabel,onSelect,onClose}:any){
+function ClipPickerModal({currentId,matchedIds,libraryItems,sectionLabel,onSelect,onClose}:any){
   const [search,setSearch]=useState("")
   const matched=libraryItems.filter((i:Item)=>matchedIds.includes(i.id))
   const others=libraryItems.filter((i:Item)=>!matchedIds.includes(i.id))
@@ -1425,7 +1417,6 @@ function ClipPickerModal({currentId,matchedIds,matchReason,libraryItems,sectionL
   return<div onClick={onClose} style={{position:"fixed",inset:0,background:"#000000dd",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
     <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:16,padding:24,maxWidth:760,width:"100%",marginTop:40}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div><div style={{fontWeight:700,fontSize:17}}>Change Clip</div><div style={{fontSize:13,color:C.muted}}>for <strong style={{color:C.text}}>{sectionLabel}</strong></div></div><Btn onClick={onClose} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px",fontSize:12}}>✕</Btn></div>
-      {matchReason&&<div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#15803D",marginBottom:14}}>🎯 AI matched on: {matchReason}</div>}
       <Input value={search} onChange={(e:any)=>setSearch(e.target.value)} placeholder="Search…" style={{marginBottom:20}}/>
       {fl(matched).length>0&&<div style={{marginBottom:24}}><div style={{fontSize:11,fontWeight:700,color:C.green,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>🎯 AI-Matched ({fl(matched).length})</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>{fl(matched).map((item:Item)=><div key={item.id} style={{cursor:"pointer"}} onClick={()=>{onSelect(item.id);onClose()}}><VideoCard item={item} compact={false} highlight={item.id!==currentId} isSelected={item.id===currentId} onClick={()=>{}} selectMode={false} onToggleSelect={()=>{}}/></div>)}</div></div>}
       {fl(others).length>0&&<div><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>All Library ({fl(others).length})</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>{fl(others).map((item:Item)=><div key={item.id} style={{cursor:"pointer"}} onClick={()=>{onSelect(item.id);onClose()}}><VideoCard item={item} compact={false} isSelected={item.id===currentId} onClick={()=>{}} selectMode={false} onToggleSelect={()=>{}}/></div>)}</div></div>}
@@ -1434,37 +1425,8 @@ function ClipPickerModal({currentId,matchedIds,matchReason,libraryItems,sectionL
   </div>
 }
 
-// ── Bulk Tag Editor ───────────────────────────────────────────────────────
-function BulkTagEditor({selectedIds,items,supabase,onRefresh}:any){
-  const [open,setOpen]=useState(false)
-  const [tag,setTag]=useState("")
-  const ref=useRef<HTMLDivElement>(null)
-  useEffect(()=>{function h(e:MouseEvent){if(ref.current&&!ref.current.contains(e.target as Node))setOpen(false)}document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h)},[])
-  async function applyTag(){
-    const t=tag.trim();if(!t)return
-    for(const id of selectedIds){
-      const item=items.find((i:Item)=>i.id===id);if(!item)continue
-      const existing=(item.analysis?.scene_tags||[])
-      if(existing.includes(t))continue
-      const newAnalysis={...(item.analysis||{}),scene_tags:[...existing,t]}
-      await supabase.from("items").update({analysis:newAnalysis}).eq("id",id)
-    }
-    setTag("");setOpen(false);onRefresh()
-  }
-  return<div ref={ref} style={{position:"relative"}}>
-    <Btn onClick={()=>setOpen(!open)} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",padding:"9px 14px"}}>🏷 Tag ({selectedIds.length})</Btn>
-    {open&&<div style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:C.surface,border:"1.5px solid "+C.border,borderRadius:12,padding:14,zIndex:200,minWidth:240,boxShadow:"0 8px 24px rgba(0,0,0,0.12)"}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.muted,marginBottom:8}}>Apply tag to {selectedIds.length} selected</div>
-      <div style={{display:"flex",gap:8}}>
-        <input value={tag} onChange={e=>setTag(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();applyTag()}}} placeholder="Type tag + Enter" style={{flex:1,background:C.bg,border:"1px solid "+C.border,borderRadius:8,padding:"7px 10px",color:C.text,fontSize:13,outline:"none"}}/>
-        <Btn onClick={applyTag} style={{background:C.accent,color:"#fff",padding:"7px 12px"}}>Add</Btn>
-      </div>
-    </div>}
-  </div>
-}
-
 // ── Library Tab ───────────────────────────────────────────────────────────
-function LibraryTab({items,onRefresh,view,setView,brand,products,forgedAds,onGoToBrand}:{items:Item[],onRefresh:()=>void,view:string,setView:(v:string)=>void,brand:BrandProfile,products:Product[],forgedAds:ForgedAd[],onGoToBrand:()=>void}){
+function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{items:Item[],onRefresh:()=>void,view:string,setView:(v:string)=>void,brand:BrandProfile,products:Product[],onGoToBrand:()=>void}){
   const supabase=createClient()
   const [selected,setSelected]=useState<Item|null>(null)
   const [search,setSearch]=useState("")
@@ -1493,7 +1455,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,forgedAds,onGoT
       creator:"",
       creatorAge:"",
       creatorGender:"",
-      autoClip:autoClipEnabled,
+      autoClip:true,
       status:"pending",
       progress:0,
       msg:"",
@@ -1579,7 +1541,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,forgedAds,onGoT
   const activeFilterCount=filterCtypes.length+filterCreators.length+filterAges.length+filterGenders.length+filterAdPotential.length+filterDuration.length
   function clearFilters(){setFilterCtypes([]);setFilterCreators([]);setFilterAges([]);setFilterGenders([]);setFilterAdPotential([]);setFilterDuration([])}
   async function handleDelete(id:string){const item=items.find(i=>i.id===id);await supabase.from("items").delete().in("id",[id,...(item?.clip_ids||[])]);onRefresh();setSelected(null);setView("grid")}
-  async function bulkDelete(){setDeleting(true);const gone=new Set(selectedIds);selectedIds.forEach(id=>{const item=items.find(i=>i.id===id);(item?.clip_ids||[]).forEach(cid=>gone.add(cid))});await supabase.from("items").delete().in("id",Array.from(gone));onRefresh();setSelectMode(false);setSelectedIds([]);setDeleting(false)}
+  async function bulkDelete(){if(!window.confirm(`Delete ${selectedIds.length} item(s)?`))return;setDeleting(true);const gone=new Set(selectedIds);selectedIds.forEach(id=>{const item=items.find(i=>i.id===id);(item?.clip_ids||[]).forEach(cid=>gone.add(cid))});await supabase.from("items").delete().in("id",Array.from(gone));onRefresh();setSelectMode(false);setSelectedIds([]);setDeleting(false)}
   async function updateTags(id:string,tags:string[]){const item=items.find(i=>i.id===id);const newAnalysis={...(item?.analysis||{}),scene_tags:tags};await supabase.from("items").update({analysis:newAnalysis}).eq("id",id);onRefresh();if(selected?.id===id)setSelected({...selected,analysis:newAnalysis})}
 
   function sortItems(arr:Item[]){const c=[...arr];if(sortIdx===0)return c.sort((a,b)=>new Date(b.created_at||0).getTime()-new Date(a.created_at||0).getTime());if(sortIdx===1)return c.sort((a,b)=>new Date(a.created_at||0).getTime()-new Date(b.created_at||0).getTime());if(sortIdx===2)return c.sort((a,b)=>a.title.localeCompare(b.title));return c.sort((a,b)=>b.title.localeCompare(a.title))}
@@ -1595,7 +1557,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,forgedAds,onGoT
     if(filterDuration.length>0&&!filterDuration.includes(getDurationRange(item.duration_seconds)))return false
     if(!search.trim())return true
     const q=search.toLowerCase(),a=item.analysis||{}
-    return[item.title,item.creator,a.summary,a.tone,...(a.scene_tags||[]),...(a.topics||[])].some(f=>f&&String(f).toLowerCase().includes(q))
+    return[item.title,item.creator,item.transcript,a.summary,a.tone,...(a.scene_tags||[]),...(a.topics||[]),...(a.key_quotes||[])].some(f=>f&&String(f).toLowerCase().includes(q))
   }))
 
   if(view==="add")return<div style={{maxWidth:860,margin:"0 auto",padding:28}}>
@@ -1729,8 +1691,33 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,forgedAds,onGoT
         </div>
         {(selected.clip_role||a.clip_role)&&<div style={{fontSize:11,color:C.green,marginTop:8}}>✓ Role set — this clip will be prioritised for {(selected.clip_role||a.clip_role)?.replace(/_/g," ")} sections</div>}
         {a.quality_score&&<div style={{fontSize:11,color:a.quality_score==="High"?C.green:a.quality_score==="Low"?"#ef4444":C.yellow,marginTop:6}}>AI Quality: {a.quality_score}</div>}
+        <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid "+C.border,display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={async()=>{
+            const supabase=createClient()
+            const newVal=!(selected as any).is_hero
+            await supabase.from("items").update({analysis:{...a,is_hero:newVal}}).eq("id",selected.id)
+            setSelected({...selected,analysis:{...a,is_hero:newVal}})
+          }} style={{background:a.is_hero?"#FEF08A":C.surface,border:"1.5px solid "+(a.is_hero?"#CA8A04":C.border),color:a.is_hero?"#92400E":C.muted,borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+            {a.is_hero?"⭐ Hero clip":"☆ Mark as hero"}
+          </button>
+          <span style={{fontSize:11,color:C.muted}}>Hero clips are prioritised in every match</span>
+        </div>
       </Card>}
       {selected.type!=="clip"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>{[{l:"Tone",v:a.tone},{l:"Ad Potential",v:a.ad_potential,c:adPotColor},{l:"Confidence",v:a.confidence}].map(s=><Card key={s.l} style={{textAlign:"center",padding:14}}><div style={{fontSize:10,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>{s.l}</div><div style={{fontWeight:700,fontSize:14,color:(s as any).c||C.text}}>{s.v||"—"}</div></Card>)}</div>}
+      <Card style={{marginBottom:12}}>
+  <div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>🎯 Clip Role</div>
+  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+    {["hook","problem","solution","social_proof","cta","b_roll","product_demo","testimonial"].map(role=>{
+      const isActive=(selected.clip_role||selected.analysis?.clip_role)===role
+      return<button key={role} onClick={async()=>{
+        await supabase.from("items").update({clip_role:isActive?null:role}).eq("id",selected.id)
+        onRefresh()
+        setSelected({...selected,clip_role:isActive?undefined:role})
+      }} style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,border:"1px solid "+(isActive?C.accent:C.border),borderRadius:99,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:isActive?700:400}}>{role.replace("_"," ")}</button>
+    })}
+  </div>
+  <div style={{fontSize:10,color:C.muted,marginTop:6}}>Assigning a role helps AI match this clip to the right script sections</div>
+</Card>
       {selected.transcript&&<Card style={{marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📝 Auto-Transcript</div><div style={{fontSize:13,lineHeight:1.7,color:C.muted,maxHeight:120,overflowY:"auto"}}>{selected.transcript}</div></Card>}
       {a.key_quotes?.length>0&&<Card style={{marginBottom:12}}><Label>Key Quotes</Label>{a.key_quotes.map((q:string,i:number)=><div key={i} style={{borderLeft:"3px solid "+C.accent,paddingLeft:12,marginBottom:8,fontSize:14,fontStyle:"italic"}}>"{q}"</div>)}</Card>}
       {a.ad_notes&&<Card style={{background:adPotColor+"18",border:"1px solid "+adPotColor+"44",marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:adPotColor,marginBottom:6}}>📢 AD USAGE</div><div style={{fontSize:14,lineHeight:1.6}}>{a.ad_notes}</div></Card>}
@@ -1747,7 +1734,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,forgedAds,onGoT
           }} style={{background:C.yellow,color:"#fff",fontSize:12,padding:"7px 16px"}}>Re-analyse</Btn>
         </div>
       </Card>}
-      {clips.length>0&&<div style={{marginTop:24}}><STitle>✂️ Auto-Generated Clips ({clips.length})</STitle><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>{clips.map(c=>{const usedCount=(forgedAds||[]).filter((ad:ForgedAd)=>(ad.sections||[]).some((s:any)=>s.selectedClipId===c.id||(s.clipSegments||[]).some((seg:any)=>seg.clipId===c.id))).length;return<div key={c.id}><VideoCard item={c} onClick={()=>setSelected(c)} selectMode={false} isSelected={false} onToggleSelect={()=>{}}/>{usedCount>0&&<div style={{fontSize:10,color:C.accent,fontWeight:600,marginTop:4,textAlign:"center"}}>Used in {usedCount} ad{usedCount!==1?"s":""}</div>}</div>})}</div></div>}
+      {clips.length>0&&<div style={{marginTop:24}}><STitle>✂️ Auto-Generated Clips ({clips.length})</STitle><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>{clips.map(c=><VideoCard key={c.id} item={c} onClick={()=>setSelected(c)} selectMode={false} isSelected={false} onToggleSelect={()=>{}}/>)}</div></div>}
     </div>
   }
 
@@ -1761,12 +1748,10 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,forgedAds,onGoT
   return<div style={{padding:20}}>
     <div style={{display:"flex",gap:10,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
       <input placeholder="Search titles, creators, tags…" value={search} onChange={e=>setSearch(e.target.value)} style={{flex:1,minWidth:180,background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none"}}/>
-      <div style={{fontSize:12,color:C.muted,whiteSpace:"nowrap"}}>{items.filter(i=>i.type==="original").length} videos · {items.filter(i=>i.type==="clip").length} clips</div>
       <select value={sortIdx} onChange={e=>setSortIdx(Number(e.target.value))} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 12px",color:C.text,fontSize:13,outline:"none",cursor:"pointer"}}>{SORTS.map((s,i)=><option key={i} value={i}>{s}</option>)}</select>
       {!selectMode&&<Btn onClick={()=>setSelectMode(true)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"9px 14px"}}>Select</Btn>}
-      {selectMode&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+      {selectMode&&<div style={{display:"flex",gap:8,alignItems:"center"}}>
         <Btn onClick={()=>setSelectedIds(filtered.map(i=>i.id))} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",padding:"9px 14px"}}>Select All ({filtered.length})</Btn>
-        {selectedIds.length>0&&<BulkTagEditor selectedIds={selectedIds} items={items} supabase={supabase} onRefresh={onRefresh}/>}
         <Btn onClick={bulkDelete} disabled={selectedIds.length===0||deleting} style={{background:selectedIds.length>0?"#ef444433":C.border,color:selectedIds.length>0?"#ef4444":C.muted,border:"1px solid "+(selectedIds.length>0?"#ef444466":C.border)}}>Delete ({selectedIds.length})</Btn>
         <Btn onClick={()=>{setSelectMode(false);setSelectedIds([])}} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn>
       </div>}
@@ -1818,6 +1803,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [generating,setGenerating]=useState(false)
   const [genError,setGenError]=useState("")
   const [genStatus,setGenStatus]=useState("")
+  const [hookScore,setHookScore]=useState<{score:number,reason:string}|null>(null)
   const [matching,setMatching]=useState(false)
   const [step,setStep]=useState<"script"|"audio"|"clips"|"forge">("script")
   const [voiceoverUrl,setVoiceoverUrl]=useState<string|null>(null)
@@ -1831,37 +1817,44 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [activeHookIdx,setActiveHookIdx]=useState(0)
   const [hookSections,setHookSections]=useState<Record<number,any[]>>({})
   const [generatingHooks,setGeneratingHooks]=useState(false)
+  const [quickBrief,setQuickBrief]=useState("")
   const [form,setForm]=useState({productId:"",awarenessStage:"problem_aware",contentType:"UGC",adLength:"30 seconds",customerAvatar:"",useAvatarId:"",painPoints:"",desires:"",objections:"",request:""})
   function setF(k:string,v:string){setForm(x=>({...x,[k]:v}))}
   const savedAvatars=(brand?.customer_avatars||[])
 
-  // Draft persistence — save/restore in-progress ad across tab switches
+  // Draft persistence
   useEffect(()=>{
-    try{
-      const saved=localStorage.getItem("adforge_draft")
-      if(saved){const d=JSON.parse(saved);if(d.sections?.length>0){setSections(d.sections);setGenMeta(d.genMeta||null);setVoiceoverUrl(d.voiceoverUrl||null);setVoiceoverVoice(d.voiceoverVoice||null);setMusicUrl(d.musicUrl||null);setMusicName(d.musicName||null);setSuggestedMood(d.suggestedMood||"Uplifting");if(d.form)setForm(d.form);if(d.hookVariations?.length>0)setHookVariations(d.hookVariations);if(d.selectedHooks)setSelectedHooks(d.selectedHooks)}}
-    }catch(e){}
+    try{const saved=localStorage.getItem("adforge_draft");if(saved){const d=JSON.parse(saved);if(d.sections?.length>0){setSections(d.sections);setGenMeta(d.genMeta||null);setVoiceoverUrl(d.voiceoverUrl||null);setVoiceoverVoice(d.voiceoverVoice||null);setMusicUrl(d.musicUrl||null);setMusicName(d.musicName||null);setSuggestedMood(d.suggestedMood||"Uplifting");if(d.form)setForm(d.form);if(d.hookVariations?.length>0)setHookVariations(d.hookVariations);if(d.selectedHooks)setSelectedHooks(d.selectedHooks)}}}catch(e){}
   },[])
   useEffect(()=>{
-    if(sections.length>0&&view==="review"){
-      try{localStorage.setItem("adforge_draft",JSON.stringify({sections,genMeta,voiceoverUrl,voiceoverVoice,musicUrl,musicName,suggestedMood,form,step,hookVariations,selectedHooks}))}catch(e){}
-    }
+    if(sections.length>0&&view==="review"){try{localStorage.setItem("adforge_draft",JSON.stringify({sections,genMeta,voiceoverUrl,voiceoverVoice,musicUrl,musicName,suggestedMood,form,step,hookVariations,selectedHooks}))}catch(e){}}
   },[sections,voiceoverUrl,musicUrl,step])
   function clearDraft(){try{localStorage.removeItem("adforge_draft")}catch(e){}}
 
   async function handleGen(){
-    setGenerating(true);setGenError("");setGenStatus("✍️ Writing script…")
+    setGenerating(true);setGenError("");setGenStatus("✍️ Writing script…");setHookScore(null)
     try{
       const prod=products.find((x:Product)=>String((x as any).id)===String(form.productId))||null
       const stage=STAGES.find(s=>s.value===form.awarenessStage)||STAGES[0]
       let ctx=`BRAND:\nName: ${brand.name||"Unknown"}\nDesc: ${brand.description||""}\nVoice: ${brand.voice||""}\nCustomer: ${brand.target_customer||""}\nReviews: ${brand.reviews||""}\n\n`
       if(prod)ctx+=`PRODUCT:\nName: ${prod.name}\nDesc: ${prod.description||""}\nBenefits: ${prod.benefits||""}\nClaims: ${prod.claims||""}\n\n`
-      const prompt=ctx+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
+      const quickBriefLine=quickBrief.trim()?`\nQUICK BRIEF: "${quickBrief.trim()}" — honour this above all other instructions.\n`:""
+      const prompt=ctx+quickBriefLine+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
       const raw=await callClaude([{role:"user",content:prompt}],2000)
       const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
       let secs=(data.sections||[]).map((s:any,i:number)=>({...s,id:Date.now()+i,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
       if(items.length>0){setGenStatus("🔍 Matching clips to sections…");secs=await matchClips(secs,items)}
       setSuggestedMood(data.suggested_music_mood||"Uplifting")
+      // Score the hook
+      const hookSec=secs.find((s:any)=>s.type==="HOOK")
+      if(hookSec?.spokenWords){
+        setGenStatus("🎯 Scoring hook quality…")
+        try{
+          const scoreRaw=await callClaude([{role:"user",content:`Score this HOOK for a direct response ad on a scale of 1-5.\nHook: "${hookSec.spokenWords}"\nBrand: ${brand.name||"Unknown"}, Product: ${prod?.name||"General"}\nScoring criteria: Does it name a specific pain or outcome? Does it create curiosity or urgency? Is it under 15 words? Does it feel like it speaks directly to the target customer?\nReturn ONLY JSON: {"score":4,"reason":"one sentence explanation"}`}],300)
+          const scoreData=JSON.parse(scoreRaw.replace(/```json|```/g,"").trim())
+          if(scoreData.score)setHookScore({score:scoreData.score,reason:scoreData.reason||""})
+        }catch(e){}
+      }
       setSections(secs);setGenMeta({form,productName:prod?.name||"General"});setView("review");setStep("script")
     }catch(e:any){setGenError(e.message||"Error generating script — please try again.")}
     setGenerating(false);setGenStatus("")
@@ -1874,7 +1867,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
 
     const libSummary=matchPool.map(item=>{
       const a=item.analysis||{}
-      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|label:"+(a.label||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(", ")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,80)+"|quality:"+(a.quality_score||"Medium")+"|type:"+item.type
+      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|hero:"+(a.is_hero?"YES":"no")+"|label:"+(a.label||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(", ")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,80)+"|quality:"+(a.quality_score||"Medium")+"|type:"+item.type
     }).join("\n")
 
     const sectionDesc=secs.map((s:any,i:number)=>{
@@ -1883,7 +1876,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
       return "Section "+i+" ["+s.type+"]: spoken=\""+words.substring(0,120)+"\" visual=\""+visual.substring(0,60)+"\""
     }).join("\n")
 
-    const prompt="You are an expert direct response video editor for DTC brands.\n\nAnalyse each script section and determine HOW MANY clips it needs to best tell the story visually.\n\nSCRIPT SECTIONS:\n"+sectionDesc+"\n\nCLIP LIBRARY ("+matchPool.length+" clips):\n"+libSummary+"\n\nRULES:\n1. Each section can use 1-4 clips depending on how many distinct visual moments exist in the spoken words\n2. A 30s ad should have roughly 8-15 total clips across all sections\n3. Match clips by VISUAL CONTENT — if script says yellow teeth, find a clip of yellow teeth\n4. Use clip tags, transcript, use_case to find best visual match\n5. NEVER use the same clip twice across the whole ad\n6. For each clip slot, provide 2 alternatives\n\nReturn ONLY valid JSON array — one entry per CLIP SLOT:\n[{\"section\":0,\"slot\":0,\"best_id\":\"clip_uuid\",\"alt_ids\":[\"alt1\",\"alt2\"],\"phrase\":\"specific phrase this clip covers\",\"reason\":\"why this clip matches\"},...]"
+    const prompt="You are an expert direct response video editor for DTC brands.\n\nAnalyse each script section and determine HOW MANY clips it needs to best tell the story visually.\n\nSECTION TYPE GUIDANCE:\n- HOOK: Short punchy clip (under 5s), high energy, pattern interrupt, grabs attention immediately\n- PROBLEM: Relatable struggle, before-state, emotional pain point demonstration\n- AGITATE: Amplifying frustration, contrast, before/after comparison\n- SOLUTION: Clear product demo, benefit in action, transformation moment\n- SOCIAL PROOF: Testimonial clip, real person reaction, user review\n- CTA: Urgency, product shot, discount reveal, strong call to action\n- BODY: Supporting lifestyle, product in use, general visual enhancement\n\nSCRIPT SECTIONS:\n"+sectionDesc+"\n\nCLIP LIBRARY ("+matchPool.length+" clips):\n"+libSummary+"\n\nRULES:\n1. Each section can use 1-4 clips depending on how many distinct visual moments exist in the spoken words\n2. A 30s ad should have roughly 8-15 total clips across all sections\n3. Match clips by VISUAL CONTENT — if script says yellow teeth, find a clip of yellow teeth\n4. Use clip tags, transcript, use_case AND clip_role to find best visual match\n5. NEVER use the same clip twice across the whole ad\n6. For each clip slot, provide 2 alternatives\n7. Prioritise clips whose clip_role matches the section type\n\nReturn ONLY valid JSON array — one entry per CLIP SLOT:\n[{\"section\":0,\"slot\":0,\"best_id\":\"clip_uuid\",\"alt_ids\":[\"alt1\",\"alt2\"],\"phrase\":\"specific phrase this clip covers\",\"reason\":\"why this clip matches\"},...]"
 
     try{
       const raw=await callClaude([{role:"user",content:prompt}],2000)
@@ -1991,7 +1984,7 @@ Return ONLY valid JSON:
       ...bodyBections
     ])
     setHookVariations([originalVariation,...aiVariations])
-  }catch(e:any){setGenError(e.message||"Failed to generate hook variations — try again")}
+  }catch(e:any){setGenError(e.message||"Failed to generate hook variations")}
   setGeneratingHooks(false)
 }
 
@@ -2032,7 +2025,7 @@ Return ONLY valid JSON:
       <Btn onClick={()=>setView("chooseMode")} style={{background:C.accent,color:"#fff"}}>+ Create New Ad</Btn>
     </div>
     {sections.length>0&&<div style={{background:C.accentSoft,border:"1.5px solid "+C.accent,borderRadius:12,padding:"14px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:12}}>
-      <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:C.accent}}>📝 Draft in progress</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>You have an unsaved ad with {sections.length} sections.</div></div>
+      <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:C.accent}}>📝 Draft in progress — {sections.length} sections</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>You left mid-flow. Resume where you left off.</div></div>
       <Btn onClick={()=>{setView("review");setStep("script")}} style={{background:C.accent,color:"#fff",fontSize:12,padding:"7px 14px"}}>Resume →</Btn>
       <Btn onClick={()=>{setSections([]);setGenMeta(null);setVoiceoverUrl(null);setMusicUrl(null);setHookVariations([]);clearDraft()}} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"7px 14px"}}>Discard</Btn>
     </div>}
@@ -2060,7 +2053,11 @@ Return ONLY valid JSON:
   if(view==="generate")return<div style={{maxWidth:740,margin:"0 auto",padding:28}}>
     <button onClick={()=>setView("chooseMode")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back</button>
     <STitle size={22}>New Script</STitle>
-    <Card style={{marginBottom:14}}><STitle size={14} mb={10}>Quick Request (optional)</STitle><Input textarea value={form.request} onChange={(e:any)=>setF("request",e.target.value)} placeholder={'"30s UGC ad for our serum targeting women with dry skin"'} rows={2}/></Card>
+    <Card style={{marginBottom:14,background:"#F0FDF4",border:"1.5px solid #86EFAC"}}>
+      <div style={{fontWeight:700,fontSize:13,color:"#15803D",marginBottom:6}}>⚡ Quick brief</div>
+      <Input textarea value={quickBrief} onChange={(e:any)=>setQuickBrief(e.target.value)} placeholder={'"30s UGC ad for Sarah, 34, dry skin, problem-aware — mention the new serum"'} rows={2}/>
+      <div style={{fontSize:11,color:"#15803D",marginTop:6}}>Describe what you want in plain English — AI will honour this above all parameters below.</div>
+    </Card>
     <Card style={{marginBottom:14}}>
       <STitle size={14} mb={14}>Parameters</STitle>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
@@ -2107,6 +2104,12 @@ Return ONLY valid JSON:
           </div>
         </div>
         <div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,marginBottom:16}}>✏️ Review and edit your script below. Use "Generate 3 Hook Variations" to create testable hook options.</div>
+        {hookScore&&<div style={{background:hookScore.score>=4?"#F0FDF4":hookScore.score>=3?"#FFFBEB":"#FEF2F2",border:"1.5px solid "+(hookScore.score>=4?"#86EFAC":hookScore.score>=3?"#FCD34D":"#FECACA"),borderRadius:10,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{display:"flex",gap:3}}>{[1,2,3,4,5].map(i=><span key={i} style={{fontSize:14,color:i<=hookScore.score?"#D97706":"#E5E7EB"}}>★</span>)}</div>
+          <div style={{flex:1}}><span style={{fontWeight:700,fontSize:13,color:hookScore.score>=4?"#15803D":hookScore.score>=3?"#92400E":"#DC2626"}}>Hook score {hookScore.score}/5 — </span><span style={{fontSize:13,color:C.muted}}>{hookScore.reason}</span></div>
+          {hookScore.score<4&&<Btn onClick={generateHookVariations} disabled={generatingHooks} style={{background:C.accent,color:"#fff",fontSize:11,padding:"5px 10px"}}>{generatingHooks?"…":"Improve →"}</Btn>}
+        </div>}
+        {genError&&<div style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#DC2626",marginBottom:16}}>⚠️ {genError}</div>}
 
         {/* Hook variations */}
         {hookVariations.length>0&&<div style={{marginBottom:20}}>
@@ -2153,6 +2156,7 @@ Return ONLY valid JSON:
       {step==="audio"&&<div style={{maxWidth:640,margin:"0 auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <button onClick={()=>setStep("script")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Back to Script</button>
+          <div style={{fontSize:10,color:C.muted}}>hooks: {hookVariations.length} selected: {selectedHooks.join(",")}</div>
           <Btn onClick={()=>setStep("clips")} style={{background:C.accent,color:"#fff"}}>Next: Match Clips →</Btn>
         </div>
 
@@ -2229,7 +2233,7 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
         </div>
         {autoCount>0&&<div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:13,color:"#15803D",fontWeight:600}}>✦ AI auto-selected {autoCount} clip{autoCount!==1?"s":""} — swap any below.</div>}
         <Card style={{padding:0,overflow:"hidden",marginBottom:20}}>
-          <ScriptTable sections={sections} onChange={(s:any[])=>{setSections(s);setHookSections(prev=>({...prev,[activeHookIdx]:s}))}} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} brandVoice={brand.voice} voiceoverUrl={voiceoverUrl}/>
+          <ScriptTable sections={sections} onChange={(s:any[])=>{setSections(s);setHookSections(prev=>({...prev,[activeHookIdx]:s}))}} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} voiceoverUrl={voiceoverUrl}/>
         </Card>
         <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl}/>
       </>}
@@ -2364,7 +2368,9 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
     </div>}
 
     {renderStatus==="failed"&&<div>
-      <div style={{background:"#ef444411",border:"1px solid #ef444433",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#ef4444",marginBottom:12}}>❌ Render failed. Try again.</div>
+      <div style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#DC2626",marginBottom:8}}>❌ Render failed.</div>
+      {(ad as any).render_error&&<div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:8,padding:"8px 12px",fontSize:11,color:C.muted,fontFamily:"monospace",marginBottom:12,wordBreak:"break-all" as const}}>{(ad as any).render_error}</div>}
+      {!(ad as any).render_error&&<div style={{fontSize:12,color:C.muted,marginBottom:12}}>Common causes: missing clips, expired video URLs, or codec issues. Try re-matching clips and re-rendering.</div>}
       <Btn onClick={startRender} style={{background:C.accent,color:"#fff",width:"100%",padding:12}}>🔄 Retry Render</Btn>
     </div>}
   </div>
@@ -2480,8 +2486,9 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
     <div style={{padding:"10px 12px",flex:1,display:"flex",flexDirection:"column",gap:5}}>
       <div style={{fontWeight:700,fontSize:12,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{ad.title}</div>
       <div style={{display:"flex",gap:2}} onMouseLeave={()=>setHoverRating(0)}>
-        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={e=>{e.stopPropagation();setHoverRating(star)}} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:13,color:(hoverRating||rating)>=star?"#f59e0b":"#ffffff22",transition:"color 0.1s"}}>★</span>)}
+        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={e=>{e.stopPropagation();setHoverRating(star)}} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:13,color:(hoverRating||rating)>=star?"#f59e0b":"rgba(0,0,0,0.15)",transition:"color 0.1s"}}>★</span>)}
       </div>
+      {ad.metadata?.hook_rate&&<div style={{fontSize:9,color:C.green,fontWeight:700}}>📊 Hook {ad.metadata.hook_rate}% · CPA ${ad.metadata.cpa||"—"}</div>}
       <div style={{fontSize:10,color:C.muted}}>{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}{ad.metadata?.adLength?` · ${ad.metadata.adLength}`:""}</div>
       {(ad as any).notes&&<div style={{fontSize:10,color:C.muted,fontStyle:"italic",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>📝 {(ad as any).notes}</div>}
     </div>
@@ -2501,9 +2508,12 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
   const [selectedIds,setSelectedIds]=useState<string[]>([])
   const [deleting,setDeleting]=useState(false)
   const [autoRendering,setAutoRendering]=useState(false)
+  const [perfModalId,setPerfModalId]=useState<string|null>(null)
+  const [perfForm,setPerfForm]=useState({hook_rate:"",ctr:"",cpa:"",roas:"",spend:"",notes:""})
   const pollRef=useRef<any>(null)
 
   const previewAd=previewId?ads.find(a=>a.id===previewId):null
+  const perfAd=perfModalId?ads.find(a=>a.id===perfModalId):null
 
   // Auto-poll render status every 15 seconds
   useEffect(()=>{
@@ -2526,6 +2536,21 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
   async function deleteAd(id:string){await supabase.from("forged_ads").delete().eq("id",id);onRefresh()}
   async function markComplete(id:string){await supabase.from("forged_ads").update({status:"complete",updated_at:new Date().toISOString()}).eq("id",id);onRefresh()}
   async function saveNotes(id:string){await supabase.from("forged_ads").update({notes:notesVal}).eq("id",id);setEditingNotes(null);onRefresh()}
+
+  async function cloneAd(ad:ForgedAd){
+    const{id:_id,created_at:_ca,updated_at:_ua,render_id:_ri,render_url:_ru,render_status:_rs,...rest}=ad as any
+    const{data}=await supabase.from("forged_ads").insert({...rest,title:ad.title+" (copy)",status:"draft",updated_at:new Date().toISOString()}).select().single()
+    if(data)onRefresh()
+  }
+
+  async function savePerformance(){
+    if(!perfModalId)return
+    const ad=ads.find(a=>a.id===perfModalId)
+    if(!ad)return
+    const updatedMeta={...ad.metadata,...Object.fromEntries(Object.entries(perfForm).filter(([,v])=>v!==""))}
+    await supabase.from("forged_ads").update({metadata:updatedMeta,notes:perfForm.notes||ad.notes}).eq("id",perfModalId)
+    setPerfModalId(null);onRefresh()
+  }
 
   async function bulkDelete(){
     setDeleting(true)
@@ -2621,7 +2646,9 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
                 {(previewAd as any).notes?`📝 ${(previewAd as any).notes}`:"+ Add notes"}
               </div>}
           </div>
-          <div style={{display:"flex",gap:8,flexShrink:0}}>
+          <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap"}}>
+            <Btn onClick={()=>{cloneAd(previewAd);setPreviewId(null)}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px"}}>⎘ Clone</Btn>
+            <Btn onClick={()=>{setPerfModalId(previewAd.id);setPerfForm({hook_rate:previewAd.metadata?.hook_rate||"",ctr:previewAd.metadata?.ctr||"",cpa:previewAd.metadata?.cpa||"",roas:previewAd.metadata?.roas||"",spend:previewAd.metadata?.spend||"",notes:(previewAd as any).notes||""})}} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontSize:12,padding:"6px 12px"}}>📊 Log Results</Btn>
             {previewAd.status==="draft"&&<Btn onClick={()=>{markComplete(previewAd.id);setPreviewId(null)}} style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
             <Btn onClick={()=>{deleteAd(previewAd.id);setPreviewId(null)}} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",fontSize:12,padding:"6px 12px"}}>Delete</Btn>
             <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
@@ -2633,6 +2660,26 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
           {previewAd.music_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls style={{width:"100%",height:36}}/></div>}
         </div>
         <ForgedAdDownload ad={previewAd} onRefresh={onRefresh}/>
+      </div>
+    </div>}
+
+    {/* Performance tracking modal */}
+    {perfAd&&<div onClick={()=>setPerfModalId(null)} style={{position:"fixed",inset:0,background:"#000000ee",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:16,padding:24,maxWidth:480,width:"100%"}}>
+        <div style={{fontWeight:700,fontSize:17,marginBottom:4}}>📊 Log Results — {perfAd.title}</div>
+        <div style={{fontSize:13,color:C.muted,marginBottom:20}}>Record real performance data to track what's working.</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+          <div><Label>Hook Rate (%)</Label><Input value={perfForm.hook_rate} onChange={(e:any)=>setPerfForm(p=>({...p,hook_rate:e.target.value}))} placeholder="e.g. 45"/></div>
+          <div><Label>CTR (%)</Label><Input value={perfForm.ctr} onChange={(e:any)=>setPerfForm(p=>({...p,ctr:e.target.value}))} placeholder="e.g. 2.1"/></div>
+          <div><Label>CPA ($)</Label><Input value={perfForm.cpa} onChange={(e:any)=>setPerfForm(p=>({...p,cpa:e.target.value}))} placeholder="e.g. 24.50"/></div>
+          <div><Label>ROAS</Label><Input value={perfForm.roas} onChange={(e:any)=>setPerfForm(p=>({...p,roas:e.target.value}))} placeholder="e.g. 3.2"/></div>
+          <div><Label>Spend ($)</Label><Input value={perfForm.spend} onChange={(e:any)=>setPerfForm(p=>({...p,spend:e.target.value}))} placeholder="e.g. 500"/></div>
+        </div>
+        <div style={{marginBottom:16}}><Label>Notes</Label><Input textarea value={perfForm.notes} onChange={(e:any)=>setPerfForm(p=>({...p,notes:e.target.value}))} rows={2} placeholder="What worked? What to test next?"/></div>
+        <div style={{display:"flex",gap:10}}>
+          <Btn onClick={savePerformance} style={{background:C.green,color:"#fff",fontWeight:700,flex:1}}>Save Results</Btn>
+          <Btn onClick={()=>setPerfModalId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn>
+        </div>
       </div>
     </div>}
 
@@ -2878,7 +2925,7 @@ export default function AdForgeApp(){
     </div>
     {/* Main content */}
     <div style={{marginLeft:220,flex:1,minHeight:"100vh",background:C.bg}}>
-      {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} forgedAds={forgedAds} onGoToBrand={()=>setTab("brand")}/>}
+      {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} onGoToBrand={()=>setTab("brand")}/>}
       {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode}/>}
       {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} onRefresh={loadData}/>}
       {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
