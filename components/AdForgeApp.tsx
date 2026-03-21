@@ -1819,8 +1819,8 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
       const stage=STAGES.find(s=>s.value===form.awarenessStage)||STAGES[0]
 
       // Step 1.2: Build library snapshot — hero clips, key quotes, available roles
-      const readyItems=items.filter(i=>i.mux_status==="ready"&&i.mux_playback_id)
-      const libSnapshot=readyItems.length>0?`\nLIBRARY SNAPSHOT (what clips actually exist to cut to):\n`+readyItems.slice(0,40).map(i=>{
+      const readyItems=items.filter((i:Item)=>i.mux_status==="ready"&&i.mux_playback_id)
+      const libSnapshot=readyItems.length>0?`\nLIBRARY SNAPSHOT (what clips actually exist to cut to):\n`+readyItems.slice(0,40).map((i:Item)=>{
         const a=i.analysis||{}
         return `- role:${a.clip_role||i.clip_role||"unset"} | type:${a.content_type||i.type} | tags:${(a.scene_tags||[]).slice(0,4).join(",")} | quote:"${(a.key_quotes||[])[0]||""}" | hero:${a.is_hero?"YES":"no"}`
       }).join("\n"):""
@@ -1988,13 +1988,13 @@ async function generateHookVariations(){
 
     // Step 1.3: Mine real quotes from library clips as hook candidates
     const realQuotes=items
-      .filter(i=>i.mux_status==="ready"&&((i.analysis?.key_quotes?.length>0)||(i.analysis?.ad_potential==="High")))
-      .flatMap(i=>(i.analysis?.key_quotes||[]).map((q:string)=>({quote:q,creator:i.creator||"",clip_id:i.id})))
-      .filter(q=>q.quote.trim().length>10&&q.quote.trim().length<120)
+      .filter((i:Item)=>i.mux_status==="ready"&&((i.analysis?.key_quotes?.length>0)||(i.analysis?.ad_potential==="High")))
+      .flatMap((i:Item)=>(i.analysis?.key_quotes||[]).map((q:string)=>({quote:q,creator:i.creator||"",clip_id:i.id})))
+      .filter((q:{quote:string,creator:string,clip_id:string})=>q.quote.trim().length>10&&q.quote.trim().length<120)
       .slice(0,6)
 
     const realQuotesBlock=realQuotes.length>0
-      ?`\nREAL CREATOR QUOTES FROM YOUR LIBRARY (these are authentic — consider using one as a hook basis):\n`+realQuotes.map((q,i)=>`${i+1}. "${q.quote}" — ${q.creator}`).join("\n")+"\n"
+      ?`\nREAL CREATOR QUOTES FROM YOUR LIBRARY (these are authentic — consider using one as a hook basis):\n`+realQuotes.map((q:{quote:string,creator:string},i:number)=>`${i+1}. "${q.quote}" — ${q.creator}`).join("\n")+"\n"
       :""
 
     const prompt=`Write 4 different HOOK variations for a direct response video ad.
