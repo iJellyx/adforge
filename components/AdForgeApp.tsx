@@ -2432,7 +2432,7 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
   </div>
 }
 
-function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefresh:()=>void}){
+function ForgedAdsTab({ads,items,brand,onRefresh}:{ads:ForgedAd[],items:Item[],brand:BrandProfile,onRefresh:()=>void}){
   const supabase=createClient()
   const [previewId,setPreviewId]=useState<string|null>(null)
   const [search,setSearch]=useState("")
@@ -2445,6 +2445,7 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
   const [selectedIds,setSelectedIds]=useState<string[]>([])
   const [deleting,setDeleting]=useState(false)
   const [autoRendering,setAutoRendering]=useState(false)
+  const [briefSections,setBriefSections]=useState<any[]|null>(null)
   const pollRef=useRef<any>(null)
 
   const previewAd=previewId?ads.find(a=>a.id===previewId):null
@@ -2543,6 +2544,9 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
       {[...new Set(ads.flatMap(ad=>[ad.metadata?.contentType,ad.metadata?.awarenessStage&&STAGES.find(s=>s.value===ad.metadata?.awarenessStage)?.label,ad.metadata?.productName&&ad.metadata.productName!=="General"?ad.metadata.productName:null].filter(Boolean)))].map((tag:any)=><button key={tag} onClick={()=>setActiveTag(activeTag===tag?null:tag)} style={{background:activeTag===tag?C.accent:C.surface,color:activeTag===tag?"#fff":C.muted,border:"1px solid "+(activeTag===tag?C.accent:C.border),borderRadius:99,padding:"4px 11px",cursor:"pointer",fontSize:11,fontWeight:600}}>{tag}</button>)}
     </div>}
 
+    {/* Brief modal */}
+    {briefSections!==null&&<CreatorBriefModal brand={brand} sections={briefSections} onClose={()=>setBriefSections(null)}/>}
+
     {/* Preview modal */}
     {previewAd&&<div onClick={()=>setPreviewId(null)} style={{position:"fixed",inset:0,background:"#000000ee",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:16,padding:24,maxWidth:900,width:"100%",marginTop:20}}>
@@ -2568,6 +2572,7 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
           </div>
           <div style={{display:"flex",gap:8,flexShrink:0}}>
             {previewAd.status==="draft"&&<Btn onClick={()=>{markComplete(previewAd.id);setPreviewId(null)}} style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
+            <Btn onClick={()=>{setBriefSections(previewAd.sections||[])}} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontSize:12,padding:"6px 12px"}}>📋 Send Brief</Btn>
             <Btn onClick={()=>{deleteAd(previewAd.id);setPreviewId(null)}} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",fontSize:12,padding:"6px 12px"}}>Delete</Btn>
             <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
           </div>
@@ -2737,6 +2742,142 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
   </div>
 }
 
+// ── Creator Brief Modal ───────────────────────────────────────────────────
+function CreatorBriefModal({brand,sections,onClose}:{brand:BrandProfile,sections?:any[],onClose:()=>void}){
+  const supabase=createClient()
+  const [saving,setSaving]=useState(false)
+  const [shareUrl,setShareUrl]=useState("")
+  const [copied,setCopied]=useState(false)
+  const [productName,setProductName]=useState("")
+
+  const defaultHooks=(sections||[]).filter((s:any)=>s.type==="HOOK"&&s.spokenWords).map((s:any)=>s.spokenWords)
+  const defaultScripts=(sections||[]).filter((s:any)=>s.spokenWords?.trim()).map((s:any)=>({type:s.type==="HOOK"?"hook":"voiceover",label:s.type,words:s.spokenWords}))
+
+  const [hooks,setHooks]=useState<string[]>(defaultHooks.length>0?defaultHooks:[""])
+  const [scripts,setScripts]=useState<{type:string,label:string,words:string}[]>(defaultScripts.length>0?defaultScripts:[{type:"voiceover",label:"",words:""}])
+  const [broll,setBroll]=useState<string[]>([""])
+  const [editingStyle,setEditingStyle]=useState("")
+  const [editingRefs,setEditingRefs]=useState("")
+  const [editingNotes,setEditingNotes]=useState("")
+  const [additionalNotes,setAdditionalNotes]=useState("")
+
+  function updHook(i:number,v:string){setHooks(h=>h.map((x,j)=>j===i?v:x))}
+  function updScript(i:number,field:string,v:string){setScripts(s=>s.map((x,j)=>j===i?{...x,[field]:v}:x))}
+  function updBroll(i:number,v:string){setBroll(b=>b.map((x,j)=>j===i?v:x))}
+
+  async function generateBrief(){
+    setSaving(true)
+    try{
+      const{data,error}=await supabase.from("creator_briefs").insert({
+        brand_name:brand.name||"",product_name:productName,
+        hooks:hooks.filter(h=>h.trim()),scripts:scripts.filter(s=>s.words.trim()),
+        broll_shots:broll.filter(b=>b.trim()),
+        editing_style:editingStyle.trim()||null,editing_references:editingRefs.trim()||null,
+        editing_notes:editingNotes.trim()||null,additional_notes:additionalNotes.trim()||null,
+      }).select("share_token").single()
+      if(error)throw new Error(error.message)
+      setShareUrl(`${window.location.origin}/brief/${data.share_token}`)
+    }catch(e:any){alert("Failed to create brief: "+e.message)}
+    setSaving(false)
+  }
+
+  async function copyUrl(){await navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),2000)}
+
+  const typeColors:Record<string,{bg:string,color:string}>={voiceover:{bg:"#DBEAFE",color:"#1D4ED8"},hook:{bg:"#FEF3C7",color:"#92400E"},"talking head":{bg:"#D1FAE5",color:"#065F46"}}
+
+  return<div onClick={onClose} style={{position:"fixed",inset:0,background:"#000000dd",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:28,maxWidth:700,width:"100%",marginTop:20,marginBottom:40}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+        <div><STitle size={20} mb={2}>📋 Creator Brief</STitle><div style={{fontSize:13,color:C.muted}}>Everything a creator needs to record your ad</div></div>
+        <Btn onClick={onClose} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕</Btn>
+      </div>
+
+      {shareUrl?<>
+        <div style={{background:"#F0FDF4",border:"2px solid #86EFAC",borderRadius:14,padding:24,textAlign:"center",marginBottom:20}}>
+          <div style={{fontSize:32,marginBottom:12}}>🔗</div>
+          <div style={{fontWeight:700,fontSize:16,color:"#15803D",marginBottom:8}}>Brief ready to share!</div>
+          <div style={{fontSize:13,color:"#15803D",marginBottom:16}}>Send this URL to your creator — no login required</div>
+          <div style={{background:"#fff",border:"1.5px solid #86EFAC",borderRadius:10,padding:"12px 16px",fontFamily:"monospace",fontSize:13,wordBreak:"break-all" as const,marginBottom:14,textAlign:"left" as const,color:C.text}}>{shareUrl}</div>
+          <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+            <Btn onClick={copyUrl} style={{background:copied?"#22c55e":C.accent,color:"#fff",fontWeight:700,minWidth:140}}>{copied?"✓ Copied!":"Copy URL"}</Btn>
+            <a href={shareUrl} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}><Btn style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44"}}>Preview →</Btn></a>
+            <Btn onClick={()=>setShareUrl("")} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Edit brief</Btn>
+          </div>
+        </div>
+        <Btn onClick={onClose} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,width:"100%"}}>Close</Btn>
+      </>:<>
+        <div style={{marginBottom:20,display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div><Label>Brand name</Label><Input value={brand.name||""} onChange={()=>{}} style={{background:"#F9FAFB",color:C.muted}}/></div>
+          <div><Label>Product (optional)</Label><Input value={productName} onChange={(e:any)=>setProductName(e.target.value)} placeholder="e.g. Vitamin C Serum"/></div>
+        </div>
+
+        {/* Hooks */}
+        <div style={{marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <Label>🎣 Hooks to record</Label>
+            <Btn onClick={()=>setHooks(h=>[...h,""])} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:11,padding:"4px 10px"}}>+ Add</Btn>
+          </div>
+          {hooks.map((h,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:8}}>
+            <div style={{width:22,height:22,borderRadius:99,background:C.accentSoft,color:C.accent,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:11}}>{i+1}</div>
+            <Input value={h} onChange={(e:any)=>updHook(i,e.target.value)} placeholder={`Hook ${i+1} — exact opening words`} style={{flex:1}}/>
+            {hooks.length>1&&<button onClick={()=>setHooks(h=>h.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:18,flexShrink:0}}>×</button>}
+          </div>)}
+        </div>
+
+        {/* Scripts */}
+        <div style={{marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <Label>📝 Scripts to record</Label>
+            <Btn onClick={()=>setScripts(s=>[...s,{type:"voiceover",label:"",words:""}])} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:11,padding:"4px 10px"}}>+ Add</Btn>
+          </div>
+          {scripts.map((s,i)=><div key={i} style={{border:"1.5px solid "+C.border,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+            <div style={{display:"flex",gap:10,marginBottom:10,alignItems:"center",flexWrap:"wrap"}}>
+              <select value={s.type} onChange={e=>updScript(i,"type",e.target.value)} style={{background:typeColors[s.type]?.bg||C.surface,border:"none",borderRadius:99,padding:"4px 10px",color:typeColors[s.type]?.color||C.text,fontSize:11,fontWeight:700,cursor:"pointer",outline:"none"}}>
+                <option value="voiceover">🎙️ Voiceover</option>
+                <option value="talking head">🎥 Talking Head</option>
+                <option value="hook">🎣 Hook</option>
+              </select>
+              <Input value={s.label} onChange={(e:any)=>updScript(i,"label",e.target.value)} placeholder="Label (optional)" style={{flex:1,minWidth:100}}/>
+              {scripts.length>1&&<button onClick={()=>setScripts(s=>s.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:18}}>×</button>}
+            </div>
+            <Input textarea value={s.words} onChange={(e:any)=>updScript(i,"words",e.target.value)} placeholder="Exact words to say…" rows={3}/>
+          </div>)}
+        </div>
+
+        {/* B-roll */}
+        <div style={{marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <Label>🎬 B-roll shots to capture</Label>
+            <Btn onClick={()=>setBroll(b=>[...b,""])} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:11,padding:"4px 10px"}}>+ Add</Btn>
+          </div>
+          {broll.map((b,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:8}}>
+            <div style={{width:22,height:22,borderRadius:99,background:"#F0FDF4",color:"#15803D",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:11}}>{i+1}</div>
+            <Input value={b} onChange={(e:any)=>updBroll(i,e.target.value)} placeholder={`Shot ${i+1} — describe what to film`} style={{flex:1}}/>
+            {broll.length>1&&<button onClick={()=>setBroll(b=>b.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:18,flexShrink:0}}>×</button>}
+          </div>)}
+        </div>
+
+        {/* Editing style */}
+        <div style={{border:"1px solid "+C.border,borderRadius:14,padding:16,marginBottom:20}}>
+          <Label>✂️ Editing style & references</Label>
+          <div style={{marginBottom:10}}><div style={{fontSize:12,color:C.muted,marginBottom:6}}>Style</div><Input textarea value={editingStyle} onChange={(e:any)=>setEditingStyle(e.target.value)} placeholder="e.g. Fast cuts, bold text overlays, raw UGC feel, no music…" rows={2}/></div>
+          <div style={{marginBottom:10}}><div style={{fontSize:12,color:C.muted,marginBottom:6}}>Reference links (one per line)</div><Input textarea value={editingRefs} onChange={(e:any)=>setEditingRefs(e.target.value)} placeholder={"https://tiktok.com/...\nhttps://instagram.com/..."} rows={3}/></div>
+          <div><div style={{fontSize:12,color:C.muted,marginBottom:6}}>Editing notes</div><Input textarea value={editingNotes} onChange={(e:any)=>setEditingNotes(e.target.value)} placeholder="e.g. Captions on every word, product close-up at end, keep it under 30s…" rows={2}/></div>
+        </div>
+
+        <div style={{marginBottom:24}}>
+          <Label>💬 Additional notes</Label>
+          <Input textarea value={additionalNotes} onChange={(e:any)=>setAdditionalNotes(e.target.value)} placeholder="Deadlines, deliverables, file format, platform specs…" rows={3}/>
+        </div>
+
+        <Btn onClick={generateBrief} disabled={saving} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:16,borderRadius:12,fontWeight:700}}>
+          {saving?"Generating link…":"🔗 Generate Shareable Brief"}
+        </Btn>
+      </>}
+    </div>
+  </div>
+}
+
 // ── Winning Ads Tab ───────────────────────────────────────────────────────
 function WinningAdsTab({brand,setBrand,products,items,onSaveForgedAd,onGoToForged}:any){
   const supabase=createClient()
@@ -2752,6 +2893,7 @@ function WinningAdsTab({brand,setBrand,products,items,onSaveForgedAd,onGoToForge
   const [analysis,setAnalysis]=useState<any>(null)
   const [templateSections,setTemplateSections]=useState<any[]>([])
   const [selectedPatternIdx,setSelectedPatternIdx]=useState<number|null>(null)
+  const [briefSections,setBriefSections]=useState<any[]|null>(null)
   const fileRef=useRef<HTMLInputElement>(null)
   const patterns:any[]=brand?.winning_patterns||[]
 
@@ -2765,7 +2907,6 @@ function WinningAdsTab({brand,setBrand,products,items,onSaveForgedAd,onGoToForge
     if(!file||!title.trim()){setError("Add a title and select a video first.");return}
     setError("");setView("processing");setProgress(5);setProgressMsg("Uploading video…")
     try{
-      // Upload via existing pipeline
       const res=await fetch("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,contentType:file.type,metadata:{title:title.trim(),creator:"winning_ad",autoClip:false}})})
       const{itemId,uploadUrl,error:uploadErr}=await res.json()
       if(uploadErr)throw new Error(uploadErr)
@@ -2776,170 +2917,62 @@ function WinningAdsTab({brand,setBrand,products,items,onSaveForgedAd,onGoToForge
         xhr.open("PUT",uploadUrl);xhr.setRequestHeader("Content-Type",file.type);xhr.send(file)
       })
       setProgress(40);setProgressMsg("Processing video — waiting for transcript…")
-
-      // Poll until ready with transcript
-      let transcript=""
-      let duration=0
+      let transcript="";let duration=0
       for(let attempt=0;attempt<40;attempt++){
         await new Promise(r=>setTimeout(r,4000))
-        const{data}=await supabase.from("items").select("mux_status,transcript,duration_seconds,mux_playback_id").eq("id",itemId).single()
-        if(data?.mux_status==="ready"&&data?.transcript){
-          transcript=data.transcript;duration=data.duration_seconds||0;break
-        }
-        setProgress(40+Math.min(attempt*1.5,20))
-        setProgressMsg(`Processing video… (${Math.round(attempt/40*100)}%)`)
+        const{data}=await supabase.from("items").select("mux_status,transcript,duration_seconds").eq("id",itemId).single()
+        if(data?.mux_status==="ready"&&data?.transcript){transcript=data.transcript;duration=data.duration_seconds||0;break}
+        setProgress(40+Math.min(attempt*1.5,20));setProgressMsg(`Processing… ${Math.round(attempt/40*100)}%`)
       }
-      if(!transcript){
-        // Fallback — analyse without transcript using title/context
-        transcript=`[No transcript — user context: "${context||title}"]`
-      }
-
-      setProgress(62);setProgressMsg("Analysing structure & patterns…")
-
+      if(!transcript)transcript=`[No transcript — context: "${context||title}"]`
+      setProgress(62);setProgressMsg("Analysing creative blueprint…")
       const prod=products.find((x:any)=>String(x.id)===String(productId))||null
-
-      // Step 1: Analyse the winning ad
-      const analysisPrompt=`You are an expert direct response ad analyst. Analyse this winning ad transcript and extract its creative blueprint.
-
-TRANSCRIPT: "${transcript.substring(0,1500)}"
-DURATION: ${duration}s
-USER CONTEXT (why it worked): "${context||"Not provided"}"
-
-Extract:
-1. Hook: exact opening words, hook type (question/bold statement/pain point/curiosity/social proof), what makes it work
-2. Section structure: list each narrative beat with estimated start time and duration in seconds
-3. Language patterns: specific phrases, power words, sentence structures that made it convert
-4. Visual pacing: estimated cuts per section, energy arc (does it build, stay flat, peak at end?)
-5. Creator brief: plain-English instructions to give a creator to replicate this style
-
-Return ONLY valid JSON:
-{
-  "hook_type": "Pain Point",
-  "hook_words": "exact opening words",
-  "hook_analysis": "why this hook works",
-  "section_structure": [{"beat":"HOOK","start_s":0,"duration_s":3,"description":"what happens"}],
-  "language_patterns": ["pattern 1","pattern 2"],
-  "power_words": ["word1","word2"],
-  "energy_arc": "builds from calm to urgent",
-  "avg_cut_frequency": "every 2-3s",
-  "creator_brief": "plain English brief",
-  "total_duration_s": ${duration}
-}`
-
-      const analysisRaw=await callClaude([{role:"user",content:analysisPrompt}],1500)
+      const analysisRaw=await callClaude([{role:"user",content:`Analyse this winning ad transcript and extract the creative blueprint.\n\nTRANSCRIPT: "${transcript.substring(0,1500)}"\nDURATION: ${duration}s\nCONTEXT: "${context||"Not provided"}"\n\nReturn ONLY valid JSON:\n{"hook_type":"Pain Point","hook_words":"exact opening","hook_analysis":"why it works","section_structure":[{"beat":"HOOK","start_s":0,"duration_s":3,"description":"what happens"}],"language_patterns":["pattern"],"power_words":["word"],"energy_arc":"description","avg_cut_frequency":"every 2-3s","creator_brief":"plain English brief for creator","total_duration_s":${duration}}`}],1500)
       const analysisData=JSON.parse(analysisRaw.replace(/```json|```/g,"").trim())
       setAnalysis(analysisData)
-      setProgress(78);setProgressMsg("Generating brand-adapted script template…")
-
-      // Step 2: Rewrite as brand-adapted template script with matching clips
+      setProgress(78);setProgressMsg("Generating brand-adapted script…")
       const brandCtx=`BRAND: ${brand.name||"Unknown"}\nVoice: ${brand.voice||""}\nCustomer: ${brand.target_customer||""}`
       const prodCtx=prod?`PRODUCT: ${prod.name}\nBenefits: ${prod.benefits||""}\nClaims: ${prod.claims||""}`:""
-      const structureDesc=analysisData.section_structure.map((s:any)=>`${s.beat} (${s.duration_s}s): ${s.description}`).join("\n")
-
-      const templatePrompt=`You are a DTC ad copywriter. Rewrite this winning ad structure for a new brand, adapting every word to their product while preserving the exact structural blueprint.
-
-${brandCtx}
-${prodCtx}
-
-WINNING AD BLUEPRINT TO REPLICATE:
-Hook type: ${analysisData.hook_type}
-Hook approach: ${analysisData.hook_analysis}
-Structure:
-${structureDesc}
-Language patterns to preserve: ${(analysisData.language_patterns||[]).join(", ")}
-Energy arc: ${analysisData.energy_arc}
-
-RULES:
-- Preserve the EXACT section sequence and timing proportions
-- Use the same hook technique but adapted to this brand's specific pain/product
-- Match the language patterns and sentence structures
-- Keep the same energy arc
-- Each section's spokenWords should be ready to record as-is
-
-Return ONLY valid JSON:
-{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is shown","durationEstimate":"${analysisData.section_structure[0]?.duration_s||3}s"}],"suggested_music_mood":"Uplifting"}`
-
-      const templateRaw=await callClaude([{role:"user",content:templatePrompt}],2000)
+      const structureDesc=(analysisData.section_structure||[]).map((s:any)=>`${s.beat} (${s.duration_s}s): ${s.description}`).join("\n")
+      const templateRaw=await callClaude([{role:"user",content:`Rewrite this winning ad structure for a new brand, preserving the exact structural blueprint.\n\n${brandCtx}\n${prodCtx}\n\nBLUEPRINT:\nHook type: ${analysisData.hook_type}\nApproach: ${analysisData.hook_analysis}\nStructure:\n${structureDesc}\nLanguage patterns: ${(analysisData.language_patterns||[]).join(", ")}\nEnergy arc: ${analysisData.energy_arc}\n\nRULES: Preserve exact section sequence and timing. Use same hook technique adapted to this brand. Match language patterns.\n\nReturn ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is shown","durationEstimate":"3s"}],"suggested_music_mood":"Uplifting"}`}],2000)
       const templateData=JSON.parse(templateRaw.replace(/```json|```/g,"").trim())
       let secs=(templateData.sections||[]).map((s:any,i:number)=>({...s,id:Date.now()+i,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
-
-      // Match clips from library
-      setProgress(90);setProgressMsg("Matching clips from your library…")
+      setProgress(90);setProgressMsg("Matching clips from library…")
       if(items.length>0){
         try{
           const readyClips=items.filter((i:Item)=>i.mux_playback_id&&i.mux_status==="ready")
           if(readyClips.length>0){
-            const libSummary=readyClips.slice(0,50).map((i:Item)=>{
-              const a=i.analysis||{}
-              return "ID:"+i.id+"|role:"+(a.clip_role||i.clip_role||"")+"|hero:"+(a.is_hero?"YES":"no")+"|tags:"+(a.scene_tags||[]).join(",")+"|summary:"+(a.summary||"").substring(0,80)+"|transcript:"+(i.transcript||"").substring(0,60)
-            }).join("\n")
-            const matchPrompt="Match clips to these sections from a brand-adapted winning ad template.\n\nSECTIONS:\n"+secs.map((s:any,i:number)=>`${i} [${s.type}]: "${(s.spokenWords||"").substring(0,80)}"`).join("\n")+"\n\nCLIPS:\n"+libSummary+"\n\nReturn ONLY JSON array: [{\"section\":0,\"best_id\":\"uuid\",\"alt_ids\":[\"uuid1\"],\"reason\":\"why\"},...]"
-            const matchRaw=await callClaude([{role:"user",content:matchPrompt}],1500)
+            const libSummary=readyClips.slice(0,50).map((i:Item)=>{const a=i.analysis||{};return "ID:"+i.id+"|role:"+(a.clip_role||i.clip_role||"")+"|hero:"+(a.is_hero?"YES":"no")+"|tags:"+(a.scene_tags||[]).join(",")+"|transcript:"+(i.transcript||"").substring(0,60)}).join("\n")
+            const matchRaw=await callClaude([{role:"user",content:"Match clips to sections.\n\nSECTIONS:\n"+secs.map((s:any,i:number)=>`${i} [${s.type}]: "${(s.spokenWords||"").substring(0,80)}"`).join("\n")+"\n\nCLIPS:\n"+libSummary+"\n\nReturn ONLY JSON array: [{\"section\":0,\"best_id\":\"uuid\",\"alt_ids\":[\"uuid1\"],\"reason\":\"why\"},...]"}],1500)
             const matches=JSON.parse(matchRaw.replace(/```json|```/g,"").trim())
-            const validIds=new Set(items.map((i:Item)=>i.id))
-            const usedIds=new Set<string>()
+            const validIds=new Set(items.map((i:Item)=>i.id));const usedIds=new Set<string>()
             secs=secs.map((s:any,i:number)=>{
-              const m=matches.find((x:any)=>x.section===i)
-              if(!m)return s
+              const m=matches.find((x:any)=>x.section===i);if(!m)return s
               const candidates=[m.best_id,...(m.alt_ids||[])].filter((id:string)=>id&&validIds.has(id)&&!usedIds.has(id))
-              const clipId=candidates[0]||null
-              if(clipId)usedIds.add(clipId)
+              const clipId=candidates[0]||null;if(clipId)usedIds.add(clipId)
               return{...s,selectedClipId:clipId,matchedClipIds:candidates,clipSegments:[{id:"seg-"+i+"-0",clipId}],autoSelected:!!clipId,matchReason:m.reason||""}
             })
           }
         }catch(e){console.error("clip matching failed",e)}
       }
-
-      setTemplateSections(secs)
-      setProgress(100);setProgressMsg("Done!")
-
-      // Save pattern to brand profile
-      const newPattern={
-        id:Date.now().toString(),
-        title:title.trim(),
-        context,
-        created_at:new Date().toISOString(),
-        hook_type:analysisData.hook_type,
-        hook_words:analysisData.hook_words,
-        section_count:analysisData.section_structure?.length||secs.length,
-        total_duration_s:duration,
-        analysis:analysisData,
-        template_sections:secs,
-        product_id:productId,
-        suggested_music_mood:templateData.suggested_music_mood||"Uplifting"
-      }
-      const newPatterns=[newPattern,...patterns]
-      await savePatterns(newPatterns)
+      setTemplateSections(secs);setProgress(100);setProgressMsg("Done!")
+      const newPattern={id:Date.now().toString(),title:title.trim(),context,created_at:new Date().toISOString(),hook_type:analysisData.hook_type,hook_words:analysisData.hook_words,section_count:analysisData.section_structure?.length||secs.length,total_duration_s:duration,analysis:analysisData,template_sections:secs,product_id:productId,suggested_music_mood:templateData.suggested_music_mood||"Uplifting"}
+      await savePatterns([newPattern,...patterns])
       setView("result")
-    }catch(e:any){
-      setError(e.message||"Analysis failed — try again")
-      setView("upload")
-    }
+    }catch(e:any){setError(e.message||"Analysis failed — try again");setView("upload")}
   }
 
   async function createAdFromPattern(pattern:any){
-    const saved=await onSaveForgedAd({
-      title:pattern.title+" (from pattern)",
-      status:"draft",
-      mode:"script",
-      sections:pattern.template_sections||[],
-      voiceover_url:null,voiceover_voice:null,
-      music_url:null,music_name:null,
-      metadata:{contentType:"Winning Pattern",patternId:pattern.id,patternTitle:pattern.title,suggestedMusicMood:pattern.suggested_music_mood}
-    })
+    const saved=await onSaveForgedAd({title:pattern.title+" (pattern)",status:"draft",mode:"script",sections:pattern.template_sections||[],voiceover_url:null,voiceover_voice:null,music_url:null,music_name:null,metadata:{contentType:"Winning Pattern",patternId:pattern.id,patternTitle:pattern.title}})
     if(saved)onGoToForged()
   }
 
-  // ── List view ─────────────────────────────────────────────────────────────
   if(view==="list")return<div style={{maxWidth:900,margin:"0 auto",padding:28}}>
+    {briefSections!==null&&<CreatorBriefModal brand={brand} sections={briefSections} onClose={()=>setBriefSections(null)}/>}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-      <div>
-        <STitle size={22} mb={4}>Winning Ads</STitle>
-        <div style={{fontSize:14,color:C.muted}}>Upload ads that perform. AI reverse-engineers the blueprint and generates a ready-to-use template for your brand.</div>
-      </div>
+      <div><STitle size={22} mb={4}>Winning Ads</STitle><div style={{fontSize:14,color:C.muted}}>Upload ads that perform. AI extracts the blueprint and generates a ready-to-use template for your brand.</div></div>
       <Btn onClick={()=>{setFile(null);setTitle("");setContext("");setProductId("");setError("");setView("upload")}} style={{background:C.accent,color:"#fff",flexShrink:0}}>+ Add Winning Ad</Btn>
     </div>
-
     {patterns.length===0
       ?<Card style={{textAlign:"center",padding:60,marginTop:24}}>
         <div style={{fontSize:48,marginBottom:16}}>🏆</div>
@@ -2948,92 +2981,80 @@ Return ONLY valid JSON:
         <Btn onClick={()=>setView("upload")} style={{background:C.accent,color:"#fff"}}>Upload First Winning Ad</Btn>
       </Card>
       :<div style={{marginTop:20,display:"grid",gap:14}}>
-        {patterns.map((p:any,idx:number)=><Card key={p.id||idx} style={{cursor:"default"}}>
+        {patterns.map((p:any,idx:number)=><Card key={p.id||idx}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16,flexWrap:"wrap"}}>
             <div style={{flex:1,minWidth:200}}>
               <div style={{fontWeight:700,fontSize:16,marginBottom:6}}>{p.title}</div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
                 {p.hook_type&&<Chip label={p.hook_type+" Hook"} color={{bg:C.accentSoft,color:C.accent}}/>}
                 {p.section_count&&<Chip label={p.section_count+" sections"} color={{bg:"#F0FDF4",color:"#15803D"}}/>}
-                {p.total_duration_s&&<Chip label={p.total_duration_s+"s"} color={{bg:"#FFFBEB",color:"#92400E"}}/>}
+                {p.total_duration_s>0&&<Chip label={p.total_duration_s+"s"} color={{bg:"#FFFBEB",color:"#92400E"}}/>}
                 {p.created_at&&<span style={{fontSize:11,color:C.muted,alignSelf:"center"}}>{new Date(p.created_at).toLocaleDateString()}</span>}
               </div>
               {p.analysis?.hook_words&&<div style={{fontSize:13,color:C.muted,fontStyle:"italic",marginBottom:6}}>"{p.analysis.hook_words}"</div>}
-              {p.analysis?.creator_brief&&<div style={{fontSize:12,color:C.muted,marginBottom:4,lineHeight:1.5}}><strong style={{color:C.text}}>Brief:</strong> {p.analysis.creator_brief.substring(0,140)}{p.analysis.creator_brief.length>140?"…":""}</div>}
+              {p.analysis?.creator_brief&&<div style={{fontSize:12,color:C.muted,lineHeight:1.5}}><strong style={{color:C.text}}>Brief:</strong> {p.analysis.creator_brief.substring(0,140)}{p.analysis.creator_brief.length>140?"…":""}</div>}
             </div>
             <div style={{display:"flex",gap:8,flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
               <Btn onClick={()=>createAdFromPattern(p)} style={{background:C.accent,color:"#fff",whiteSpace:"nowrap"}}>⚡ Create Ad</Btn>
+              <Btn onClick={()=>setBriefSections(p.template_sections||[])} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontSize:12,padding:"6px 12px",whiteSpace:"nowrap"}}>📋 Send Brief</Btn>
               <Btn onClick={()=>setSelectedPatternIdx(selectedPatternIdx===idx?null:idx)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"5px 12px"}}>{selectedPatternIdx===idx?"Hide":"View analysis"}</Btn>
             </div>
           </div>
           {selectedPatternIdx===idx&&p.analysis&&<div style={{marginTop:16,paddingTop:16,borderTop:"1px solid "+C.border}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-              <div><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Section Structure</div>
+              <div><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:6}}>Section Structure</div>
                 {(p.analysis.section_structure||[]).map((s:any,i:number)=><div key={i} style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}>
-                  <span style={{...secColor(s.beat),padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:700}}>{s.beat}</span>
+                  <span style={{background:secColor(s.beat).bg,color:secColor(s.beat).color,padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:700}}>{s.beat}</span>
                   <span style={{fontSize:11,color:C.muted}}>{s.duration_s}s — {s.description}</span>
                 </div>)}
               </div>
               <div>
-                <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Language Patterns</div>
+                <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:6}}>Language Patterns</div>
                 {(p.analysis.language_patterns||[]).map((lp:string,i:number)=><div key={i} style={{fontSize:12,color:C.muted,marginBottom:3}}>• {lp}</div>)}
-                <div style={{marginTop:8,fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Pacing</div>
-                <div style={{fontSize:12,color:C.muted}}>{p.analysis.avg_cut_frequency} cuts · {p.analysis.energy_arc}</div>
+                <div style={{marginTop:8,fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:4}}>Pacing</div>
+                <div style={{fontSize:12,color:C.muted}}>{p.analysis.avg_cut_frequency} · {p.analysis.energy_arc}</div>
               </div>
             </div>
-            {p.analysis.creator_brief&&<div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#15803D"}}>
-              <strong>Creator brief:</strong> {p.analysis.creator_brief}
-            </div>}
+            {p.analysis.creator_brief&&<div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#15803D"}}><strong>Creator brief:</strong> {p.analysis.creator_brief}</div>}
           </div>}
         </Card>)}
       </div>
     }
   </div>
 
-  // ── Upload view ───────────────────────────────────────────────────────────
   if(view==="upload")return<div style={{maxWidth:700,margin:"0 auto",padding:28}}>
     <button onClick={()=>setView("list")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back</button>
     <STitle size={22}>Add Winning Ad</STitle>
-    <div style={{color:C.muted,fontSize:14,marginBottom:24}}>Upload a video ad that has performed well. AI will extract the creative blueprint and generate a ready-to-use script for your brand.</div>
-
-    <div onDrop={e=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f?.type.startsWith("video/"))setFile(f)}}
-      onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)}
-      onClick={()=>fileRef.current?.click()}
-      style={{border:"2px dashed "+(dragOver?C.accent:file?C.green:C.border),borderRadius:14,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:dragOver?C.accentSoft:file?"#F0FDF4":C.surface,marginBottom:20,transition:"all 0.15s"}}>
+    <div style={{color:C.muted,fontSize:14,marginBottom:24}}>Upload a video ad that has performed well. AI extracts the creative blueprint and generates a ready-to-use script for your brand.</div>
+    <div onDrop={e=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f?.type.startsWith("video/"))setFile(f)}} onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onClick={()=>fileRef.current?.click()} style={{border:"2px dashed "+(dragOver?C.accent:file?C.green:C.border),borderRadius:14,padding:"32px 20px",textAlign:"center" as const,cursor:"pointer",background:dragOver?C.accentSoft:file?"#F0FDF4":C.surface,marginBottom:20,transition:"all 0.15s"}}>
       <input ref={fileRef} type="file" accept="video/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(f)setFile(f)}}/>
-      {file?<div><div style={{fontSize:36,marginBottom:8}}>✅</div><div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:4}}>{file.name}</div><div style={{fontSize:12,color:C.muted}}>{(file.size/1024/1024).toFixed(1)} MB · click to change</div></div>
-      :<div><div style={{fontSize:36,marginBottom:8}}>🎬</div><div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:4}}>Drop video here or click to select</div><div style={{fontSize:12,color:C.muted}}>MP4, MOV, AVI — any format</div></div>}
+      {file?<div><div style={{fontSize:36,marginBottom:8}}>✅</div><div style={{fontWeight:700,fontSize:15,marginBottom:4}}>{file.name}</div><div style={{fontSize:12,color:C.muted}}>{(file.size/1024/1024).toFixed(1)} MB · click to change</div></div>
+      :<div><div style={{fontSize:36,marginBottom:8}}>🎬</div><div style={{fontWeight:700,fontSize:15,marginBottom:4}}>Drop video here or click to select</div><div style={{fontSize:12,color:C.muted}}>MP4, MOV, AVI — any format</div></div>}
     </div>
-
     <Card style={{marginBottom:14}}>
       <div style={{marginBottom:12}}><Label>Ad title *</Label><Input value={title} onChange={(e:any)=>setTitle(e.target.value)} placeholder="e.g. Competitor UGC — 52% hook rate"/></div>
-      <div style={{marginBottom:12}}><Label>Why did this ad win? (optional)</Label><Input textarea value={context} onChange={(e:any)=>setContext(e.target.value)} placeholder="e.g. High hook rate, cheap CPA, strong emotional hook, went viral — any context helps the AI understand what to replicate" rows={3}/></div>
-      <div><Label>Which product to adapt for?</Label>
-        <select value={productId} onChange={e=>setProductId(e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}>
-          <option value="">General brand</option>
-          {products.map((p:any)=><option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </div>
+      <div style={{marginBottom:12}}><Label>Why did this ad win? (optional)</Label><Input textarea value={context} onChange={(e:any)=>setContext(e.target.value)} placeholder="High hook rate, cheap CPA, strong emotional hook — any context helps" rows={3}/></div>
+      <Label>Product to adapt for</Label>
+      <select value={productId} onChange={e=>setProductId(e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}>
+        <option value="">General brand</option>
+        {products.map((p:any)=><option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
     </Card>
-
     {error&&<div style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#DC2626",marginBottom:16}}>⚠️ {error}</div>}
     <Btn onClick={handleUpload} disabled={!file||!title.trim()} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:16,borderRadius:12}}>🏆 Analyse & Generate Template</Btn>
   </div>
 
-  // ── Processing view ───────────────────────────────────────────────────────
-  if(view==="processing")return<div style={{maxWidth:540,margin:"80px auto",padding:28,textAlign:"center"}}>
+  if(view==="processing")return<div style={{maxWidth:540,margin:"80px auto",padding:28,textAlign:"center" as const}}>
     <div style={{fontSize:48,marginBottom:20}}>🔬</div>
     <STitle size={20} mb={8}>Analysing winning ad…</STitle>
     <div style={{fontSize:14,color:C.muted,marginBottom:28}}>{progressMsg}</div>
     <div style={{height:8,background:C.border,borderRadius:99,overflow:"hidden",marginBottom:12}}>
       <div style={{height:"100%",width:progress+"%",background:C.accent,borderRadius:99,transition:"width 0.6s ease"}}/>
     </div>
-    <div style={{fontSize:12,color:C.muted}}>{progress}%</div>
-    <div style={{marginTop:28,display:"grid",gap:8}}>
-      {[["Uploading video","Upload"],["Processing & transcribing","Transcribe"],["Extracting creative blueprint","Analyse"],["Generating brand-adapted template","Generate"],["Matching clips from library","Match"]].map(([label],i)=>{
-        const stepPct=[15,45,65,85,95][i]
-        const done=progress>=stepPct+10
-        const active=progress>=stepPct&&!done
+    <div style={{fontSize:12,color:C.muted,marginBottom:28}}>{progress}%</div>
+    <div style={{display:"grid",gap:8}}>
+      {[["Uploading video",15],["Processing & transcribing",45],["Extracting creative blueprint",65],["Generating brand-adapted template",85],["Matching clips from library",95]].map(([label,stepPct],i)=>{
+        const done=progress>=(stepPct as number)+10;const active=progress>=(stepPct as number)&&!done
         return<div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,background:done?"#F0FDF4":active?C.accentSoft:C.surface,border:"1px solid "+(done?"#86EFAC":active?C.accent:C.border)}}>
           <span style={{fontSize:14}}>{done?"✅":active?"⏳":"⭕"}</span>
           <span style={{fontSize:13,color:done?"#15803D":active?C.accent:C.muted,fontWeight:active||done?600:400}}>{label}</span>
@@ -3042,50 +3063,46 @@ Return ONLY valid JSON:
     </div>
   </div>
 
-  // ── Result view ───────────────────────────────────────────────────────────
   if(view==="result"&&analysis)return<div style={{maxWidth:860,margin:"0 auto",padding:28}}>
+    {briefSections!==null&&<CreatorBriefModal brand={brand} sections={briefSections} onClose={()=>setBriefSections(null)}/>}
     <button onClick={()=>setView("list")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back to patterns</button>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,gap:16,flexWrap:"wrap"}}>
-      <div><STitle size={22} mb={4}>✅ Pattern extracted</STitle><div style={{fontSize:14,color:C.muted}}>"{title}" — blueprint extracted and adapted to {brand.name||"your brand"}</div></div>
-      <Btn onClick={()=>createAdFromPattern(patterns[0])} style={{background:C.accent,color:"#fff",fontSize:15,padding:"11px 24px",flexShrink:0}}>⚡ Create Ad from Pattern</Btn>
+      <div><STitle size={22} mb={4}>✅ Pattern extracted</STitle><div style={{fontSize:14,color:C.muted}}>Blueprint extracted and adapted to {brand.name||"your brand"}</div></div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        <Btn onClick={()=>setBriefSections(templateSections)} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontSize:14,padding:"10px 18px"}}>📋 Send Brief</Btn>
+        <Btn onClick={()=>createAdFromPattern(patterns[0])} style={{background:C.accent,color:"#fff",fontSize:14,padding:"10px 20px"}}>⚡ Create Ad</Btn>
+      </div>
     </div>
-
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
       <Card>
         <div style={{fontWeight:700,fontSize:13,marginBottom:12}}>🎣 Hook analysis</div>
-        <Chip label={analysis.hook_type+" Hook"} color={{bg:C.accentSoft,color:C.accent}}/><div style={{marginTop:8,fontSize:13,fontStyle:"italic",color:C.muted,marginBottom:6}}>"{analysis.hook_words}"</div>
+        <Chip label={analysis.hook_type+" Hook"} color={{bg:C.accentSoft,color:C.accent}}/>
+        <div style={{marginTop:8,fontSize:13,fontStyle:"italic",color:C.muted,marginBottom:6}}>"{analysis.hook_words}"</div>
         <div style={{fontSize:12,color:C.muted,lineHeight:1.6}}>{analysis.hook_analysis}</div>
       </Card>
       <Card>
         <div style={{fontWeight:700,fontSize:13,marginBottom:12}}>⚡ Pacing & energy</div>
         <div style={{fontSize:13,marginBottom:6}}><strong>Cuts:</strong> <span style={{color:C.muted}}>{analysis.avg_cut_frequency}</span></div>
-        <div style={{fontSize:13,marginBottom:6}}><strong>Energy arc:</strong> <span style={{color:C.muted}}>{analysis.energy_arc}</span></div>
-        <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginTop:10,marginBottom:6}}>Power words</div>
+        <div style={{fontSize:13,marginBottom:10}}><strong>Energy arc:</strong> <span style={{color:C.muted}}>{analysis.energy_arc}</span></div>
         <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{(analysis.power_words||[]).map((w:string,i:number)=><span key={i} style={{background:C.accentSoft,color:C.accent,borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600}}>{w}</span>)}</div>
       </Card>
     </div>
-
     {analysis.creator_brief&&<Card style={{marginBottom:20,background:"#F0FDF4",border:"1.5px solid #86EFAC"}}>
-      <div style={{fontWeight:700,fontSize:13,color:"#15803D",marginBottom:6}}>📋 Creator brief — copy this directly</div>
+      <div style={{fontWeight:700,fontSize:13,color:"#15803D",marginBottom:6}}>📋 Creator brief</div>
       <div style={{fontSize:13,color:"#15803D",lineHeight:1.7}}>{analysis.creator_brief}</div>
     </Card>}
-
     <Card>
-      <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>📝 Generated script template — adapted to {brand.name||"your brand"}</div>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>📝 Generated template — adapted to {brand.name||"your brand"}</div>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {templateSections.map((s:any,i:number)=>{
-          const sc=secColor(s.type)
-          return<div key={i} style={{background:sc.bg,border:"1px solid "+sc.bd,borderRadius:10,padding:"12px 14px"}}>
-            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6,flexWrap:"wrap"}}>
-              <span style={{background:sc.color,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:700}}>{s.type}</span>
-              {s.durationEstimate&&<span style={{fontSize:11,color:C.muted}}>{s.durationEstimate}</span>}
-              {s.selectedClipId&&<span style={{fontSize:11,color:C.green,fontWeight:600}}>✓ clip matched</span>}
-              {!s.selectedClipId&&<span style={{fontSize:11,color:C.yellow}}>⚠ no clip — assign manually</span>}
-            </div>
-            <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:4}}>{s.spokenWords}</div>
-            {s.visualDirection&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>{s.visualDirection}</div>}
+        {templateSections.map((s:any,i:number)=>{const sc=secColor(s.type);return<div key={i} style={{background:sc.bg,border:"1px solid "+sc.bd,borderRadius:10,padding:"12px 14px"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6,flexWrap:"wrap"}}>
+            <span style={{background:sc.color,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:700}}>{s.type}</span>
+            {s.durationEstimate&&<span style={{fontSize:11,color:C.muted}}>{s.durationEstimate}</span>}
+            {s.selectedClipId?<span style={{fontSize:11,color:C.green,fontWeight:600}}>✓ clip matched</span>:<span style={{fontSize:11,color:C.yellow}}>⚠ no clip</span>}
           </div>
-        })}
+          <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>{s.spokenWords}</div>
+          {s.visualDirection&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>{s.visualDirection}</div>}
+        </div>})}
       </div>
     </Card>
   </div>
@@ -3182,7 +3199,7 @@ export default function AdForgeApp(){
     <div style={{marginLeft:220,flex:1,minHeight:"100vh",background:C.bg}}>
       {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} onGoToBrand={()=>setTab("brand")}/>}
       {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode}/>}
-      {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} onRefresh={loadData}/>}
+      {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} brand={brand} onRefresh={loadData}/>}
       {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
       {tab==="winning"&&<WinningAdsTab brand={brand} setBrand={setBrand} products={products} items={items} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")}/>}
     </div>
