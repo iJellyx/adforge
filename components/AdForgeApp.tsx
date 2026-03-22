@@ -466,22 +466,113 @@ function MusicPicker({suggestedMood,onSave}:any){
 }
 
 // ── Stitched Preview ──────────────────────────────────────────────────────
-function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
+// ── Caption helpers ───────────────────────────────────────────────────────
+type CaptionStyle = "word"|"line"|"karaoke"
+type CaptionSettings = {enabled:boolean,style:CaptionStyle,accentColor:string,fontSize:number}
+const DEFAULT_CAPTIONS:CaptionSettings={enabled:false,style:"word",accentColor:C.accent,fontSize:22}
+
+function isKeyWord(word:string,idx:number,all:string[]):boolean{
+  const clean=word.replace(/[^a-zA-Z0-9%$£€]/g,"")
+  if(!clean)return false
+  if(/^\d/.test(clean))return true  // numbers
+  if(/%|€|\$|£/.test(word))return true  // money/percent
+  if(clean===clean.toUpperCase()&&clean.length>1)return true  // ALL CAPS
+  if(idx>0&&/[.!?]$/.test(all[idx-1]))return true  // first word after sentence end
+  if((idx+1)%4===0)return true  // rhythm: every 4th word
+  return false
+}
+
+function buildCaptionChunks(text:string,style:CaptionStyle,totalDur:number):{words:string[],start:number,end:number}[]{
+  const words=text.trim().split(/\s+/).filter(Boolean)
+  if(!words.length)return[]
+  if(style==="line")return[{words,start:0,end:totalDur}]
+  if(style==="karaoke")return[{words,start:0,end:totalDur}]
+  // word-by-word: groups of 2
+  const chunks:{words:string[],start:number,end:number}[]=[]
+  for(let i=0;i<words.length;i+=2){
+    const group=words.slice(i,i+2)
+    chunks.push({words:group,start:0,end:0})
+  }
+  const durEach=totalDur/chunks.length
+  return chunks.map((c,i)=>({...c,start:i*durEach,end:(i+1)*durEach}))
+}
+
+function CaptionOverlay({spoken,elapsed,clipDur,settings}:{spoken:string,elapsed:number,clipDur:number,settings:CaptionSettings}){
+  if(!settings.enabled||!spoken.trim())return null
+  const chunks=buildCaptionChunks(spoken,settings.style,clipDur)
+  if(!chunks.length)return null
+
+  const allWords=spoken.trim().split(/\s+/).filter(Boolean)
+  const progress=Math.min(1,elapsed/clipDur)
+  const activeWordIdx=Math.floor(progress*allWords.length)
+
+  let displayWords:string[]=[]
+  let chunkStart=0
+
+  if(settings.style==="karaoke"){
+    displayWords=allWords
+    chunkStart=0
+  } else {
+    const active=chunks.find(c=>elapsed>=c.start&&elapsed<c.end)||chunks[chunks.length-1]
+    if(!active)return null
+    displayWords=active.words
+    // figure out word offset for key-word check
+    let off=0;for(const c of chunks){if(c===active)break;off+=c.words.length}
+    chunkStart=off
+  }
+
+  const {fontSize,accentColor,style}=settings
+
+  return<div style={{
+    position:"absolute",bottom:"18%",left:"50%",transform:"translateX(-50%)",
+    width:"88%",textAlign:"center",pointerEvents:"none",zIndex:10,
+    filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.9))"
+  }}>
+    <div style={{display:"inline-flex",flexWrap:"wrap",justifyContent:"center",gap:"0 6px",lineHeight:1.25}}>
+      {displayWords.map((word,i)=>{
+        const globalIdx=chunkStart+i
+        const isKey=isKeyWord(word,globalIdx,allWords)
+        const isActive=style==="karaoke"&&globalIdx===activeWordIdx
+        const isPast=style==="karaoke"&&globalIdx<activeWordIdx
+        return<span key={i} style={{
+          fontFamily:"'Plus Jakarta Sans','Arial Black',system-ui,sans-serif",
+          fontSize:fontSize+"px",
+          fontWeight:900,
+          color:isActive||isKey?accentColor:"#fff",
+          opacity:style==="karaoke"?(isPast?0.55:1):1,
+          textShadow:"0 0 8px rgba(0,0,0,0.8), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000",
+          letterSpacing:"-0.01em",
+          transition:"color 0.05s",
+          WebkitTextStroke:style==="word"?"0.5px rgba(0,0,0,0.3)":"none",
+        }}>{word}</span>
+      })}
+    </div>
+  </div>
+}
+
+function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSettings,onCaptionChange}:any){
   const [clipIdx,setClipIdx]=useState(0)
   const [playing,setPlaying]=useState(false)
-  const [hookPreview,setHookPreview]=useState(false)
-  const [musicVol,setMusicVol]=useState(0.2)
+  const [elapsed,setElapsed]=useState(0)
+  const [captions,setCaptions]=useState<CaptionSettings>(captionSettings||DEFAULT_CAPTIONS)
+  const [showCaptionPanel,setShowCaptionPanel]=useState(false)
   const vidRef=useRef<HTMLVideoElement>(null)
   const voiceRef=useRef<HTMLAudioElement>(null)
   const musicRef=useRef<HTMLAudioElement>(null)
   const clipStartTimesRef=useRef<number[]>([])
-  const hookTimerRef=useRef<any>(null)
 
-    const clips=(sections||[]).flatMap((s:any,sectionIdx:number)=>{
+  // Sync external caption settings
+  useEffect(()=>{if(captionSettings)setCaptions(captionSettings)},[captionSettings])
+  function updateCaptions(patch:Partial<CaptionSettings>){
+    const next={...captions,...patch}
+    setCaptions(next)
+    onCaptionChange?.(next)
+  }
+
+  const clips=(sections||[]).flatMap((s:any,sectionIdx:number)=>{
     const segments=s.clipSegments&&s.clipSegments.length>0?s.clipSegments:[{clipId:s.selectedClipId}]
     const validSegs=segments.filter((seg:any)=>seg.clipId&&libraryItems.find((i:Item)=>i.id===seg.clipId))
     const segCount=validSegs.length
-    // Calculate natural durations for proportional time distribution
     const naturalDurs=validSegs.map((seg:any)=>{
       const item=libraryItems.find((i:Item)=>i.id===seg.clipId)
       const start=seg.trimStart??item?.start_seconds??0
@@ -495,39 +586,15 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
       const trimStart=seg.trimStart??item.start_seconds??0
       const trimEnd=seg.trimEnd??item.end_seconds??(trimStart+(item.duration_seconds||5))
       const naturalDur=naturalDurs[segIdx]
-      const naturalFraction=naturalDur/totalNatural
-      return{
-        item,
-        start:trimStart,
-        end:trimEnd,
-        naturalDur,
-        naturalFraction,
-        sectionIdx,
-        label:s.type,
-        spoken:segIdx===0?s.spokenWords||"":"",
-        muted:s.muted||false,
-        voiceover_url:s.voiceover_url||null,
-        sectionVoUrl:s.voiceover_url||null,
-        isFirstInSection:segIdx===0,
-        isLastInSection:segIdx===segCount-1,
-        segCount,
-        segIdx,
-      }
+      return{item,start:trimStart,end:trimEnd,naturalDur,naturalFraction:naturalDur/totalNatural,sectionIdx,label:s.type,spoken:segIdx===0?s.spokenWords||"":"",muted:s.muted||false,voiceover_url:s.voiceover_url||null,sectionVoUrl:s.voiceover_url||null,isFirstInSection:segIdx===0,isLastInSection:segIdx===segCount-1,segCount,segIdx}
     }).filter(Boolean)
   }).filter(Boolean)
 
   const cur=clips[clipIdx]
 
-   useEffect(()=>{
-    // Use clip segment duration (end - start), not full video duration
-    let elapsed=0
-    const times=clips.map((c:any)=>{
-      const t=elapsed
-      const segDur=(c.end!=null&&c.start!=null&&c.end>c.start)?(c.end-c.start):3
-      elapsed+=segDur
-      return t
-    })
-    clipStartTimesRef.current=times
+  useEffect(()=>{
+    let acc=0
+    clipStartTimesRef.current=clips.map((c:any)=>{const t=acc;acc+=(c.end!=null&&c.start!=null&&c.end>c.start)?(c.end-c.start):3;return t})
   },[clips.length])
 
   useEffect(()=>{
@@ -536,36 +603,25 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     function seek(){if(v)v.currentTime=cur!.start}
     if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true})
     if(playing)v.play().catch(()=>{})
+    setElapsed(0)
   },[clipIdx])
 
   function getClipPlayDuration(idx:number):number{
-    const clip=clips[idx]
-    if(!clip)return 3
+    const clip=clips[idx];if(!clip)return 3
     const voiceDur=voiceRef.current?.duration||0
-    if(voiceDur>0&&clip.sectionVoUrl){
-      return Math.max(1,voiceDur*clip.naturalFraction)
-    }
+    if(voiceDur>0&&clip.sectionVoUrl)return Math.max(1,voiceDur*clip.naturalFraction)
     return Math.max(1,clip.naturalDur||3)
   }
+  function getVoiceTime(idx:number){const f=clipStartTimesRef.current[idx]||0;const d=voiceRef.current?.duration||0;return f*d}
 
   function onTimeUpdate(){
     const v=vidRef.current;if(!v||!cur)return
-    const clipDur=getClipPlayDuration(clipIdx)
-    const elapsed=v.currentTime-cur.start
-    // Hook preview — stop after 3 seconds of total playback
-    if(hookPreview){
-      const totalElapsed=(clipStartTimesRef.current[clipIdx]||0)+(elapsed)
-      if(totalElapsed>=3){
-        v.pause();setPlaying(false);setHookPreview(false);setClipIdx(0)
-        voiceRef.current?.pause();musicRef.current?.pause()
-        clearTimeout(hookTimerRef.current)
-        return
-      }
-    }
-    if(elapsed>=clipDur){
+    const e=v.currentTime-cur.start
+    setElapsed(e)
+    if(e>=getClipPlayDuration(clipIdx)){
       if(clipIdx<clips.length-1){
         const next=clips[clipIdx+1]
-        if(next?.sectionIdx!==cur.sectionIdx){voiceRef.current?.pause()}
+        if(next?.sectionIdx!==cur.sectionIdx)voiceRef.current?.pause()
         setClipIdx(i=>i+1)
       } else {
         v.pause();setPlaying(false);setClipIdx(0)
@@ -573,142 +629,111 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
       }
     }
   }
-    function getVoiceTime(idx:number){
-    const fraction=clipStartTimesRef.current[idx]||0
-    const voiceDur=voiceRef.current?.duration||0
-    return fraction*voiceDur
-  }
 
   function toggle(){
     const v=vidRef.current;if(!v)return
-    if(playing){
-      v.pause();voiceRef.current?.pause();musicRef.current?.pause();setPlaying(false);setHookPreview(false)
-    } else {
+    if(playing){v.pause();voiceRef.current?.pause();musicRef.current?.pause();setPlaying(false)}
+    else{
       v.play().catch(()=>{})
       if(voiceRef.current){voiceRef.current.currentTime=0;voiceRef.current.play().catch(()=>{})}
-      if(musicRef.current){musicRef.current.currentTime=0;musicRef.current.volume=musicVol;musicRef.current.play().catch(()=>{})}
+      if(musicRef.current){musicRef.current.currentTime=0;musicRef.current.volume=0.2;musicRef.current.play().catch(()=>{})}
       setPlaying(true)
     }
   }
-
-  function playHook(){
-    const v=vidRef.current;if(!v||clips.length===0)return
-    // Reset to first clip
-    setClipIdx(0);setHookPreview(true)
-    setTimeout(()=>{
-      v.play().catch(()=>{})
-      if(voiceRef.current){voiceRef.current.currentTime=0;voiceRef.current.play().catch(()=>{})}
-      if(musicRef.current){musicRef.current.currentTime=0;musicRef.current.volume=musicVol;musicRef.current.play().catch(()=>{})}
-      setPlaying(true)
-    },50)
-  }
-
-  // Update music volume live when slider changes
-  useEffect(()=>{if(musicRef.current)musicRef.current.volume=musicVol},[musicVol])
 
   useEffect(()=>{
-    if(playing&&cur?.isFirstInSection&&voiceRef.current){
-      // Only restart voiceover at start of a new section
-      voiceRef.current.currentTime=0
-      voiceRef.current.play().catch(()=>{})
-    }
-    // For secondary clips in same section, voiceover keeps playing — no action needed
+    if(playing&&cur?.isFirstInSection&&voiceRef.current){voiceRef.current.currentTime=0;voiceRef.current.play().catch(()=>{})}
   },[clipIdx])
 
   if(clips.length===0)return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:32,textAlign:"center",color:C.muted}}><div style={{fontSize:28,marginBottom:8}}>🎬</div><div style={{fontSize:13}}>Assign clips to sections to preview the full ad</div></div>
 
-  // Aspect ratio check — warn if clips aren't 9:16
-  const nonVertical=clips.filter((c:any)=>{
-    const a=c.item.analysis||{}
-    if(a.aspect_ratio)return a.aspect_ratio!=="9:16"&&a.aspect_ratio!=="vertical"
-    if(c.item.width&&c.item.height)return c.item.width>c.item.height
-    return false
-  })
-
   const sc=secColor(cur?.label)
+  const clipDur=getClipPlayDuration(clipIdx)
 
   return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
-    {nonVertical.length>0&&<div style={{background:"#FFFBEB",border:"1px solid #FCD34D",padding:"8px 14px",fontSize:12,color:"#92400E",display:"flex",alignItems:"center",gap:8}}>
-      ⚠️ {nonVertical.length} clip{nonVertical.length!==1?"s are":"is"} not 9:16 vertical — Meta Reels/Stories may letterbox or crop. Shoot in portrait for best delivery.
-    </div>}
-    {hookPreview&&<div style={{background:"#EDE8FF",borderBottom:"1px solid #C4B5FD",padding:"6px 14px",fontSize:12,color:"#5B49FF",fontWeight:700,textAlign:"center"}}>
-      ⚡ Hook preview — first 3 seconds playing…
-    </div>}
-    {/* Hidden audio elements */}
     {cur?.sectionVoUrl&&<audio ref={voiceRef} key={cur.sectionVoUrl} src={cur.sectionVoUrl} style={{display:"none"}}/>}
     {voiceoverUrl&&!cur?.sectionVoUrl&&<audio ref={voiceRef} key={voiceoverUrl} src={voiceoverUrl} style={{display:"none"}}/>}
     {musicUrl&&<audio ref={musicRef} src={musicUrl} style={{display:"none"}} loop/>}
 
-    <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-      <div style={{fontWeight:700,fontSize:14}}>🎬 Full Ad Preview</div>
-      <span style={{fontSize:12,color:C.muted}}>{clips.length} clips · section {clipIdx+1}</span>
-      {(voiceoverUrl||musicUrl)&&<div style={{display:"flex",gap:6}}>
-        {voiceoverUrl&&<span style={{fontSize:10,color:C.green,background:"#22c55e11",padding:"2px 7px",borderRadius:99,border:"1px solid #22c55e33"}}>🎙️ Voiceover</span>}
-        {musicUrl&&<span style={{fontSize:10,color:C.accent,background:C.accentSoft,padding:"2px 7px",borderRadius:99,border:"1px solid "+C.accent+"33"}}>🎵 Music</span>}
-      </div>}
+    {/* Header */}
+    <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <div style={{fontWeight:700,fontSize:14}}>🎬 Preview</div>
+      <span style={{fontSize:11,color:C.muted}}>{clips.length} clips</span>
+      {voiceoverUrl&&<span style={{fontSize:10,color:C.green,background:"#22c55e11",padding:"2px 7px",borderRadius:99,border:"1px solid #22c55e33"}}>🎙️</span>}
+      {musicUrl&&<span style={{fontSize:10,color:C.accent,background:C.accentSoft,padding:"2px 7px",borderRadius:99,border:"1px solid "+C.accent+"33"}}>🎵</span>}
       <div style={{flex:1}}/>
-      <button onClick={playHook} disabled={playing&&!hookPreview} style={{background:"#EDE8FF",border:"1.5px solid #C4B5FD",color:"#5B49FF",borderRadius:8,padding:"4px 12px",cursor:"pointer",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>⚡ Preview Hook (3s)</button>
+      {/* Caption toggle */}
+      <button onClick={()=>updateCaptions({enabled:!captions.enabled})} style={{background:captions.enabled?C.accent:C.surface,color:captions.enabled?"#fff":C.muted,border:"1.5px solid "+(captions.enabled?C.accent:C.border),borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>CC {captions.enabled?"On":"Off"}</button>
+      <button onClick={()=>setShowCaptionPanel(v=>!v)} style={{background:showCaptionPanel?C.accentSoft:C.surface,border:"1px solid "+(showCaptionPanel?C.accent:C.border),color:showCaptionPanel?C.accent:C.muted,borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11}}>⚙ Captions</button>
       <span style={{background:sc?.bg,color:sc?.color,border:"1px solid "+sc?.bd,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5}}>{cur?.label}</span>
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"1fr 260px"}}>
+    {/* Caption settings panel */}
+    {showCaptionPanel&&<div style={{background:C.bg,borderBottom:"1px solid "+C.border,padding:"12px 14px",display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
+      <div>
+        <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Style</div>
+        <div style={{display:"flex",gap:6}}>
+          {([["word","Word by word"],["line","Full line"],["karaoke","Karaoke"]] as [CaptionStyle,string][]).map(([v,l])=>
+            <button key={v} onClick={()=>updateCaptions({style:v})} style={{background:captions.style===v?C.accent:C.surface,color:captions.style===v?"#fff":C.muted,border:"1px solid "+(captions.style===v?C.accent:C.border),borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:captions.style===v?700:400}}>{l}</button>
+          )}
+        </div>
+      </div>
+      <div>
+        <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Size</div>
+        <div style={{display:"flex",gap:6}}>
+          {([[18,"S"],[22,"M"],[28,"L"],[34,"XL"]] as [number,string][]).map(([v,l])=>
+            <button key={v} onClick={()=>updateCaptions({fontSize:v})} style={{background:captions.fontSize===v?C.accent:C.surface,color:captions.fontSize===v?"#fff":C.muted,border:"1px solid "+(captions.fontSize===v?C.accent:C.border),borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:captions.fontSize===v?700:400}}>{l}</button>
+          )}
+        </div>
+      </div>
+      <div>
+        <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Accent colour</div>
+        <div style={{display:"flex",gap:6}}>
+          {[C.accent,"#FFD700","#FF3B5C","#00C4B4","#FF6B35","#fff"].map(col=>
+            <button key={col} onClick={()=>updateCaptions({accentColor:col})} style={{width:24,height:24,borderRadius:"50%",background:col,border:"2px solid "+(captions.accentColor===col?"#fff":C.border),cursor:"pointer",outline:captions.accentColor===col?"2px solid "+C.accent:"none",outlineOffset:"1px"}}/>
+          )}
+          <input type="color" value={captions.accentColor} onChange={e=>updateCaptions({accentColor:e.target.value})} style={{width:24,height:24,borderRadius:"50%",border:"none",cursor:"pointer",padding:0,background:"none"}} title="Custom colour"/>
+        </div>
+      </div>
+    </div>}
+
+    {/* Video + timeline */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 240px"}}>
       <div style={{position:"relative",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:320}}>
         <video ref={vidRef} playsInline preload="metadata" muted={cur?.muted||false} style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
-        {!playing&&<div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+        {/* Caption overlay */}
+        {captions.enabled&&<CaptionOverlay spoken={cur?.spoken||""} elapsed={elapsed} clipDur={clipDur} settings={captions}/>}
+        {!playing&&<div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:5}}>
           <div style={{width:52,height:52,borderRadius:"50%",background:"#000a",border:"2px solid #fff4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>▶</div>
-          {(voiceoverUrl||musicUrl)&&<div style={{position:"absolute",bottom:16,fontSize:11,color:"#fff",background:"#000a",padding:"3px 10px",borderRadius:99}}>{[voiceoverUrl?"🎙️ Voiceover":"",musicUrl?"🎵 Music":""].filter(Boolean).join(" + ")} will play</div>}
         </div>}
+        {/* 9:16 safe zone indicator */}
+        {captions.enabled&&<div style={{position:"absolute",bottom:"14%",left:0,right:0,height:"1px",background:"rgba(255,255,255,0.15)",pointerEvents:"none",zIndex:4}} title="Meta CTA safe zone"/>}
       </div>
       <div style={{borderLeft:"1px solid "+C.border,overflowY:"auto",maxHeight:480}}>
         <div style={{padding:"8px 10px",borderBottom:"1px solid "+C.border,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>Timeline</div>
-        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>{
-          setClipIdx(i);setPlaying(false);
-          if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}
-          if(musicRef.current){musicRef.current.pause()}
-        }} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
+        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false);setElapsed(0);if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}if(musicRef.current)musicRef.current.pause()}} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
           <div style={{width:34,position:"relative",paddingTop:"60px",flexShrink:0,borderRadius:5,overflow:"hidden",background:"#111",border:"1px solid "+(active?C.accent:C.border)}}>{clip.item.mux_playback_id&&<img src={muxThumb(clip.item.mux_playback_id,clip.item.thumbnail_time||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>}</div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{background:sc2.bg,color:sc2.color,fontSize:8,fontWeight:800,padding:"1px 5px",borderRadius:3,display:"inline-block",marginBottom:3}}>{clip.label}</div>
-            {clip.muted&&<span style={{fontSize:8,color:"#ef4444",marginLeft:4}}>🔇</span>}
             <div style={{fontSize:10,color:active?C.text:C.muted,lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{clip.spoken||clip.item.title}</div>
           </div>
         </div>})}
       </div>
     </div>
 
-    <div style={{padding:"10px 16px",borderTop:"1px solid "+C.border}}>
-      {/* Timeline scrubber */}
-      <div style={{display:"flex",gap:2,marginBottom:10}}>
-        {clips.map((clip:any,i:number)=>{
-          const sc2=secColor(clip.label)
-          const active=i===clipIdx
-          return<div key={i} onClick={()=>{
-            setClipIdx(i);setPlaying(false);
-            if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}
-            if(musicRef.current){musicRef.current.pause()}
-          }} title={clip.label} style={{flex:1,height:6,borderRadius:3,background:active?sc2.color:sc2.bg,cursor:"pointer",border:active?"1px solid "+sc2.color:"1px solid transparent",transition:"all 0.15s"}}/>
-        })}
+    {/* Controls */}
+    <div style={{padding:"10px 14px",borderTop:"1px solid "+C.border}}>
+      <div style={{display:"flex",gap:2,marginBottom:8}}>
+        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false);setElapsed(0);if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}if(musicRef.current)musicRef.current.pause()}} title={clip.label} style={{flex:1,height:5,borderRadius:3,background:active?sc2.color:sc2.bg,cursor:"pointer",border:active?"1px solid "+sc2.color:"none",transition:"all 0.15s"}}/>})}
       </div>
-      {/* Section labels */}
-      <div style={{display:"flex",gap:2,marginBottom:10}}>
-        {clips.map((clip:any,i:number)=>{
-          const sc2=secColor(clip.label)
-          const active=i===clipIdx
-          return<div key={i} onClick={()=>{
-            setClipIdx(i);setPlaying(false);
-            if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}
-            if(musicRef.current){musicRef.current.pause()}
-          }} style={{flex:1,textAlign:"center",fontSize:7,fontWeight:800,color:active?sc2.color:C.muted,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap"}}>{clip.label?.substring(0,4)}</div>
-        })}
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-        <button onClick={()=>{setClipIdx(i=>Math.max(0,i-1));setPlaying(false)}} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
-        <button onClick={toggle} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>{playing?"⏸ Pause":"▶ Play Full Ad"}</button>
-        <button onClick={()=>{setClipIdx(i=>Math.min(clips.length-1,i+1));setPlaying(false)}} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
-        <span style={{fontSize:11,color:C.muted}}>{clipIdx+1} / {clips.length}</span>
-        {musicUrl&&<div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}>
-          <span style={{fontSize:10,color:C.muted,whiteSpace:"nowrap"}}>🎵 {Math.round(musicVol*100)}%</span>
-          <input type="range" min="0" max="1" step="0.05" value={musicVol} onChange={e=>setMusicVol(parseFloat(e.target.value))} style={{width:70,accentColor:C.accent,cursor:"pointer"}}/>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <button onClick={()=>{setClipIdx(i=>Math.max(0,i-1));setPlaying(false);setElapsed(0)}} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
+        <button onClick={toggle} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>{playing?"⏸ Pause":"▶ Play"}</button>
+        <button onClick={()=>{setClipIdx(i=>Math.min(clips.length-1,i+1));setPlaying(false);setElapsed(0)}} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
+        <span style={{fontSize:11,color:C.muted}}>{clipIdx+1}/{clips.length}</span>
+        {musicUrl&&<div style={{display:"flex",alignItems:"center",gap:5,marginLeft:"auto"}}>
+          <span style={{fontSize:10,color:C.muted}}>🎵 {Math.round((musicRef.current?.volume||0.2)*100)}%</span>
+          <input type="range" min="0" max="1" step="0.05" defaultValue="0.2" onChange={e=>{if(musicRef.current)musicRef.current.volume=parseFloat(e.target.value)}} style={{width:60,accentColor:C.accent,cursor:"pointer"}}/>
         </div>}
       </div>
     </div>
@@ -1521,13 +1546,12 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
         const possibleDupes=items.filter((item:Item)=>{
           if(!item.duration_seconds)return false
           const durDiff=Math.abs(item.duration_seconds-videoDuration)
-          return durDiff<1.5
+          return durDiff<1.5 // within 1.5 seconds = likely same video
         })
         if(possibleDupes.length>0){
           const dupeTitle=possibleDupes[0].title
-          // Surface as inline warning — let user decide via "Upload anyway" button in queue UI
-          updateQueue(idx,{status:"duplicate_warning",progress:0,msg:`Possible duplicate of "${dupeTitle}" (${videoDuration.toFixed(1)}s). Check before uploading.`})
-          return
+          const proceed=window.confirm(`"${entry.title}" appears to be a duplicate of "${dupeTitle}" (same duration: ${videoDuration.toFixed(1)}s). Upload anyway?`)
+          if(!proceed){updateQueue(idx,{status:"pending",progress:0,msg:""});return}
         }
       }
     }catch(e){/* continue with upload if check fails */}
@@ -1576,7 +1600,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
   const activeFilterCount=filterCtypes.length+filterCreators.length+filterAges.length+filterGenders.length+filterAdPotential.length+filterDuration.length
   function clearFilters(){setFilterCtypes([]);setFilterCreators([]);setFilterAges([]);setFilterGenders([]);setFilterAdPotential([]);setFilterDuration([])}
   async function handleDelete(id:string){const item=items.find(i=>i.id===id);await supabase.from("items").delete().in("id",[id,...(item?.clip_ids||[])]);onRefresh();setSelected(null);setView("grid")}
-  async function bulkDelete(){setDeleting(true);const gone=new Set(selectedIds);selectedIds.forEach(id=>{const item=items.find(i=>i.id===id);(item?.clip_ids||[]).forEach((cid:string)=>gone.add(cid))});await supabase.from("items").delete().in("id",Array.from(gone));onRefresh();setSelectMode(false);setSelectedIds([]);setDeleting(false)}
+  async function bulkDelete(){if(!window.confirm(`Delete ${selectedIds.length} item(s)?`))return;setDeleting(true);const gone=new Set(selectedIds);selectedIds.forEach(id=>{const item=items.find(i=>i.id===id);(item?.clip_ids||[]).forEach(cid=>gone.add(cid))});await supabase.from("items").delete().in("id",Array.from(gone));onRefresh();setSelectMode(false);setSelectedIds([]);setDeleting(false)}
   async function updateTags(id:string,tags:string[]){const item=items.find(i=>i.id===id);const newAnalysis={...(item?.analysis||{}),scene_tags:tags};await supabase.from("items").update({analysis:newAnalysis}).eq("id",id);onRefresh();if(selected?.id===id)setSelected({...selected,analysis:newAnalysis})}
 
   function sortItems(arr:Item[]){const c=[...arr];if(sortIdx===0)return c.sort((a,b)=>new Date(b.created_at||0).getTime()-new Date(a.created_at||0).getTime());if(sortIdx===1)return c.sort((a,b)=>new Date(a.created_at||0).getTime()-new Date(b.created_at||0).getTime());if(sortIdx===2)return c.sort((a,b)=>a.title.localeCompare(b.title));return c.sort((a,b)=>b.title.localeCompare(a.title))}
@@ -1649,17 +1673,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
             {uploadQueue.filter((e:any)=>e.status==="duplicate").length>0&&<div style={{marginTop:6,fontSize:12,color:C.yellow}}>⚠️ {uploadQueue.filter((e:any)=>e.status==="duplicate").length} duplicate{uploadQueue.filter((e:any)=>e.status==="duplicate").length!==1?"s":""} blocked</div>}
           </div>
           {/* Show individual errors only */}
-          {uploadQueue.filter((e:any)=>e.status==="error").map((entry:any)=><div key={entry.id} style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:12,color:C.red}}>❌ {entry.title} — {entry.msg}</div>)}
-          {uploadQueue.filter((e:any)=>e.status==="duplicate_warning").map((entry:any)=>{
-            const realIdx=uploadQueue.indexOf(entry)
-            return<div key={entry.id} style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-              <div style={{flex:1,minWidth:200}}><div style={{fontSize:12,fontWeight:700,color:"#92400E",marginBottom:2}}>⚠️ Possible duplicate</div><div style={{fontSize:11,color:"#92400E"}}>{entry.msg}</div></div>
-              <div style={{display:"flex",gap:8}}>
-                <Btn onClick={()=>updateQueue(realIdx,{status:"pending",progress:0,msg:""})} style={{background:C.accent,color:"#fff",fontSize:11,padding:"5px 12px"}}>Upload anyway</Btn>
-                <Btn onClick={()=>updateQueue(realIdx,{status:"duplicate",progress:0,msg:"Skipped"})} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:11,padding:"5px 12px"}}>Skip</Btn>
-              </div>
-            </div>
-          })}
+          {uploadQueue.filter((e:any)=>e.status==="error").map((entry:any,idx:number)=><div key={entry.id} style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:12,color:C.red}}>❌ {entry.title} — {entry.msg}</div>)}
           {/* Pending uploads that still need a title */}
           {uploadQueue.filter((e:any)=>e.status==="pending").map((entry:any,idx:number)=>{
             const realIdx=uploadQueue.indexOf(entry)
@@ -1704,6 +1718,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:16}}>
         <div><Chip label={selected.type==="clip"?"CLIP":(a.content_type||"Untagged")} color={selected.type==="clip"?typeColor("Clip"):undefined}/><div style={{fontWeight:800,fontSize:22,marginTop:8,marginBottom:4}}>{selected.title}</div><div style={{color:C.muted,fontSize:13,display:"flex",gap:12,flexWrap:"wrap"}}>{selected.duration_seconds&&<span>⏱ {fmt(selected.duration_seconds)}</span>}{selected.creator&&<span>👤 {selected.creator}{selected.creator_age?` · ${selected.creator_age}`:""}</span>}{selected.created_at&&<span>Added {new Date(selected.created_at).toLocaleDateString()}</span>}</div></div>
         <Btn onClick={async()=>{
+          if(!window.confirm("Delete this "+(selected.type==="clip"?"clip":"video and all its clips")+"?"))return
           if(selected.type==="clip"&&selected.parent_id){
             // Remove from parent's clip_ids
             const parent=items.find(i=>i.id===selected.parent_id)
@@ -1842,6 +1857,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [musicName,setMusicName]=useState<string|null>(null)
   const [suggestedMood,setSuggestedMood]=useState("Uplifting")
   const [adTitle,setAdTitle]=useState("")
+  const [captionSettings,setCaptionSettings]=useState<CaptionSettings>({...DEFAULT_CAPTIONS})
   const [hookVariations,setHookVariations]=useState<any[][]>([])
   const [selectedHooks,setSelectedHooks]=useState<number[]>([0])
   const [activeHookIdx,setActiveHookIdx]=useState(0)
@@ -1858,7 +1874,6 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
       const stage=STAGES.find(s=>s.value===form.awarenessStage)||STAGES[0]
       let ctx=`BRAND:\nName: ${brand.name||"Unknown"}\nDesc: ${brand.description||""}\nVoice: ${brand.voice||""}\nCustomer: ${brand.target_customer||""}\nReviews: ${brand.reviews||""}\n\n`
       if(prod)ctx+=`PRODUCT:\nName: ${prod.name}\nDesc: ${prod.description||""}\nBenefits: ${prod.benefits||""}\nClaims: ${prod.claims||""}\n\n`
-
       const prompt=ctx+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
       const raw=await callClaude([{role:"user",content:prompt}],2000)
       const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
@@ -1943,7 +1958,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
         if(d.url)finalVoiceoverUrl=d.url
       }catch(e){console.error("Voiceover upload failed:",e)}
     }
-    const adData={title,status,mode:"script" as const,sections:secs,voiceover_url:finalVoiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName,hookVariation:hookNum!=null?hookNum+1:null}}
+    const adData={title,status,mode:"script" as const,sections:secs,voiceover_url:finalVoiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName,hookVariation:hookNum!=null?hookNum+1:null,captionSettings}}
     const savedAd=await onSaveForgedAd(adData)
     if(savedAd?.id){
       fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(e=>console.error("Background render error:",e))
@@ -2229,7 +2244,7 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
         <Card style={{padding:0,overflow:"hidden",marginBottom:20}}>
           <ScriptTable sections={sections} onChange={(s:any[])=>{setSections(s);setHookSections(prev=>({...prev,[activeHookIdx]:s}))}} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} voiceoverUrl={voiceoverUrl}/>
         </Card>
-        <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl}/>
+        <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl} captionSettings={captionSettings} onCaptionChange={setCaptionSettings}/>
       </>}
 
       {/* Step 4: Forge */}
@@ -2249,7 +2264,7 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
           <Card pad={12}><div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover</div>{voiceoverUrl?<><audio src={voiceoverUrl} controls style={{width:"100%",height:32}}/><div style={{fontSize:11,color:C.green,marginTop:4}}>✓ {voiceoverVoice}</div><button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.muted,fontSize:10,cursor:"pointer",textDecoration:"underline",padding:0}}>Change</button></>:<div style={{fontSize:12,color:C.muted}}>None — <button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,textDecoration:"underline",padding:0}}>add one</button></div>}</Card>
           <Card pad={12}><div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music</div>{musicUrl?<><audio src={musicUrl} controls style={{width:"100%",height:32}}/><div style={{fontSize:11,color:C.green,marginTop:4}}>✓ {musicName}</div><button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.muted,fontSize:10,cursor:"pointer",textDecoration:"underline",padding:0}}>Change</button></>:<div style={{fontSize:12,color:C.muted}}>None — <button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,textDecoration:"underline",padding:0}}>add some</button></div>}</Card>
         </div>
-        <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl}/>
+        <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl} captionSettings={captionSettings} onCaptionChange={setCaptionSettings}/>
       </div>}
     </div>
   }
@@ -2478,7 +2493,7 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
     <div style={{padding:"10px 12px",flex:1,display:"flex",flexDirection:"column",gap:5}}>
       <div style={{fontWeight:700,fontSize:12,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{ad.title}</div>
       <div style={{display:"flex",gap:2}} onMouseLeave={()=>setHoverRating(0)}>
-        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={e=>{e.stopPropagation();setHoverRating(star)}} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:13,color:(hoverRating||rating)>=star?"#f59e0b":"rgba(0,0,0,0.15)",transition:"color 0.1s"}}>★</span>)}
+        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={e=>{e.stopPropagation();setHoverRating(star)}} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:13,color:(hoverRating||rating)>=star?"#f59e0b":"#ffffff22",transition:"color 0.1s"}}>★</span>)}
       </div>
       <div style={{fontSize:10,color:C.muted}}>{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}{ad.metadata?.adLength?` · ${ad.metadata.adLength}`:""}</div>
       {(ad as any).notes&&<div style={{fontSize:10,color:C.muted,fontStyle:"italic",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>📝 {(ad as any).notes}</div>}
@@ -2526,6 +2541,7 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
   async function saveNotes(id:string){await supabase.from("forged_ads").update({notes:notesVal}).eq("id",id);setEditingNotes(null);onRefresh()}
 
   async function bulkDelete(){
+    if(!window.confirm(`Delete ${selectedIds.length} ad(s)?`))return
     setDeleting(true)
     for(const id of selectedIds){await supabase.from("forged_ads").delete().eq("id",id)}
     setSelectedIds([]);setSelectMode(false);setDeleting(false);onRefresh()
