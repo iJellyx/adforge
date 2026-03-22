@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
 const SHOTSTACK_API_KEY = process.env.SHOTSTACK_API_KEY!
-const SHOTSTACK_ENV = process.env.SHOTSTACK_ENV || 'stage'
-
-export const runtime = 'nodejs'
+const SHOTSTACK_BASE = 'https://api.shotstack.io/v1'
 
 export async function POST(req: NextRequest) {
+  const supabase = createServiceClient()
+
   try {
     const { adId } = await req.json()
-    const supabase = createServiceClient()
+    if (!adId) return NextResponse.json({ error: 'adId required' }, { status: 400 })
 
     const { data: ad } = await supabase
       .from('forged_ads')
@@ -17,34 +17,57 @@ export async function POST(req: NextRequest) {
       .eq('id', adId)
       .single()
 
-    if (!ad?.render_id) return NextResponse.json({ status: 'pending' })
-    if (ad.render_status === 'ready') return NextResponse.json({ status: 'ready', url: ad.render_url })
-    if (ad.render_status === 'failed') return NextResponse.json({ status: 'failed' })
+    if (!ad?.render_id) {
+      return NextResponse.json({ status: 'pending' })
+    }
 
-    // Check Shotstack
-    const res = await fetch(`https://api.shotstack.io/${SHOTSTACK_ENV}/render/${ad.render_id}`, {
+    // Already done — return immediately
+    if (ad.render_status === 'ready' && ad.render_url) {
+      return NextResponse.json({ status: 'ready', url: ad.render_url })
+    }
+
+    // Poll Shotstack
+    const res = await fetch(`${SHOTSTACK_BASE}/render/${ad.render_id}`, {
       headers: { 'x-api-key': SHOTSTACK_API_KEY },
     })
+
     const data = await res.json()
-    const status = data.response?.status
+    const renderData = data?.response
 
-    if (status === 'done') {
-      const url = data.response.url
-      await supabase.from('forged_ads').update({
-        render_status: 'ready',
-        render_url: url,
-        updated_at: new Date().toISOString(),
-      }).eq('id', adId)
-      return NextResponse.json({ status: 'ready', url })
+    if (!renderData) {
+      return NextResponse.json({ status: ad.render_status || 'rendering' })
     }
 
-    if (status === 'failed') {
-      await supabase.from('forged_ads').update({ render_status: 'failed' }).eq('id', adId)
-      return NextResponse.json({ status: 'failed' })
+    const shotStatus: string = renderData.status // queued | fetching | rendering | saving | done | failed
+
+    if (shotStatus === 'done' && renderData.url) {
+      await supabase
+        .from('forged_ads')
+        .update({
+          render_status: 'ready',
+          render_url: renderData.url,
+          render_error: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', adId)
+
+      return NextResponse.json({ status: 'ready', url: renderData.url })
     }
 
-    return NextResponse.json({ status: 'rendering' })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    if (shotStatus === 'failed') {
+      const errMsg = renderData.error || 'Render failed on Shotstack'
+      await supabase
+        .from('forged_ads')
+        .update({ render_status: 'failed', render_error: errMsg })
+        .eq('id', adId)
+
+      return NextResponse.json({ status: 'failed', error: errMsg })
+    }
+
+    // Still in progress
+    return NextResponse.json({ status: 'rendering', shotstackStatus: shotStatus })
+  } catch (err: any) {
+    console.error('Check route error:', err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
