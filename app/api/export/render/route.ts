@@ -277,10 +277,13 @@ export async function POST(req: NextRequest) {
 
     const output = {
       format: 'mp4',
-      resolution: 'hd',        // 1080×1920 portrait
-      aspectRatio: '9:16',
+      resolution: 'mobile',  // 720×1280 portrait — 'hd' is landscape only
       fps: 30,
       quality: 'high',
+      size: {
+        width: 720,
+        height: 1280,
+      },
     }
 
     // 5. Submit to Shotstack
@@ -296,13 +299,18 @@ export async function POST(req: NextRequest) {
     const shotstackData = await shotstackRes.json()
 
     if (!shotstackRes.ok) {
-      const errMsg = shotstackData?.response?.error || shotstackData?.message || 'Shotstack error'
-      // Store error on the ad
+      // Log full response for debugging
+      console.error('Shotstack rejected render:', JSON.stringify(shotstackData))
+      const errMsg =
+        shotstackData?.response?.error ||
+        shotstackData?.message ||
+        shotstackData?.error ||
+        (typeof shotstackData === 'string' ? shotstackData : JSON.stringify(shotstackData))
       await supabase
         .from('forged_ads')
         .update({ render_status: 'failed', render_error: errMsg })
         .eq('id', adId)
-      return NextResponse.json({ error: errMsg }, { status: 500 })
+      return NextResponse.json({ error: errMsg, detail: shotstackData }, { status: 500 })
     }
 
     const renderId = shotstackData?.response?.id
