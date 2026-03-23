@@ -104,7 +104,7 @@ function captionHtml(text: string, accentColor: string): string {
 
 // ── Shotstack timeline builders ────────────────────────────────────────────
 
-function buildVideoClips(sections: any[], items: any[]) {
+function buildVideoClips(sections: any[], items: any[], hasVoiceover: boolean) {
   const clips: any[] = []
   let timelinePos = 0
 
@@ -124,12 +124,15 @@ function buildVideoClips(sections: any[], items: any[]) {
       const trimOut = seg.trimEnd ?? naturalEnd
       const duration = Math.max(0.5, trimOut - trimIn)
 
+      // Mute clip audio if: section is explicitly muted OR a voiceover track exists
+      const shouldMute = section.muted || hasVoiceover
+
       clips.push({
         asset: {
           type: 'video',
           src: `https://stream.mux.com/${item.mux_playback_id}/capped-1080p.mp4`,
           trim: trimIn,
-          volume: section.muted ? 0 : 1,
+          volume: shouldMute ? 0 : 1,
         },
         start: timelinePos,
         length: duration,
@@ -173,31 +176,35 @@ function buildAudioClips(
 function buildCaptionClips(
   sections: any[],
   captionSettings: CaptionSettings,
-  videoWidth = 1080,
-  videoHeight = 1920
 ) {
   if (!captionSettings?.enabled) return []
 
   const { style, accentColor, fontSize } = captionSettings
   const chunks = buildCaptionTimeline(sections, style)
 
-  // Lower third position: 18% from bottom, safe above Meta CTA zone
-  const yPercent = 18
-  const yPx = Math.round(videoHeight * (yPercent / 100))
+  // Map fontSize numbers to Shotstack size strings
+  const sizeMap: Record<number, string> = { 18: 'small', 22: 'medium', 28: 'large', 34: 'x-large' }
+  const ssSize = sizeMap[fontSize] || 'medium'
 
-  return chunks.map((chunk) => ({
-    asset: {
-      type: 'html',
-      html: `<p style="font-family:Impact,Arial Black,sans-serif;font-size:${fontSize * 2}px;font-weight:900;text-align:center;line-height:1.2;-webkit-text-stroke:2px black;paint-order:stroke fill;max-width:${videoWidth * 0.88}px;margin:0 auto">${captionHtml(chunk.text, accentColor)}</p>`,
-      width: videoWidth,
-      height: Math.round(videoHeight * 0.15),
-      background: 'transparent',
-    },
-    start: chunk.start,
-    length: chunk.duration,
-    position: 'bottom',
-    offset: { x: 0, y: yPercent / 100 },
-  }))
+  return chunks.map((chunk) => {
+    // Split into words, first word gets accent colour if available
+    // Use plain text for the title asset — Shotstack handles styling natively
+    return {
+      asset: {
+        type: 'title',
+        text: chunk.text,
+        style: 'minimal',
+        color: accentColor,    // accent on all caption text — closest to preview
+        size: ssSize,
+        background: 'transparent',
+        position: 'bottom',
+      },
+      start: chunk.start,
+      length: chunk.duration,
+      position: 'bottom',
+      offset: { x: 0, y: 0.18 }, // 18% from bottom — above Meta CTA zone
+    }
+  })
 }
 
 // ── Route handler ──────────────────────────────────────────────────────────
@@ -241,7 +248,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Build tracks
-    const { clips: videoClips, totalDuration } = buildVideoClips(sections, items)
+    const { clips: videoClips, totalDuration } = buildVideoClips(sections, items, !!ad.voiceover_url)
 
     if (!videoClips.length) {
       return NextResponse.json({ error: 'No Mux-ready clips to render' }, { status: 400 })
