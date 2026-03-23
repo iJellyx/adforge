@@ -13,13 +13,26 @@ type Item = {
   clip_role?: string; created_at?: string
 }
 type Script = { id: string; product_name?: string; metadata?: any; sections?: any[]; created_at?: string }
-type BrandProfile = { id?: string; name: string; website: string; description: string; voice: string; target_customer: string; reviews: string; additional_info: string; customer_avatars: CustomerAvatar[]; brand_intelligence?: any; winning_patterns?: any[] }
+type BrandProfile = { id?: string; name: string; website: string; description: string; voice: string; target_customer: string; reviews: string; additional_info: string; customer_avatars: CustomerAvatar[] }
 type CustomerAvatar = { id: string; name: string; age: string; gender: string; description: string; pains: string; desires: string; objections: string }
 type Product = { id?: string; name: string; description: string; benefits: string; target_customer: string; claims: string; ingredients: string; differentiators: string; reviews: string; notes: string; price: string; url: string }
 type ForgedAd = { id: string; title: string; status: 'draft'|'complete'; mode?: 'script'|'broll'; script_id?: string; sections?: any[]; voiceover_url?: string; voiceover_voice?: string; music_url?: string; music_name?: string; render_id?: string; render_url?: string; render_status?: string; notes?: string; star_rating?: number; metadata?: any; created_at?: string; updated_at?: string }
 
 
-const C = { bg:"#F4F2FF",surface:"#ffffff",card:"#ffffff",border:"rgba(91,73,255,0.12)",accent:"#5B49FF",accentSoft:"#EDE8FF",text:"#0F1133",muted:"#6B6894",green:"#16A34A",yellow:"#D97706",red:"#DC2626" }
+const C = {
+  bg:          "#07090F",
+  surface:     "#0C1018",
+  card:        "#0F1520",
+  border:      "rgba(255,255,255,0.07)",
+  accent:      "#6366F1",
+  accentSoft:  "rgba(99,102,241,0.1)",
+  accentGlow:  "rgba(99,102,241,0.2)",
+  text:        "#DDE2F0",
+  muted:       "#48506A",
+  green:       "#10B981",
+  yellow:      "#F59E0B",
+  red:         "#EF4444",
+}
 const GENDERS = ["Male","Female","Non-binary","Other"]
 const AGE_RANGES = ["Under 18","18-24","25-34","35-44","45+"]
 const SEC_TYPES = ["HOOK","PROBLEM","AGITATE","SOLUTION","SOCIAL PROOF","BODY","CTA"]
@@ -30,7 +43,7 @@ const STAGES = [
   {value:"product_aware",label:"Product Aware",desc:"Know your product, haven't bought"},
   {value:"most_aware",label:"Most Aware",desc:"Need a reason to buy now"},
 ]
-const STAGE_COLORS: Record<string,string> = { unaware:"#7C3AED",problem_aware:"#DC2626",solution_aware:"#D97706",product_aware:"#2563EB",most_aware:"#16A34A" }
+const STAGE_COLORS: Record<string,string> = { unaware:"#A78BFA",problem_aware:"#F87171",solution_aware:"#FBBF24",product_aware:"#60A5FA",most_aware:"#34D399" }
 const AD_LENGTHS = ["15 seconds","30 seconds","45 seconds","60 seconds","90 seconds"]
 const FORM_CTYPES = ["UGC","Talking Head","Founder Story","Mashup","Testimonial","Problem-Solution","Tutorial","Before & After"]
 const SORTS = ["Newest first","Oldest first","A → Z","Z → A"]
@@ -53,12 +66,12 @@ function muxThumb(playbackId: string, time = 0) { return `https://image.mux.com/
 function muxMp4(playbackId: string) { return `https://stream.mux.com/${playbackId}/high.mp4` }
 function fmt(s?: number) { if(!s&&s!==0)return"0:00"; return`${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,"0")}` }
 function typeColor(t?: string) {
-  const m: Record<string,any> = { "UGC":{bg:"#EDE8FF",color:"#5B49FF"},"Founder Clip":{bg:"#EFF6FF",color:"#2563EB"},"Tutorial":{bg:"#F0FDF4",color:"#16A34A"},"Behind the Scenes":{bg:"#FFFBEB",color:"#D97706"},"High Production":{bg:"#FDF2F8",color:"#9D174D"},"Testimonial":{bg:"#EFF6FF",color:"#1D4ED8"},"Product Demo":{bg:"#ECFDF5",color:"#059669"},"Clip":{bg:"#FFF7ED",color:"#C2410C"},"Talking Head":{bg:"#F5F3FF",color:"#7C3AED"} }
-  return m[t||""]||{bg:"#EDE8FF",color:"#5B49FF"}
+  const m: Record<string,any> = { "UGC":{bg:"rgba(99,102,241,0.12)",color:"#818CF8"},"Founder Clip":{bg:"rgba(59,130,246,0.12)",color:"#60A5FA"},"Tutorial":{bg:"rgba(16,185,129,0.12)",color:"#34D399"},"Behind the Scenes":{bg:"rgba(245,158,11,0.12)",color:"#FBBF24"},"High Production":{bg:"rgba(236,72,153,0.12)",color:"#F472B6"},"Testimonial":{bg:"rgba(59,130,246,0.12)",color:"#93C5FD"},"Product Demo":{bg:"rgba(5,150,105,0.12)",color:"#6EE7B7"},"Clip":{bg:"rgba(249,115,22,0.12)",color:"#FB923C"},"Talking Head":{bg:"rgba(124,58,237,0.12)",color:"#A78BFA"} }
+  return m[t||""]||{bg:"rgba(99,102,241,0.12)",color:"#818CF8"}
 }
 function secColor(t?: string) {
-  const m: Record<string,any> = { "HOOK":{bg:"#FEF2F2",color:"#DC2626",bd:"#FECACA"},"PROBLEM":{bg:"#FFFBEB",color:"#D97706",bd:"#FCD34D"},"AGITATE":{bg:"#FFF7ED",color:"#C2410C",bd:"#FED7AA"},"SOLUTION":{bg:"#F0FDF4",color:"#16A34A",bd:"#86EFAC"},"SOCIAL PROOF":{bg:"#EFF6FF",color:"#2563EB",bd:"#BFDBFE"},"CTA":{bg:"#EDE8FF",color:"#5B49FF",bd:"#C4B5FD"},"BODY":{bg:"#F9FAFB",color:"#6B7280",bd:"#E5E7EB"} }
-  return m[t||""]||{bg:"#F4F2FF",color:C.muted,bd:C.border}
+  const m: Record<string,any> = { "HOOK":{bg:"rgba(239,68,68,0.1)",color:"#F87171",bd:"rgba(239,68,68,0.25)"},"PROBLEM":{bg:"rgba(245,158,11,0.1)",color:"#FBBF24",bd:"rgba(245,158,11,0.25)"},"AGITATE":{bg:"rgba(249,115,22,0.1)",color:"#FB923C",bd:"rgba(249,115,22,0.25)"},"SOLUTION":{bg:"rgba(16,185,129,0.1)",color:"#34D399",bd:"rgba(16,185,129,0.25)"},"SOCIAL PROOF":{bg:"rgba(59,130,246,0.1)",color:"#60A5FA",bd:"rgba(59,130,246,0.25)"},"CTA":{bg:"rgba(99,102,241,0.1)",color:"#818CF8",bd:"rgba(99,102,241,0.25)"},"BODY":{bg:"rgba(100,116,139,0.1)",color:"#94A3B8",bd:"rgba(100,116,139,0.25)"} }
+  return m[t||""]||{bg:"rgba(100,116,139,0.08)",color:C.muted,bd:C.border}
 }
 function getDurationRange(secs?: number){if(!secs)return"";if(secs<5)return"Under 5s";if(secs<15)return"5–15s";if(secs<30)return"15–30s";if(secs<60)return"30–60s";return"Over 60s"}
 async function callClaude(messages: any[], maxTokens = 1500) {
@@ -67,15 +80,15 @@ async function callClaude(messages: any[], maxTokens = 1500) {
 }
 
 // ── UI Primitives ─────────────────────────────────────────────────────────
-function Btn({onClick,disabled,style,children}:any){return<button onClick={onClick} disabled={disabled} style={{border:"none",borderRadius:50,padding:"9px 20px",fontWeight:700,fontSize:13,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.4:1,fontFamily:"inherit",transition:"opacity 0.15s",...style}}>{children}</button>}
-function Label({children}:any){return<div style={{fontSize:12,fontWeight:700,color:C.muted,marginBottom:6,letterSpacing:"0.02em"}}>{children}</div>}
-function Card({children,style,pad}:any){return<div style={{background:C.card,border:"1.5px solid "+C.border,borderRadius:16,padding:pad||20,boxShadow:"0 2px 12px rgba(91,73,255,0.06)",...style}}>{children}</div>}
-function STitle({children,size,mb}:any){return<div style={{fontWeight:800,fontSize:size||17,marginBottom:mb!=null?mb:16,color:C.text,letterSpacing:"-0.02em"}}>{children}</div>}
-function Chip({label,color}:any){const cl=color||typeColor(label);return<span style={{background:cl.bg,color:cl.color,padding:"3px 10px",borderRadius:50,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{label}</span>}
+function Btn({onClick,disabled,style,children}:any){return<button onClick={onClick} disabled={disabled} style={{border:"none",borderRadius:8,padding:"8px 18px",fontWeight:600,fontSize:12,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.35:1,fontFamily:"inherit",transition:"opacity 0.15s",letterSpacing:"0.01em",...style}}>{children}</button>}
+function Label({children}:any){return<div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase" as const}}>{children}</div>}
+function Card({children,style,pad}:any){return<div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:pad||18,...style}}>{children}</div>}
+function STitle({children,size,mb}:any){return<div style={{fontWeight:700,fontSize:size||16,marginBottom:mb!=null?mb:14,color:C.text,letterSpacing:"-0.02em"}}>{children}</div>}
+function Chip({label,color}:any){const cl=color||typeColor(label);return<span style={{background:cl.bg,color:cl.color,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700,whiteSpace:"nowrap" as const,letterSpacing:"0.03em"}}>{label}</span>}
 function Input({value,onChange,placeholder,type,textarea,rows,onKeyDown,style}:any){
-  const s={background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",boxSizing:"border-box" as const,fontFamily:"inherit",...style}
+  const s={background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const,fontFamily:"inherit",...style}
   if(textarea)return<textarea value={value} onChange={onChange} onKeyDown={onKeyDown} placeholder={placeholder} rows={rows||3} style={{...s,resize:"vertical" as const}}/>
-  return<input value={value} onChange={onChange} placeholder={placeholder} type={type||"text"} style={s}/>
+  return<input value={value} onChange={onChange} placeholder={placeholder} type={type||"text"} style={s} onKeyDown={onKeyDown}/>
 }
 function MultiSelect({label,options,selected,onChange}:any){
   const [open,setOpen]=useState(false);const ref=useRef<HTMLDivElement>(null);const sel:string[]=selected||[]
@@ -221,7 +234,7 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl,onSave}:any){
   const assignedCount=clips.length
   const total=(sections||[]).length
 
-  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20,marginTop:16}}>
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:20,marginTop:16}}>
     <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>⬇️ Export Final Ad as MP4</div>
     <div style={{fontSize:13,color:C.muted,marginBottom:12}}>Stitches all clips{voiceoverUrl?" + voiceover":""}{musicUrl?" + music":""} into a single MP4 file on the server.</div>
     <div style={{background:"#ffffff08",border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",fontSize:11,color:C.muted,marginBottom:12}}>⚠️ Requires Mux paid plan for MP4 access. Max ~60s of total ad length on Vercel's free plan.</div>
@@ -331,7 +344,7 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
   }
   const filteredVoices=voices.filter(v=>!voiceSearch||v.name.toLowerCase().includes(voiceSearch.toLowerCase())||(v.gender||"").toLowerCase().includes(voiceSearch.toLowerCase())||(v.accent||"").toLowerCase().includes(voiceSearch.toLowerCase()))
 
-  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20}}>
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:20}}>
     <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>🎙️ AI Voiceover — Per Section</div>
     <div style={{fontSize:13,color:C.muted,marginBottom:16}}>Generates a separate voiceover for each script section — perfectly synced to each clip.</div>
     {loading&&<div style={{color:C.muted,fontSize:13,padding:"20px 0",textAlign:"center"}}>Loading voices…</div>}
@@ -443,7 +456,7 @@ function MusicPicker({suggestedMood,onSave}:any){
     else{Object.values(audioRefs.current).forEach(a=>a.pause());if(!audioRefs.current[track.id]){const a=new Audio(track.preview_url);audioRefs.current[track.id]=a;a.onended=()=>setPlayingId(null)}audioRefs.current[track.id].play().catch(()=>{});setPlayingId(track.id)}
   }
 
-  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20}}>
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:20}}>
     <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>🎵 Background Music</div>
     <div style={{fontSize:13,color:C.muted,marginBottom:12}}>Optional — choose a royalty-free track.</div>
     {suggestedMood&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"8px 12px",fontSize:12,color:C.accent,marginBottom:12}}>✨ AI suggested: <strong>{suggestedMood}</strong></div>}
@@ -595,7 +608,7 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
 
   const sc=secColor(cur?.label)
 
-  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden"}}>
     {/* Hidden audio elements — per section voiceover */}
     {cur?.sectionVoUrl&&<audio ref={voiceRef} key={cur.sectionVoUrl} src={cur.sectionVoUrl} style={{display:"none"}}/>}
     {voiceoverUrl&&!cur?.sectionVoUrl&&<audio ref={voiceRef} key={voiceoverUrl} src={voiceoverUrl} style={{display:"none"}}/>}
@@ -796,20 +809,20 @@ Return ONLY valid JSON:
     <STitle size={24} mb={6}>⚡ Auto-Mash from Library</STitle>
     <div style={{color:C.muted,fontSize:14,marginBottom:32,lineHeight:1.6}}>AI analyses your clip library and assembles a complete direct response ad using your creators' real voices — no scripting needed.</div>
 
-    {usableClips.length<3&&<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:12,padding:"12px 16px",fontSize:13,color:C.yellow,marginBottom:20}}>⚠️ You need at least 3 clips with transcripts. Upload more content first, or wait for AI analysis to complete.</div>}
+    {usableClips.length<3&&<div style={{background:"rgba(245,158,11,0.08)",border:"1.5px solid rgba(245,158,11,0.3)",borderRadius:12,padding:"12px 16px",fontSize:13,color:C.yellow,marginBottom:20}}>⚠️ You need at least 3 clips with transcripts. Upload more content first, or wait for AI analysis to complete.</div>}
 
     <Card style={{marginBottom:16}}>
       <STitle size={14} mb={14}>Ad Parameters</STitle>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
         <div>
           <Label>Ad Length</Label>
-          <select value={form.adLength} onChange={e=>setF("adLength",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}>
+          <select value={form.adLength} onChange={e=>setF("adLength",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",cursor:"pointer"}}>
             {AD_LENGTHS.map(l=><option key={l} value={l}>{l}</option>)}
           </select>
         </div>
         <div>
           <Label>Product</Label>
-          <select value={form.productId} onChange={e=>setF("productId",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}>
+          <select value={form.productId} onChange={e=>setF("productId",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",cursor:"pointer"}}>
             <option value="">General</option>
             {products.map((x:any)=><option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
@@ -821,7 +834,7 @@ Return ONLY valid JSON:
       </div>
       <Label>Style</Label>
       <div style={{display:"flex",gap:8}}>
-        {["mashup","ugc-only","testimonial-wall"].map(s=><button key={s} onClick={()=>setF("style",s)} style={{flex:1,background:form.style===s?C.accent:C.surface,color:form.style===s?"#fff":C.muted,border:"1.5px solid "+(form.style===s?C.accent:C.border),borderRadius:50,padding:"8px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"inherit"}}>{s==="mashup"?"🎬 Mashup":s==="ugc-only"?"📱 UGC Only":"⭐ Testimonials"}</button>)}
+        {["mashup","ugc-only","testimonial-wall"].map(s=><button key={s} onClick={()=>setF("style",s)} style={{flex:1,background:form.style===s?C.accent:C.surface,color:form.style===s?"#fff":C.muted,border:"1.5px solid "+(form.style===s?C.accent:C.border),borderRadius:8,padding:"8px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"inherit"}}>{s==="mashup"?"🎬 Mashup":s==="ugc-only"?"📱 UGC Only":"⭐ Testimonials"}</button>)}
       </div>
     </Card>
 
@@ -849,7 +862,7 @@ Return ONLY valid JSON:
 
     <div style={{marginBottom:16}}>
       <Label>Ad Title</Label>
-      <input value={adTitle} onChange={e=>setAdTitle(e.target.value)} placeholder="Auto-Mash title…" style={{background:C.surface,border:"1.5px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
+      <input value={adTitle} onChange={e=>setAdTitle(e.target.value)} placeholder="Auto-Mash title…" style={{background:C.surface,border:"1.5px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
     </div>
 
     <div style={{marginBottom:20}}>
@@ -1034,7 +1047,7 @@ Return ONLY valid JSON:
     </div>
 
     {pickingIdx!==null&&<div onClick={()=>setPickingIdx(null)} style={{position:"fixed",inset:0,background:"#000000dd",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:16,padding:24,maxWidth:700,width:"100%",marginTop:40}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:12,padding:24,maxWidth:700,width:"100%",marginTop:40}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontWeight:700,fontSize:17}}>Pick B-Roll Clip</div><Btn onClick={()=>setPickingIdx(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px",fontSize:12}}>✕</Btn></div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
           {libraryItems.filter((i:Item)=>i.mux_playback_id).map((item:Item)=><div key={item.id} onClick={()=>{setBrollSections(prev=>prev.map((s:any,i:number)=>i===pickingIdx?{...s,selectedClipId:item.id,autoSelected:false}:s));setPickingIdx(null)}}><VideoCard item={item} onClick={()=>{}} selectMode={false} isSelected={brollSections[pickingIdx!]?.selectedClipId===item.id} onToggleSelect={()=>{}}/></div>)}
@@ -1218,7 +1231,7 @@ function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,onClose
         </div>
         <div style={{background:C.accentSoft,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:C.accent}}>{selDur.toFixed(1)}s selected</div>
         <button onClick={onClose} style={{background:"none",border:"1px solid "+C.border,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,color:C.muted,fontFamily:"inherit"}}>Cancel</button>
-        <button onClick={()=>onSave({trimStart:inPt,trimEnd:outPt})} style={{background:C.accent,color:"#fff",border:"none",borderRadius:50,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Save Trim</button>
+        <button onClick={()=>onSave({trimStart:inPt,trimEnd:outPt})} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Save Trim</button>
       </div>
       <div style={{background:"#000",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:340,overflow:"hidden"}}>
         <video ref={vidRef} playsInline preload="auto" muted style={{maxHeight:340,width:"100%",objectFit:"contain",display:"block",cursor:"pointer"}} onClick={togglePlay}/>
@@ -1229,7 +1242,7 @@ function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,onClose
         <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginBottom:6}}>
           <span style={{color:C.green,fontWeight:700}}>In: {inPt.toFixed(2)}s</span>
           <span style={{color:C.accent,fontWeight:700}}>Duration: {selDur.toFixed(2)}s</span>
-          <span style={{color:"#DC2626",fontWeight:700}}>Out: {outPt.toFixed(2)}s</span>
+          <span style={{color:C.red,fontWeight:700}}>Out: {outPt.toFixed(2)}s</span>
         </div>
         <div ref={tlRef} onMouseDown={onTlDown} style={{position:"relative",height:60,borderRadius:10,overflow:"hidden",cursor:"crosshair",userSelect:"none",marginBottom:10}}>
           <div style={{position:"absolute",inset:0,display:"flex"}}>
@@ -1255,9 +1268,9 @@ function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,onClose
         </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>seekTo(inPt)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>⏮ In</button>
-          <button onClick={togglePlay} style={{background:C.accent,color:"#fff",border:"none",borderRadius:50,padding:"9px 0",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",flex:1}}>{playing?"⏸ Pause":"▶ Play Selection"}</button>
+          <button onClick={togglePlay} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"9px 0",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",flex:1}}>{playing?"⏸ Pause":"▶ Play Selection"}</button>
           <button onClick={()=>seekTo(outPt-0.1)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Out ⏭</button>
-          <button onClick={()=>{setInPt(item.start_seconds??0);setOutPt(item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||fullDur))}} style={{background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",borderRadius:8,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Reset</button>
+          <button onClick={()=>{setInPt(item.start_seconds??0);setOutPt(item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||fullDur))}} style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.3)",color:C.red,borderRadius:8,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Reset</button>
         </div>
       </div>
     </div>
@@ -1383,7 +1396,7 @@ function toggleMuteClip(idx:number){
                 updM(idx,{clipSegments:[...currentSegs,newSeg]})
                 setPickerIdx(idx*1000+currentSegs.length)
               }} style={{width:"100%",background:C.accentSoft,border:"1.5px dashed "+C.accent,color:C.accent,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:10,fontWeight:700,marginBottom:8}}>+ Add clip to section</button>}
-              {!readOnly&&!(row.clipSegments?.length>0||row.selectedClipId)&&(row.matchedClipIds||[]).length>0&&<button onClick={()=>setPickerIdx(idx*1000)} style={{width:"100%",background:"#FFFBEB",border:"1px solid #FCD34D",color:C.yellow,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8}}>+ Pick ({row.matchedClipIds.length} matched)</button>}
+              {!readOnly&&!(row.clipSegments?.length>0||row.selectedClipId)&&(row.matchedClipIds||[]).length>0&&<button onClick={()=>setPickerIdx(idx*1000)} style={{width:"100%",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.3)",color:C.yellow,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8}}>+ Pick ({row.matchedClipIds.length} matched)</button>}
               {alternatives.length>0&&<div><div style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>Alternatives</div><div style={{display:"flex",gap:5}}>{alternatives.map((alt:Item)=><div key={alt.id} title={alt.title} onClick={()=>!readOnly&&updM(idx,{selectedClipId:alt.id,autoSelected:false})} style={{flex:1,position:"relative",paddingTop:"177.78%",background:"#111",borderRadius:6,overflow:"hidden",cursor:readOnly?"default":"pointer",border:"2px solid "+(alt.id===row.selectedClipId?C.accent:C.border)}}>{alt.mux_playback_id?<img src={muxThumb(alt.mux_playback_id,alt.thumbnail_time||alt.start_seconds||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🎬</div>}</div>)}</div></div>}
             </div>
             <div style={{padding:"10px 12px",background:C.surface,borderTop:"1px solid "+C.border,flex:1}}>
@@ -1406,7 +1419,7 @@ function ClipPickerModal({currentId,matchedIds,libraryItems,sectionLabel,onSelec
   const others=libraryItems.filter((i:Item)=>!matchedIds.includes(i.id))
   const fl=(arr:Item[])=>!search.trim()?arr:arr.filter((i:Item)=>[i.title,i.creator,...(i.analysis?.scene_tags||[])].some((f:any)=>f&&String(f).toLowerCase().includes(search.toLowerCase())))
   return<div onClick={onClose} style={{position:"fixed",inset:0,background:"#000000dd",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
-    <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:16,padding:24,maxWidth:760,width:"100%",marginTop:40}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:12,padding:24,maxWidth:760,width:"100%",marginTop:40}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div><div style={{fontWeight:700,fontSize:17}}>Change Clip</div><div style={{fontSize:13,color:C.muted}}>for <strong style={{color:C.text}}>{sectionLabel}</strong></div></div><Btn onClick={onClose} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px",fontSize:12}}>✕</Btn></div>
       <Input value={search} onChange={(e:any)=>setSearch(e.target.value)} placeholder="Search…" style={{marginBottom:20}}/>
       {fl(matched).length>0&&<div style={{marginBottom:24}}><div style={{fontSize:11,fontWeight:700,color:C.green,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>🎯 AI-Matched ({fl(matched).length})</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>{fl(matched).map((item:Item)=><div key={item.id} style={{cursor:"pointer"}} onClick={()=>{onSelect(item.id);onClose()}}><VideoCard item={item} compact={false} highlight={item.id!==currentId} isSelected={item.id===currentId} onClick={()=>{}} selectMode={false} onToggleSelect={()=>{}}/></div>)}</div></div>}
@@ -1557,7 +1570,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
     <div style={{color:C.muted,fontSize:14,marginBottom:24}}>Upload one or more videos. AI will automatically transcribe, analyse, and create clips from each one.</div>
 
     {/* Drop zone */}
-    <div onDrop={e=>{e.preventDefault();setDragOver(false);const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith("video/"));if(files.length>0)addFiles(files)}} onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onClick={()=>fileRef.current?.click()} style={{border:"2px dashed "+(dragOver?C.accent:C.border),borderRadius:14,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:dragOver?C.accentSoft:C.surface,marginBottom:20,transition:"all 0.15s"}}>
+    <div onDrop={e=>{e.preventDefault();setDragOver(false);const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith("video/"));if(files.length>0)addFiles(files)}} onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onClick={()=>fileRef.current?.click()} style={{border:"2px dashed "+(dragOver?C.accent:C.border),borderRadius:10,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:dragOver?C.accentSoft:C.surface,marginBottom:20,transition:"all 0.15s"}}>
       <input ref={fileRef} type="file" accept="video/*" multiple style={{display:"none"}} onChange={e=>{const files=Array.from(e.target.files||[]).filter(f=>f.type.startsWith("video/"));if(files.length>0)addFiles(files);e.target.value=""}}/>
       <div style={{fontSize:36,marginBottom:10}}>🎬</div>
       <div style={{fontWeight:700,fontSize:16,marginBottom:6}}>Drop videos here or click to select</div>
@@ -1589,7 +1602,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
         const minsLeft=Math.ceil(secsLeft/60)
         const allDone=done+errored===total
         return<>
-          <div style={{background:C.card,border:"1.5px solid "+C.border,borderRadius:14,padding:20,marginBottom:12}}>
+          <div style={{background:C.card,border:"1.5px solid "+C.border,borderRadius:10,padding:20,marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{fontWeight:700,fontSize:15,color:C.text}}>{allDone?"✓ Upload complete":"⏳ Uploading & analysing…"}</div>
               <div style={{fontSize:13,color:C.muted,fontWeight:600}}>{done}/{total} videos</div>
@@ -1605,7 +1618,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
             {uploadQueue.filter((e:any)=>e.status==="duplicate").length>0&&<div style={{marginTop:6,fontSize:12,color:C.yellow}}>⚠️ {uploadQueue.filter((e:any)=>e.status==="duplicate").length} duplicate{uploadQueue.filter((e:any)=>e.status==="duplicate").length!==1?"s":""} blocked</div>}
           </div>
           {/* Show individual errors only */}
-          {uploadQueue.filter((e:any)=>e.status==="error").map((entry:any,idx:number)=><div key={entry.id} style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:12,color:C.red}}>❌ {entry.title} — {entry.msg}</div>)}
+          {uploadQueue.filter((e:any)=>e.status==="error").map((entry:any,idx:number)=><div key={entry.id} style={{background:"rgba(239,68,68,0.08)",border:"1.5px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:12,color:C.red}}>❌ {entry.title} — {entry.msg}</div>)}
           {/* Pending uploads that still need a title */}
           {uploadQueue.filter((e:any)=>e.status==="pending").map((entry:any,idx:number)=>{
             const realIdx=uploadQueue.indexOf(entry)
@@ -1628,15 +1641,15 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
 
     {/* While uploading — prompt for brand/product info */}
     {uploadQueue.some((e:any)=>e.status==="uploading"||e.status==="processing"||e.status==="done")&&<div style={{marginBottom:12}}>
-      {(!brand?.name||!brand?.description)&&<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+      {(!brand?.name||!brand?.description)&&<div style={{background:"rgba(245,158,11,0.08)",border:"1.5px solid rgba(245,158,11,0.3)",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
         <div style={{fontWeight:700,fontSize:13,color:C.yellow,marginBottom:4}}>💡 While you wait — set up your Brand Profile</div>
         <div style={{fontSize:12,color:C.muted,marginBottom:10}}>Your brand name, voice, and description help AI write better scripts and match clips more accurately.</div>
-       <button onClick={onGoToBrand} style={{background:C.yellow,color:"#fff",border:"none",borderRadius:50,padding:"7px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>Set up Brand →</button>
+       <button onClick={onGoToBrand} style={{background:C.yellow,color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>Set up Brand →</button>
       </div>}
-      {brand?.name&&(!products||products.length===0)&&<div style={{background:"#EFF6FF",border:"1.5px solid #BFDBFE",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+      {brand?.name&&(!products||products.length===0)&&<div style={{background:"rgba(59,130,246,0.08)",border:"1.5px solid #BFDBFE",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
         <div style={{fontWeight:700,fontSize:13,color:"#2563EB",marginBottom:4}}>💡 Add your products while you wait</div>
         <div style={{fontSize:12,color:C.muted,marginBottom:10}}>Products let AI create targeted scripts with specific benefits, claims, and pricing.</div>
-       <button onClick={()=>{onRefresh();setView("grid");}} style={{background:"#2563EB",color:"#fff",border:"none",borderRadius:50,padding:"7px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>Add Products →</button>
+       <button onClick={()=>{onRefresh();setView("grid");}} style={{background:"#2563EB",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>Add Products →</button>
       </div>}
     </div>}
   </div>
@@ -1701,7 +1714,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
       {selected.transcript&&<Card style={{marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📝 Auto-Transcript</div><div style={{fontSize:13,lineHeight:1.7,color:C.muted,maxHeight:120,overflowY:"auto"}}>{selected.transcript}</div></Card>}
       {a.key_quotes?.length>0&&<Card style={{marginBottom:12}}><Label>Key Quotes</Label>{a.key_quotes.map((q:string,i:number)=><div key={i} style={{borderLeft:"3px solid "+C.accent,paddingLeft:12,marginBottom:8,fontSize:14,fontStyle:"italic"}}>"{q}"</div>)}</Card>}
       {a.ad_notes&&<Card style={{background:adPotColor+"18",border:"1px solid "+adPotColor+"44",marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:adPotColor,marginBottom:6}}>📢 AD USAGE</div><div style={{fontSize:14,lineHeight:1.6}}>{a.ad_notes}</div></Card>}
-     {selected.type==="original"&&clips.length===0&&selected.mux_status==="ready"&&<Card style={{marginBottom:12,background:"#FFFBEB",border:"1.5px solid #FCD34D"}}>
+     {selected.type==="original"&&clips.length===0&&selected.mux_status==="ready"&&<Card style={{marginBottom:12,background:"rgba(245,158,11,0.08)",border:"1.5px solid rgba(245,158,11,0.3)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <div style={{fontWeight:700,fontSize:13,color:C.yellow,marginBottom:2}}>⚠️ No clips generated</div>
@@ -1727,7 +1740,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
 
   return<div style={{padding:20}}>
     <div style={{display:"flex",gap:10,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
-      <input placeholder="Search titles, creators, tags…" value={search} onChange={e=>setSearch(e.target.value)} style={{flex:1,minWidth:180,background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none"}}/>
+      <input placeholder="Search titles, creators, tags…" value={search} onChange={e=>setSearch(e.target.value)} style={{flex:1,minWidth:180,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none"}}/>
       <select value={sortIdx} onChange={e=>setSortIdx(Number(e.target.value))} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 12px",color:C.text,fontSize:13,outline:"none",cursor:"pointer"}}>{SORTS.map((s,i)=><option key={i} value={i}>{s}</option>)}</select>
       {!selectMode&&<Btn onClick={()=>setSelectMode(true)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"9px 14px"}}>Select</Btn>}
       {selectMode&&<div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -1803,27 +1816,9 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
     try{
       const prod=products.find((x:Product)=>String((x as any).id)===String(form.productId))||null
       const stage=STAGES.find(s=>s.value===form.awarenessStage)||STAGES[0]
-
-      // ── Fix 1: Full brand + product context ───────────────────────────
-      let ctx=`BRAND:\nName: ${brand.name||"Unknown"}\nDescription: ${brand.description||""}\nVoice & Tone: ${brand.voice||""}\nTarget Customer: ${brand.target_customer||""}\nSocial Proof / Reviews: ${brand.reviews||""}\nAdditional Info: ${brand.additional_info||""}\n\n`
-      if(prod)ctx+=`PRODUCT:\nName: ${prod.name}\nDescription: ${prod.description||""}\nKey Benefits: ${prod.benefits||""}\nClaims & Results: ${prod.claims||""}\nDifferentiators (what makes it unique): ${prod.differentiators||""}\nKey Ingredients: ${prod.ingredients||""}\nCustomer Reviews: ${prod.reviews||""}\nPrice: ${prod.price||""}\nNotes for scripts: ${prod.notes||""}\n\n`
-
-      // ── Fix 2: Brand intelligence context ─────────────────────────────
-      const intel=brand.brand_intelligence
-      let intelBlock=""
-      if(intel&&(intel.best_hook_types?.length||intel.top_performing_claims?.length)){
-        intelBlock=`\nBRAND PERFORMANCE INTELLIGENCE (apply these learnings):\n`
-        if(intel.best_hook_types?.length)intelBlock+=`• Best hook types for this brand: ${intel.best_hook_types.join(", ")}\n`
-        if(intel.worst_hook_types?.length)intelBlock+=`• Avoid these hook types: ${intel.worst_hook_types.join(", ")}\n`
-        if(intel.best_hook_patterns?.length)intelBlock+=`• Winning hook patterns: ${intel.best_hook_patterns.join("; ")}\n`
-        if(intel.top_performing_claims?.length)intelBlock+=`• Claims that drive results: ${intel.top_performing_claims.join(", ")}\n`
-        if(intel.underperforming_claims?.length)intelBlock+=`• Avoid leading with: ${intel.underperforming_claims.join(", ")}\n`
-        if(intel.best_content_type)intelBlock+=`• Best content type: ${intel.best_content_type}\n`
-        if(intel.avg_winning_hook_length)intelBlock+=`• Winning hooks are ~${intel.avg_winning_hook_length} words\n`
-        intelBlock+="\n"
-      }
-
-      const prompt=ctx+intelBlock+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
+      let ctx=`BRAND:\nName: ${brand.name||"Unknown"}\nDesc: ${brand.description||""}\nVoice: ${brand.voice||""}\nCustomer: ${brand.target_customer||""}\nReviews: ${brand.reviews||""}\n\n`
+      if(prod)ctx+=`PRODUCT:\nName: ${prod.name}\nDesc: ${prod.description||""}\nBenefits: ${prod.benefits||""}\nClaims: ${prod.claims||""}\n\n`
+      const prompt=ctx+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
       const raw=await callClaude([{role:"user",content:prompt}],2000)
       const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
       let secs=(data.sections||[]).map((s:any,i:number)=>({...s,id:Date.now()+i,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
@@ -1841,8 +1836,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
 
     const libSummary=matchPool.map(item=>{
       const a=item.analysis||{}
-      const quotes=(a.key_quotes||[]).slice(0,2).join(" | ")
-      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(",")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,200)+(quotes?"|quotes:"+quotes:"")+"|quality:"+(a.quality_score||"Med")+"|ad_potential:"+(a.ad_potential||"")+"|type:"+item.type
+      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|label:"+(a.label||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(", ")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,80)+"|quality:"+(a.quality_score||"Medium")+"|type:"+item.type
     }).join("\n")
 
     const sectionDesc=secs.map((s:any,i:number)=>{
@@ -1868,13 +1862,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
           const candidates=[m.best_id,...(m.alt_ids||[])].filter((id:string)=>id&&validIds.has(id)&&!usedIds.has(id))
           const clipId=candidates[0]||null
           if(clipId)usedIds.add(clipId)
-          return{
-            id:"seg-"+i+"-"+si,
-            clipId,
-            phrase:m.phrase||"",
-            reason:m.reason||"",
-            ai_suggested_clip_id:m.best_id||null, // Fix 4: track original AI suggestion
-          }
+          return{id:"seg-"+i+"-"+si,clipId,phrase:m.phrase||"",reason:m.reason||""}
         }).filter((seg:any)=>seg.clipId)
 
         const allMatchedIds=sectionMatches.flatMap((m:any)=>[m.best_id,...(m.alt_ids||[])]).filter((id:string)=>id&&validIds.has(id))
@@ -1979,17 +1967,17 @@ Return ONLY valid JSON:
     <STitle size={24} mb={8}>Create New Ad</STitle>
     <div style={{color:C.muted,fontSize:15,marginBottom:40}}>How would you like to start?</div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
-      <div onClick={()=>setView("generate")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:16,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor=C.accent;(e.currentTarget as any).style.background=C.accentSoft}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
+      <div onClick={()=>setView("generate")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor=C.accent;(e.currentTarget as any).style.background=C.accentSoft}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
         <div style={{fontSize:36,marginBottom:12}}>✍️</div>
         <div style={{fontWeight:700,fontSize:17,marginBottom:8}}>Create from Script</div>
         <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>AI writes a direct response script, matches clips from your library, you add voiceover and music.</div>
       </div>
-      <div onClick={()=>setView("automash")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:16,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor="#7C3AED";(e.currentTarget as any).style.background="#7C3AED0a"}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
+      <div onClick={()=>setView("automash")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor="#7C3AED";(e.currentTarget as any).style.background="#7C3AED0a"}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
         <div style={{fontSize:36,marginBottom:12}}>⚡</div>
         <div style={{fontWeight:700,fontSize:17,marginBottom:8}}>Auto-Mash from Library</div>
         <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>AI assembles a complete ad from your existing creator clips — using their real voices to tell a logical story.</div>
       </div>
-      <div onClick={()=>setView("broll")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:16,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor=C.green;(e.currentTarget as any).style.background="#22c55e0a"}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
+      <div onClick={()=>setView("broll")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor=C.green;(e.currentTarget as any).style.background="#22c55e0a"}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
         <div style={{fontSize:36,marginBottom:12}}>🎬</div>
         <div style={{fontWeight:700,fontSize:17,marginBottom:8}}>Add B-Roll</div>
         <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>Upload a talking head or existing ad. AI keeps the original audio and suggests b-roll clips to overlay.</div>
@@ -2033,9 +2021,9 @@ Return ONLY valid JSON:
     <Card style={{marginBottom:14}}>
       <STitle size={14} mb={14}>Parameters</STitle>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
-        <div><Label>Product</Label><select value={form.productId} onChange={e=>setF("productId",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}><option value="">General</option>{products.map((x:Product)=><option key={(x as any).id} value={(x as any).id}>{x.name}</option>)}</select></div>
-        <div><Label>Content Type</Label><select value={form.contentType} onChange={e=>setF("contentType",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}>{FORM_CTYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
-        <div><Label>Ad Length</Label><select value={form.adLength} onChange={e=>setF("adLength",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}>{AD_LENGTHS.map(l=><option key={l} value={l}>{l}</option>)}</select></div>
+        <div><Label>Product</Label><select value={form.productId} onChange={e=>setF("productId",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",cursor:"pointer"}}><option value="">General</option>{products.map((x:Product)=><option key={(x as any).id} value={(x as any).id}>{x.name}</option>)}</select></div>
+        <div><Label>Content Type</Label><select value={form.contentType} onChange={e=>setF("contentType",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",cursor:"pointer"}}>{FORM_CTYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+        <div><Label>Ad Length</Label><select value={form.adLength} onChange={e=>setF("adLength",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",cursor:"pointer"}}>{AD_LENGTHS.map(l=><option key={l} value={l}>{l}</option>)}</select></div>
       </div>
       <Label>Market Awareness Stage</Label>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{STAGES.map(s=>{const active=form.awarenessStage===s.value,sc2=STAGE_COLORS[s.value]||C.accent;return<div key={s.value} onClick={()=>setF("awarenessStage",s.value)} style={{background:active?sc2+"22":C.surface,border:"2px solid "+(active?sc2:C.border),borderRadius:10,padding:"10px 12px",cursor:"pointer"}}><div style={{fontWeight:700,fontSize:13,color:active?sc2:C.text,marginBottom:2}}>{s.label}</div><div style={{fontSize:11,color:C.muted}}>{s.desc}</div></div>})}</div>
@@ -2196,7 +2184,7 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
             <Btn onClick={()=>setStep("forge")} style={{background:C.accent,color:"#fff"}}>Next: Forge →</Btn>
           </div>
         </div>
-        {autoCount>0&&<div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:13,color:"#15803D",fontWeight:600}}>✦ AI auto-selected {autoCount} clip{autoCount!==1?"s":""} — swap any below.</div>}
+        {autoCount>0&&<div style={{background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:13,color:"#34D399",fontWeight:600}}>✦ AI auto-selected {autoCount} clip{autoCount!==1?"s":""} — swap any below.</div>}
         <Card style={{padding:0,overflow:"hidden",marginBottom:20}}>
           <ScriptTable sections={sections} onChange={(s:any[])=>{setSections(s);setHookSections(prev=>({...prev,[activeHookIdx]:s}))}} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} voiceoverUrl={voiceoverUrl}/>
         </Card>
@@ -2214,7 +2202,7 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
         </div>
         <div style={{marginBottom:16}}>
           <Label>Ad Name (optional)</Label>
-          <input value={adTitle} onChange={e=>setAdTitle(e.target.value)} placeholder={`e.g. ProblemAware_${form.contentType||"UGC"}_${(form.adLength||"30s").replace(" seconds","s")}_v1`} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
+          <input value={adTitle} onChange={e=>setAdTitle(e.target.value)} placeholder={`e.g. ProblemAware_${form.contentType||"UGC"}_${(form.adLength||"30s").replace(" seconds","s")}_v1`} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
           <Card pad={12}><div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover</div>{voiceoverUrl?<><audio src={voiceoverUrl} controls style={{width:"100%",height:32}}/><div style={{fontSize:11,color:C.green,marginTop:4}}>✓ {voiceoverVoice}</div><button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.muted,fontSize:10,cursor:"pointer",textDecoration:"underline",padding:0}}>Change</button></>:<div style={{fontSize:12,color:C.muted}}>None — <button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,textDecoration:"underline",padding:0}}>add one</button></div>}</Card>
@@ -2310,7 +2298,7 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
 
   const renderStatus=ad.render_status||"pending"
 
-  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20,marginTop:16}}>
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:20,marginTop:16}}>
     <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>⬇️ Download MP4</div>
 
     {renderStatus==="pending"&&<div>
@@ -2401,7 +2389,7 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
     onMouseEnter={()=>setHovered(true)}
     onMouseLeave={()=>setHovered(false)}
     onClick={handleClick}
-    style={{background:C.card,border:"2px solid "+(isSelected?C.accent:hovered?C.accent:C.border),borderRadius:14,overflow:"hidden",cursor:"pointer",transition:"border-color 0.15s,transform 0.15s",transform:hovered&&!selectMode?"translateY(-2px)":"none",display:"flex",flexDirection:"column",position:"relative"}}
+    style={{background:C.card,border:"2px solid "+(isSelected?C.accent:hovered?C.accent:C.border),borderRadius:10,overflow:"hidden",cursor:"pointer",transition:"border-color 0.15s,transform 0.15s",transform:hovered&&!selectMode?"translateY(-2px)":"none",display:"flex",flexDirection:"column",position:"relative"}}
   >
     {/* Select checkbox */}
     {selectMode&&<div style={{position:"absolute",top:8,left:8,zIndex:20,width:22,height:22,borderRadius:6,background:isSelected?C.accent:"#000a",border:"2px solid "+(isSelected?"#fff":"#fff5"),display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -2457,72 +2445,8 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
   </div>
 }
 
-function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{ads:ForgedAd[],items:Item[],brand:BrandProfile,setBrand:(b:BrandProfile)=>void,onRefresh:()=>void,onEditAd:(ad:ForgedAd)=>void,onCreateV2:(ad:ForgedAd)=>void}){
+function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefresh:()=>void}){
   const supabase=createClient()
-
-  // ── Fix 2: Update brand intelligence after performance is logged ──────
-  async function updateBrandIntelligence(updatedAds:ForgedAd[]){
-    const adsWithData=updatedAds.filter(a=>a.metadata?.hook_rate||a.metadata?.cpa||a.metadata?.roas||a.star_rating)
-    if(adsWithData.length<2)return
-
-    // Hook type analysis
-    const hookPerf:Record<string,number[]>={}
-    adsWithData.forEach(a=>{
-      const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK")
-      const hookType=hook?.hookType||"Unknown"
-      const rate=parseFloat(a.metadata?.hook_rate||"0")
-      if(rate>0){if(!hookPerf[hookType])hookPerf[hookType]=[];hookPerf[hookType].push(rate)}
-    })
-    const avg=(arr:number[])=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10:0
-    const hookEntries=Object.entries(hookPerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(b[1])-avg(a[1]))
-    const best_hook_types=hookEntries.filter(([,v])=>avg(v)>=40).map(([k])=>k)
-    const worst_hook_types=hookEntries.filter(([,v])=>avg(v)<30).map(([k])=>k)
-
-    // Hook pattern analysis from top-performing ads
-    const topAds=adsWithData.filter(a=>parseFloat(a.metadata?.hook_rate||"0")>=45)
-    const best_hook_patterns:string[]=[]
-    topAds.forEach(a=>{
-      const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK")
-      const words=(hook?.spokenWords||"").trim()
-      if(!words)return
-      if(/^\d/.test(words.split(" ")[0]))best_hook_patterns.push("Opens with a number")
-      if(/I |My |We /.test(words.substring(0,20)))best_hook_patterns.push("First-person opening")
-      if(/\?$/.test(words))best_hook_patterns.push("Question hook")
-      if(words.split(" ").length<=6)best_hook_patterns.push("Short punchy hook (under 7 words)")
-    })
-    const uniquePatterns=[...new Set(best_hook_patterns)]
-
-    // Content type analysis by CPA
-    const ctypePerf:Record<string,number[]>={}
-    adsWithData.forEach(a=>{
-      const ct=a.metadata?.contentType||"Unknown"
-      const cpa=parseFloat(a.metadata?.cpa||"0")
-      if(cpa>0){if(!ctypePerf[ct])ctypePerf[ct]=[];ctypePerf[ct].push(cpa)}
-    })
-    const ctypeEntries=Object.entries(ctypePerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(a[1])-avg(b[1]))
-    const best_content_type=ctypeEntries[0]?.[0]||""
-
-    // Top creators by star rating
-    const creatorRatings:Record<string,number[]>={}
-    adsWithData.forEach(a=>{
-      if(!a.star_rating)return
-      ;(a.sections||[]).forEach((s:any)=>{
-        const clip=items.find((i:Item)=>i.id===s.selectedClipId)
-        if(clip?.creator){if(!creatorRatings[clip.creator])creatorRatings[clip.creator]=[];creatorRatings[clip.creator].push(a.star_rating!)}
-      })
-    })
-    const top_creators=Object.entries(creatorRatings).filter(([,v])=>v.length>=2).sort((a,b)=>avg(b[1])-avg(a[1])).slice(0,3).map(([k])=>k)
-
-    // Avg hook word count in top performers
-    const hookLengths=topAds.map(a=>{const h=(a.sections||[]).find((s:any)=>s.type==="HOOK");return(h?.spokenWords||"").trim().split(/\s+/).filter(Boolean).length}).filter(l=>l>0)
-    const avg_winning_hook_length=hookLengths.length?Math.round(hookLengths.reduce((a,b)=>a+b,0)/hookLengths.length):0
-
-    const intel={best_hook_types,worst_hook_types,best_hook_patterns:uniquePatterns,best_content_type,top_creators,avg_winning_hook_length,total_ads_analysed:adsWithData.length,last_updated:new Date().toISOString()}
-
-    const updated={...brand,brand_intelligence:intel}
-    setBrand(updated)
-    if(brand.id)await supabase.from("brand_profile").update({brand_intelligence:intel}).eq("id",brand.id)
-  }
   const [previewId,setPreviewId]=useState<string|null>(null)
   const [search,setSearch]=useState("")
   const [activeTag,setActiveTag]=useState<string|null>(null)
@@ -2534,20 +2458,9 @@ function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{
   const [selectedIds,setSelectedIds]=useState<string[]>([])
   const [deleting,setDeleting]=useState(false)
   const [autoRendering,setAutoRendering]=useState(false)
-  const [perfOpen,setPerfOpen]=useState(false)
-  const [perfVals,setPerfVals]=useState<Record<string,string>>({})
-  const [perfSaving,setPerfSaving]=useState(false)
   const pollRef=useRef<any>(null)
 
   const previewAd=previewId?ads.find(a=>a.id===previewId):null
-
-  // Reset perf vals when preview ad changes
-  useEffect(()=>{
-    if(previewAd){
-      setPerfVals({hook_rate:previewAd.metadata?.hook_rate||"",cpa:previewAd.metadata?.cpa||"",roas:previewAd.metadata?.roas||"",spend:previewAd.metadata?.spend||""})
-      setPerfOpen(false)
-    }
-  },[previewId])
 
   // Auto-poll render status every 15 seconds
   useEffect(()=>{
@@ -2570,15 +2483,6 @@ function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{
   async function deleteAd(id:string){await supabase.from("forged_ads").delete().eq("id",id);onRefresh()}
   async function markComplete(id:string){await supabase.from("forged_ads").update({status:"complete",updated_at:new Date().toISOString()}).eq("id",id);onRefresh()}
   async function saveNotes(id:string){await supabase.from("forged_ads").update({notes:notesVal}).eq("id",id);setEditingNotes(null);onRefresh()}
-  async function savePerf(){
-    if(!previewAd)return
-    setPerfSaving(true)
-    const newMeta={...previewAd.metadata,...perfVals}
-    await supabase.from("forged_ads").update({metadata:newMeta}).eq("id",previewAd.id)
-    const updatedAds=ads.map(a=>a.id===previewAd.id?{...a,metadata:newMeta}:a)
-    await updateBrandIntelligence(updatedAds)
-    setPerfSaving(false);onRefresh();setPerfOpen(false)
-  }
 
   async function bulkDelete(){
     if(!window.confirm(`Delete ${selectedIds.length} ad(s)?`))return
@@ -2638,7 +2542,7 @@ function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{
 
     {/* Search + filter row */}
     <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search ads by name, product, stage…" style={{flex:1,minWidth:220,background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 14px",color:C.text,fontSize:14,outline:"none"}}/>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search ads by name, product, stage…" style={{flex:1,minWidth:220,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",color:C.text,fontSize:13,outline:"none"}}/>
 
       {/* Render status filter buttons */}
       <button onClick={()=>setRenderFilter(renderFilter==="ready"?null:"ready")} style={{background:renderFilter==="ready"?"#22c55e33":C.surface,border:"1px solid "+(renderFilter==="ready"?"#22c55e":C.border),color:renderFilter==="ready"?C.green:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>✓ Ready ({totalReady})</button>
@@ -2654,7 +2558,7 @@ function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{
 
     {/* Preview modal */}
     {previewAd&&<div onClick={()=>setPreviewId(null)} style={{position:"fixed",inset:0,background:"#000000ee",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:16,padding:24,maxWidth:900,width:"100%",marginTop:20}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:12,padding:24,maxWidth:900,width:"100%",marginTop:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,gap:16}}>
           <div style={{flex:1}}>
             <div style={{fontWeight:700,fontSize:18,marginBottom:6}}>{previewAd.title}</div>
@@ -2675,37 +2579,16 @@ function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{
                 {(previewAd as any).notes?`📝 ${(previewAd as any).notes}`:"+ Add notes"}
               </div>}
           </div>
-          <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap"}}>
-            {previewAd.mode!=="broll"&&<Btn onClick={()=>{onEditAd(previewAd);setPreviewId(null)}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px"}}>✏️ Edit Ad</Btn>}
-            {previewAd.mode!=="broll"&&<Btn onClick={()=>{onCreateV2(previewAd);setPreviewId(null)}} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontSize:12,padding:"6px 12px"}}>⚡ Create v2</Btn>}
+          <div style={{display:"flex",gap:8,flexShrink:0}}>
             {previewAd.status==="draft"&&<Btn onClick={()=>{markComplete(previewAd.id);setPreviewId(null)}} style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
             <Btn onClick={()=>{deleteAd(previewAd.id);setPreviewId(null)}} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",fontSize:12,padding:"6px 12px"}}>Delete</Btn>
-            <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕</Btn>
+            <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
           </div>
         </div>
         {previewAd.sections&&previewAd.sections.length>0&&<div style={{marginBottom:20}}><StitchedPreview sections={previewAd.sections} libraryItems={items} voiceoverUrl={previewAd.voiceover_url} musicUrl={previewAd.music_url}/></div>}
         <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
           {previewAd.voiceover_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover · {previewAd.voiceover_voice}</div><audio src={previewAd.voiceover_url} controls style={{width:"100%",height:36}}/></div>}
           {previewAd.music_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls style={{width:"100%",height:36}}/></div>}
-        </div>
-        {/* Performance logging */}
-        <div style={{marginBottom:16}}>
-          {!perfOpen
-            ?<button onClick={()=>setPerfOpen(true)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,width:"100%",textAlign:"left" as const}}>
-              📊 {previewAd.metadata?.hook_rate?`Hook rate: ${previewAd.metadata.hook_rate}%${previewAd.metadata?.cpa?` · CPA: £${previewAd.metadata.cpa}`:""}${previewAd.metadata?.roas?` · ROAS: ${previewAd.metadata.roas}x`:""}`:"+  Log performance data"}
-            </button>
-            :<div style={{background:C.bg,border:"1px solid "+C.border,borderRadius:10,padding:14}}>
-              <div style={{fontWeight:700,fontSize:13,marginBottom:10}}>📊 Log Performance Data</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-                {([["Hook Rate %","hook_rate","e.g. 42"],["CPA (£)","cpa","e.g. 18"],["ROAS","roas","e.g. 3.2"],["Spend (£)","spend","e.g. 500"]] as [string,string,string][]).map(([label,key,ph])=>
-                  <div key={key}><Label>{label}</Label><input value={perfVals[key]||""} onChange={e=>setPerfVals(v=>({...v,[key]:e.target.value}))} placeholder={ph} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"7px 10px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const}}/></div>
-                )}
-              </div>
-              <div style={{display:"flex",gap:8}}>
-                <Btn onClick={savePerf} disabled={perfSaving} style={{background:C.accent,color:"#fff",flex:1}}>{perfSaving?"Saving…":"💾 Save + Update Intelligence"}</Btn>
-                <Btn onClick={()=>setPerfOpen(false)} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn>
-              </div>
-            </div>}
         </div>
         <ForgedAdDownload ad={previewAd} onRefresh={onRefresh}/>
       </div>
@@ -2716,7 +2599,7 @@ function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{
     {ads.length>0&&filtered.length===0&&<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:28,marginBottom:8}}>🔍</div><div style={{color:C.muted,fontSize:14}}>No ads match your filters.<br/><button onClick={()=>{setSearch("");setActiveTag(null);setRenderFilter(null)}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,textDecoration:"underline",marginTop:8}}>Clear all filters</button></div></Card>}
 
 {/* Pending renders section */}
-    {ads.filter(a=>!a.render_status||a.render_status==="pending"||a.render_status==="failed").length>0&&<div style={{marginBottom:20,border:"1px solid #f59e0b44",borderRadius:14,overflow:"hidden"}}>
+    {ads.filter(a=>!a.render_status||a.render_status==="pending"||a.render_status==="failed").length>0&&<div style={{marginBottom:20,border:"1px solid #f59e0b44",borderRadius:10,overflow:"hidden"}}>
       <div style={{background:"#f59e0b11",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #f59e0b33"}}>
         <div style={{width:10,height:10,borderRadius:"50%",background:C.yellow,flexShrink:0}}/>
         <div style={{flex:1}}>
@@ -2745,7 +2628,7 @@ function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{
       const expanded=isExpanded(stageKey)
       const readyCount=stageAds.filter(a=>(a as any).render_status==="ready").length
 
-      return<div key={stageKey} style={{marginBottom:16,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
+      return<div key={stageKey} style={{marginBottom:16,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden"}}>
         <div onClick={()=>toggleStage(stageKey)} style={{background:C.card,padding:"14px 20px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderBottom:expanded?"1px solid "+C.border:"none"}}>
           <div style={{width:10,height:10,borderRadius:"50%",background:stageColor,flexShrink:0}}/>
           <div style={{flex:1}}>
@@ -2800,62 +2683,8 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
   function deleteAvatar(id:string){setBrand({...brand,customer_avatars:(brand.customer_avatars||[]).filter((a:CustomerAvatar)=>a.id!==id)})}
   const navBtn=(id:string,label:string)=><button style={{padding:"8px 18px",borderRadius:99,fontSize:13,fontWeight:600,cursor:"pointer",border:"none",background:section===id?C.accent:"transparent",color:section===id?"#fff":C.muted}} onClick={()=>setSection(id)}>{label}</button>
 
-  // Fix 3: Brand Intelligence Score
-  function calcScore():{score:number,items:{label:string,pts:number,earned:boolean,tip:string}[]}{
-    const b=brand;const ps=products
-    const checks=[
-      {label:"Brand name",pts:2,earned:!!(b.name?.trim()),tip:"Add your brand name"},
-      {label:"Brand description (100+ chars)",pts:5,earned:(b.description||"").length>=100,tip:"Describe what your brand does in detail"},
-      {label:"Brand voice & tone",pts:5,earned:(b.voice||"").length>=50,tip:"Describe your brand's personality and tone"},
-      {label:"Target customer",pts:5,earned:(b.target_customer||"").length>=50,tip:"Describe who your ideal customer is"},
-      {label:"Social proof / reviews",pts:5,earned:(b.reviews||"").length>=30,tip:"Paste customer reviews or social proof"},
-      {label:"Additional info",pts:3,earned:(b.additional_info||"").length>=30,tip:"Ingredients, certifications, backstory — anything else"},
-      {label:"At least 1 customer avatar",pts:5,earned:(b.customer_avatars||[]).length>=1,tip:"Create a customer avatar with pains, desires & objections"},
-      {label:"At least 1 product",pts:5,earned:ps.length>=1,tip:"Add your first product"},
-      {label:"Product benefits & claims",pts:5,earned:ps.some((p:Product)=>(p.benefits||"").length>20&&(p.claims||"").length>20),tip:"Fill in product benefits and specific claims"},
-      {label:"Product differentiators",pts:5,earned:ps.some((p:Product)=>(p.differentiators||"").length>20),tip:"What makes your product unique vs competitors?"},
-      {label:"Product reviews",pts:5,earned:ps.some((p:Product)=>(p.reviews||"").length>20),tip:"Paste specific product reviews — these get quoted in scripts"},
-      {label:"Product price",pts:5,earned:ps.some((p:Product)=>!!(p.price?.trim())),tip:"Add price — unlocks specific CTA copy"},
-    ]
-    const score=checks.reduce((acc,c)=>acc+(c.earned?c.pts:0),0)
-    return{score,items:checks}
-  }
-
-  const {score:intellScore,items:intellItems}=calcScore()
-  const maxStaticScore=55 // 90pts max from data; 10 from usage
-  const displayPct=Math.min(90,Math.round(intellScore/maxStaticScore*90))
-
   return<div style={{maxWidth:820,margin:"0 auto",padding:28}}>
     <STitle size={22}>Brand & Products</STitle>
-
-    {/* Intelligence Score */}
-    <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20,marginBottom:24}}>
-      <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:12}}>
-        <div style={{flex:1}}>
-          <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>🧠 Platform Intelligence Score</div>
-          <div style={{fontSize:12,color:C.muted}}>How well the platform knows your brand. Higher = better scripts, smarter clip matching, stronger captions.</div>
-        </div>
-        <div style={{fontSize:36,fontWeight:900,color:displayPct>=80?C.green:displayPct>=50?C.accent:C.yellow,minWidth:64,textAlign:"right"}}>{displayPct}%</div>
-      </div>
-      <div style={{height:8,background:C.border,borderRadius:4,overflow:"hidden",marginBottom:12}}>
-        <div style={{height:"100%",width:displayPct+"%",background:displayPct>=80?"linear-gradient(90deg,#16A34A,#22c55e)":displayPct>=50?"linear-gradient(90deg,"+C.accent+",#8B7FFF)":"linear-gradient(90deg,#D97706,#FBBF24)",borderRadius:4,transition:"width 0.6s ease"}}/>
-      </div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:intellItems.filter(i=>!i.earned).length>0?12:0}}>
-        {intellItems.filter(i=>i.earned).map(i=><span key={i.label} style={{background:"#22c55e11",color:C.green,border:"1px solid #22c55e33",borderRadius:99,fontSize:10,fontWeight:700,padding:"2px 8px"}}>✓ {i.label}</span>)}
-      </div>
-      {intellItems.filter(i=>!i.earned).length>0&&<div>
-        <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Missing — fill these to improve:</div>
-        <div style={{display:"flex",flexDirection:"column",gap:4}}>
-          {intellItems.filter(i=>!i.earned).map(i=><div key={i.label} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:C.text}}>
-            <span style={{color:C.yellow,fontWeight:700,fontSize:11,minWidth:24}}>+{i.pts}</span>
-            <span style={{color:C.muted}}>{i.tip}</span>
-          </div>)}
-        </div>
-      </div>}
-      {displayPct>=90&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:8,padding:"8px 12px",fontSize:12,color:C.green,marginTop:8}}>🎯 The final 10% comes from platform usage. Keep logging performance data on your ads — the platform learns from every result.</div>}
-      {displayPct<90&&displayPct>=70&&<div style={{fontSize:11,color:C.muted,marginTop:8}}>🎯 The last 10% is earned through usage — the platform learns from your ad performance data over time.</div>}
-    </div>
-
     <div style={{display:"flex",gap:8,marginBottom:24}}>{navBtn("brand","Brand Profile")}{navBtn("avatars",`Customer Avatars (${(brand.customer_avatars||[]).length})`)}{navBtn("products",`Products (${products.length})`)}</div>
 
     {section==="brand"&&<Card>
@@ -2881,8 +2710,8 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><STitle size={15} mb={0}>{editingAvatar.name||"New Avatar"}</STitle><Btn onClick={()=>setEditingAvatar(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"5px 10px"}}>Cancel</Btn></div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginBottom:12}}>
           <div><Label>Name *</Label><Input value={editingAvatar.name} onChange={(e:any)=>setEditingAvatar({...editingAvatar,name:e.target.value})} placeholder="e.g. Sarah"/></div>
-          <div><Label>Age Range</Label><select value={editingAvatar.age} onChange={e=>setEditingAvatar({...editingAvatar,age:e.target.value})} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}><option value="">Any</option>{AGE_RANGES.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
-          <div><Label>Gender</Label><select value={editingAvatar.gender} onChange={e=>setEditingAvatar({...editingAvatar,gender:e.target.value})} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}><option value="">Any</option>{GENDERS.map(g=><option key={g} value={g}>{g}</option>)}</select></div>
+          <div><Label>Age Range</Label><select value={editingAvatar.age} onChange={e=>setEditingAvatar({...editingAvatar,age:e.target.value})} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",cursor:"pointer"}}><option value="">Any</option>{AGE_RANGES.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
+          <div><Label>Gender</Label><select value={editingAvatar.gender} onChange={e=>setEditingAvatar({...editingAvatar,gender:e.target.value})} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",cursor:"pointer"}}><option value="">Any</option>{GENDERS.map(g=><option key={g} value={g}>{g}</option>)}</select></div>
         </div>
         <div style={{marginBottom:12}}><Label>Description</Label><Input textarea value={editingAvatar.description} onChange={(e:any)=>setEditingAvatar({...editingAvatar,description:e.target.value})} placeholder="Describe this customer" rows={2}/></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
@@ -2932,8 +2761,6 @@ export default function AdForgeApp(){
   const [brand,setBrand]=useState<BrandProfile>({...DEFAULT_BRAND})
   const [products,setProducts]=useState<Product[]>([])
   const [scriptsStartMode,setScriptsStartMode]=useState(0)
-  const [editingAd,setEditingAd]=useState<ForgedAd|null>(null)
-  const [v2SourceAd,setV2SourceAd]=useState<ForgedAd|null>(null)
   const [loading,setLoading]=useState(true)
 
   const loadData=useCallback(async()=>{
@@ -2970,48 +2797,53 @@ export default function AdForgeApp(){
   const tabBtn=(id:string,label:string)=>{const active=tab===id;return<button style={{padding:"10px 20px",background:"none",border:"none",borderBottom:"2px solid "+(active?C.accent:"transparent"),color:active?C.text:C.muted,fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",whiteSpace:"nowrap"}} onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}}>{label}</button>}
   const draftCount=forgedAds.filter(a=>a.status==="draft").length
 
-  if(loading)return<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
+  if(loading)return<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
     <div style={{textAlign:"center"}}>
-      <div style={{fontWeight:800,fontSize:24,color:C.accent,marginBottom:8,letterSpacing:"-0.02em"}}>AdForge</div>
-      <div style={{fontSize:13,color:C.muted}}>Loading your workspace…</div>
+      <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${C.accent},#818CF8)`,margin:"0 auto 16px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,boxShadow:`0 0 32px ${C.accentGlow}`}}>⚡</div>
+      <div style={{fontWeight:800,fontSize:18,color:C.text,letterSpacing:"-0.03em",marginBottom:6}}>Ad<span style={{color:C.accent}}>Forge</span></div>
+      <div style={{fontSize:12,color:C.muted,letterSpacing:"0.04em"}}>Loading workspace…</div>
     </div>
   </div>
 
   const navItem=(id:string,label:string,icon:string)=>{
     const active=tab===id
-    return<button onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",margin:"0 8px",borderRadius:10,border:"none",background:active?"rgba(91,73,255,0.12)":"transparent",color:active?C.accent:C.muted,fontWeight:active?700:500,fontSize:13,cursor:"pointer",width:"calc(100% - 16px)",textAlign:"left",fontFamily:"inherit",borderRight:active?"2px solid "+C.accent:"2px solid transparent"}}>
-      <span style={{fontSize:15,flexShrink:0}}>{icon}</span>{label}
-      {id==="forged"&&draftCount>0&&<span style={{background:C.yellow,color:"#fff",borderRadius:99,fontSize:9,padding:"1px 6px",fontWeight:800,marginLeft:"auto"}}>{draftCount}</span>}
+    return<button onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",margin:"0 8px",borderRadius:8,border:"none",background:active?"rgba(99,102,241,0.12)":"transparent",color:active?"#818CF8":C.muted,fontWeight:active?600:400,fontSize:12,cursor:"pointer",width:"calc(100% - 16px)",textAlign:"left",fontFamily:"inherit",letterSpacing:"0.01em",transition:"all 0.1s",outline:"none"}}>
+      <span style={{fontSize:13,flexShrink:0,opacity:active?1:0.6}}>{icon}</span>{label}
+      {id==="forged"&&draftCount>0&&<span style={{background:C.yellow,color:"#000",borderRadius:99,fontSize:8,padding:"1px 5px",fontWeight:800,marginLeft:"auto",letterSpacing:"0.05em"}}>{draftCount}</span>}
     </button>
   }
 
   return<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",color:C.text,display:"flex"}}>
     {/* Sidebar */}
-    <div style={{width:220,background:"#0F1133",display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0}}>
-      {/* Brand */}
-      <div style={{padding:"20px 16px 16px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
-        <div style={{fontWeight:800,fontSize:20,color:"#fff",letterSpacing:"-0.02em",marginBottom:2}}>Ad<span style={{color:"#7C6FFF"}}>Forge</span></div>
-        {brand.name&&<div style={{fontSize:10,color:"rgba(255,255,255,0.35)",fontWeight:600,letterSpacing:"0.04em",marginTop:2}}>{brand.name}</div>}
+    <div style={{width:210,background:C.surface,display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0,borderRight:`1px solid ${C.border}`}}>
+      {/* Wordmark */}
+      <div style={{padding:"18px 16px 14px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:brand.name?4:0}}>
+          <div style={{width:24,height:24,borderRadius:6,background:`linear-gradient(135deg,${C.accent},#818CF8)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0,boxShadow:`0 0 12px ${C.accentGlow}`}}>⚡</div>
+          <span style={{fontWeight:800,fontSize:15,color:C.text,letterSpacing:"-0.03em"}}>Ad<span style={{color:"#818CF8"}}>Forge</span></span>
+        </div>
+        {brand.name&&<div style={{fontSize:10,color:C.muted,fontWeight:500,letterSpacing:"0.05em",paddingLeft:32,marginTop:2,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{brand.name}</div>}
       </div>
       {/* Nav */}
-      <div style={{padding:"12px 0",flex:1}}>
+      <div style={{padding:"10px 0",flex:1}}>
         {navItem("library","Library","▦")}
         {navItem("forged","Forged Ads","⚡")}
         {navItem("scripts","Scripts","✦")}
         {navItem("brand","Brand","◉")}
+        {navItem("winning","Winning Ads","🏆")}
       </div>
-      {/* Create Ad CTA */}
-      <div style={{padding:"12px 16px 20px",borderTop:"1px solid rgba(255,255,255,0.08)"}}>
-        {tab==="library"&&libView!=="add"&&<button onClick={()=>setLibView("add")} style={{width:"100%",background:"rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.7)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:50,padding:"9px",fontFamily:"inherit",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:8}}>+ Add Content</button>}
-        <button onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts")}} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:50,padding:"11px",fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer"}}>✦ Create Ad</button>
-        <button onClick={handleSignOut} style={{width:"100%",background:"none",border:"none",color:"rgba(255,255,255,0.25)",cursor:"pointer",fontSize:11,marginTop:10,fontFamily:"inherit"}}>Sign out</button>
+      {/* Footer */}
+      <div style={{padding:"10px 14px 18px",borderTop:`1px solid ${C.border}`}}>
+        {tab==="library"&&libView!=="add"&&<button onClick={()=>setLibView("add")} style={{width:"100%",background:`rgba(99,102,241,0.07)`,color:"#818CF8",border:`1px solid rgba(99,102,241,0.2)`,borderRadius:8,padding:"8px",fontFamily:"inherit",fontSize:11,fontWeight:600,cursor:"pointer",marginBottom:8,letterSpacing:"0.01em"}}>+ Add Content</button>}
+        <button onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts")}} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},#818CF8)`,color:"#fff",border:"none",borderRadius:8,padding:"10px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"-0.01em",boxShadow:`0 4px 14px ${C.accentGlow}`}}>✦ Create Ad</button>
+        <button onClick={handleSignOut} style={{width:"100%",background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:10,marginTop:10,fontFamily:"inherit",letterSpacing:"0.03em",opacity:0.6}}>Sign out</button>
       </div>
     </div>
     {/* Main content */}
-    <div style={{marginLeft:220,flex:1,minHeight:"100vh",background:C.bg}}>
+    <div style={{marginLeft:210,flex:1,minHeight:"100vh",background:C.bg}}>
       {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} onGoToBrand={()=>setTab("brand")}/>}
-      {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode} editingAd={editingAd} onEditingAdConsumed={()=>setEditingAd(null)} v2SourceAd={v2SourceAd} onV2Consumed={()=>setV2SourceAd(null)}/>}
-      {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} brand={brand} setBrand={setBrand} onRefresh={loadData} onEditAd={(ad:ForgedAd)=>{setEditingAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}} onCreateV2={(ad:ForgedAd)=>{setV2SourceAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}}/>}
+      {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode}/>}
+      {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} onRefresh={loadData}/>}
       {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
     </div>
   </div>
