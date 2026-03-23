@@ -4,7 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 const SHOTSTACK_API_KEY = process.env.SHOTSTACK_API_KEY!
 const SHOTSTACK_BASE = process.env.SHOTSTACK_ENV === 'production'
   ? 'https://api.shotstack.io/edit/v1'
-  : 'https://api.shotstack.io/edit/stage/v1'
+  : 'https://api.shotstack.io/edit/stage'
 
 // ── Caption helpers ────────────────────────────────────────────────────────
 
