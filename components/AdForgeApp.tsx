@@ -13,7 +13,7 @@ type Item = {
   clip_role?: string; created_at?: string
 }
 type Script = { id: string; product_name?: string; metadata?: any; sections?: any[]; created_at?: string }
-type BrandProfile = { id?: string; name: string; website: string; description: string; voice: string; target_customer: string; reviews: string; additional_info: string; customer_avatars: CustomerAvatar[] }
+type BrandProfile = { id?: string; name: string; website: string; description: string; voice: string; target_customer: string; reviews: string; additional_info: string; customer_avatars: CustomerAvatar[]; brand_intelligence?: any; winning_patterns?: any[] }
 type CustomerAvatar = { id: string; name: string; age: string; gender: string; description: string; pains: string; desires: string; objections: string }
 type Product = { id?: string; name: string; description: string; benefits: string; target_customer: string; claims: string; ingredients: string; differentiators: string; reviews: string; notes: string; price: string; url: string }
 type ForgedAd = { id: string; title: string; status: 'draft'|'complete'; mode?: 'script'|'broll'; script_id?: string; sections?: any[]; voiceover_url?: string; voiceover_voice?: string; music_url?: string; music_name?: string; render_id?: string; render_url?: string; render_status?: string; notes?: string; star_rating?: number; metadata?: any; created_at?: string; updated_at?: string }
@@ -1774,36 +1774,9 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
 }
 
 // ── Scripts Tab ───────────────────────────────────────────────────────────
-function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode,editingAd,onEditingAdConsumed,v2SourceAd,onV2Consumed}:any){
-  const [view,setView]=useState("list")
+function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode}:any){
+  const [view,setView]=useState("list")  // list | chooseMode | generate | broll | review | detail
   useEffect(()=>{if(startAtChooseMode>0)setView("chooseMode")},[startAtChooseMode])
-
-  // Edit mode — load a forged ad back into the review flow
-  useEffect(()=>{
-    if(!editingAd)return
-    setSections(editingAd.sections||[])
-    setVoiceoverUrl(editingAd.voiceover_url||null)
-    setVoiceoverVoice(editingAd.voiceover_voice||null)
-    setMusicUrl(editingAd.music_url||null)
-    setMusicName(editingAd.music_name||null)
-    setAdTitle(editingAd.title||"")
-    setGenMeta({form:{contentType:editingAd.metadata?.contentType,adLength:editingAd.metadata?.adLength,awarenessStage:editingAd.metadata?.awarenessStage},productName:editingAd.metadata?.productName})
-    setView("review");setStep("clips")
-    onEditingAdConsumed?.()
-  },[editingAd])
-
-  // v2 mode — load source ad structure, clear voiceover/music, go to script step for hook swap
-  useEffect(()=>{
-    if(!v2SourceAd)return
-    setSections((v2SourceAd.sections||[]).map((s:any)=>({...s,voiceover_url:null})))
-    setVoiceoverUrl(null);setVoiceoverVoice(null)
-    setMusicUrl(null);setMusicName(null)
-    setAdTitle(v2SourceAd.title.replace(/_v\d+$/,"")+"_v2")
-    setGenMeta({form:{contentType:v2SourceAd.metadata?.contentType,adLength:v2SourceAd.metadata?.adLength,awarenessStage:v2SourceAd.metadata?.awarenessStage},productName:v2SourceAd.metadata?.productName,isV2:true,sourceTitle:v2SourceAd.title})
-    setHookVariations([])
-    setView("review");setStep("script")
-    onV2Consumed?.()
-  },[v2SourceAd])
   const [selected,setSelected]=useState<Script|null>(null)
   const [sections,setSections]=useState<any[]>([])
   const [genMeta,setGenMeta]=useState<any>(null)
@@ -1830,9 +1803,27 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
     try{
       const prod=products.find((x:Product)=>String((x as any).id)===String(form.productId))||null
       const stage=STAGES.find(s=>s.value===form.awarenessStage)||STAGES[0]
-      let ctx=`BRAND:\nName: ${brand.name||"Unknown"}\nDesc: ${brand.description||""}\nVoice: ${brand.voice||""}\nCustomer: ${brand.target_customer||""}\nReviews: ${brand.reviews||""}\n\n`
-      if(prod)ctx+=`PRODUCT:\nName: ${prod.name}\nDesc: ${prod.description||""}\nBenefits: ${prod.benefits||""}\nClaims: ${prod.claims||""}\n\n`
-      const prompt=ctx+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
+
+      // ── Fix 1: Full brand + product context ───────────────────────────
+      let ctx=`BRAND:\nName: ${brand.name||"Unknown"}\nDescription: ${brand.description||""}\nVoice & Tone: ${brand.voice||""}\nTarget Customer: ${brand.target_customer||""}\nSocial Proof / Reviews: ${brand.reviews||""}\nAdditional Info: ${brand.additional_info||""}\n\n`
+      if(prod)ctx+=`PRODUCT:\nName: ${prod.name}\nDescription: ${prod.description||""}\nKey Benefits: ${prod.benefits||""}\nClaims & Results: ${prod.claims||""}\nDifferentiators (what makes it unique): ${prod.differentiators||""}\nKey Ingredients: ${prod.ingredients||""}\nCustomer Reviews: ${prod.reviews||""}\nPrice: ${prod.price||""}\nNotes for scripts: ${prod.notes||""}\n\n`
+
+      // ── Fix 2: Brand intelligence context ─────────────────────────────
+      const intel=brand.brand_intelligence
+      let intelBlock=""
+      if(intel&&(intel.best_hook_types?.length||intel.top_performing_claims?.length)){
+        intelBlock=`\nBRAND PERFORMANCE INTELLIGENCE (apply these learnings):\n`
+        if(intel.best_hook_types?.length)intelBlock+=`• Best hook types for this brand: ${intel.best_hook_types.join(", ")}\n`
+        if(intel.worst_hook_types?.length)intelBlock+=`• Avoid these hook types: ${intel.worst_hook_types.join(", ")}\n`
+        if(intel.best_hook_patterns?.length)intelBlock+=`• Winning hook patterns: ${intel.best_hook_patterns.join("; ")}\n`
+        if(intel.top_performing_claims?.length)intelBlock+=`• Claims that drive results: ${intel.top_performing_claims.join(", ")}\n`
+        if(intel.underperforming_claims?.length)intelBlock+=`• Avoid leading with: ${intel.underperforming_claims.join(", ")}\n`
+        if(intel.best_content_type)intelBlock+=`• Best content type: ${intel.best_content_type}\n`
+        if(intel.avg_winning_hook_length)intelBlock+=`• Winning hooks are ~${intel.avg_winning_hook_length} words\n`
+        intelBlock+="\n"
+      }
+
+      const prompt=ctx+intelBlock+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
       const raw=await callClaude([{role:"user",content:prompt}],2000)
       const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
       let secs=(data.sections||[]).map((s:any,i:number)=>({...s,id:Date.now()+i,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
@@ -1850,7 +1841,8 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
 
     const libSummary=matchPool.map(item=>{
       const a=item.analysis||{}
-      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|label:"+(a.label||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(", ")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,80)+"|quality:"+(a.quality_score||"Medium")+"|type:"+item.type
+      const quotes=(a.key_quotes||[]).slice(0,2).join(" | ")
+      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(",")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,200)+(quotes?"|quotes:"+quotes:"")+"|quality:"+(a.quality_score||"Med")+"|ad_potential:"+(a.ad_potential||"")+"|type:"+item.type
     }).join("\n")
 
     const sectionDesc=secs.map((s:any,i:number)=>{
@@ -1876,7 +1868,13 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
           const candidates=[m.best_id,...(m.alt_ids||[])].filter((id:string)=>id&&validIds.has(id)&&!usedIds.has(id))
           const clipId=candidates[0]||null
           if(clipId)usedIds.add(clipId)
-          return{id:"seg-"+i+"-"+si,clipId,phrase:m.phrase||"",reason:m.reason||""}
+          return{
+            id:"seg-"+i+"-"+si,
+            clipId,
+            phrase:m.phrase||"",
+            reason:m.reason||"",
+            ai_suggested_clip_id:m.best_id||null, // Fix 4: track original AI suggestion
+          }
         }).filter((seg:any)=>seg.clipId)
 
         const allMatchedIds=sectionMatches.flatMap((m:any)=>[m.best_id,...(m.alt_ids||[])]).filter((id:string)=>id&&validIds.has(id))
@@ -2076,7 +2074,6 @@ Return ONLY valid JSON:
             }} style={{background:C.accent,color:"#fff"}}>Next: Audio →</Btn>
           </div>
         </div>
-        {genMeta?.isV2&&<div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#15803D",marginBottom:12}}>⚡ Creating v2 from <strong>"{genMeta.sourceTitle}"</strong> — same structure, ready for a new hook or voiceover. Hit "Generate 3 Hook Variations" to test a different opening.</div>}
         <div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,marginBottom:16}}>✏️ Review and edit your script below. Use "Generate 3 Hook Variations" to create testable hook options.</div>
 
         {/* Hook variations */}
@@ -2460,8 +2457,72 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
   </div>
 }
 
-function ForgedAdsTab({ads,items,onRefresh,onEditAd,onCreateV2}:{ads:ForgedAd[],items:Item[],onRefresh:()=>void,onEditAd:(ad:ForgedAd)=>void,onCreateV2:(ad:ForgedAd)=>void}){
+function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{ads:ForgedAd[],items:Item[],brand:BrandProfile,setBrand:(b:BrandProfile)=>void,onRefresh:()=>void,onEditAd:(ad:ForgedAd)=>void,onCreateV2:(ad:ForgedAd)=>void}){
   const supabase=createClient()
+
+  // ── Fix 2: Update brand intelligence after performance is logged ──────
+  async function updateBrandIntelligence(updatedAds:ForgedAd[]){
+    const adsWithData=updatedAds.filter(a=>a.metadata?.hook_rate||a.metadata?.cpa||a.metadata?.roas||a.star_rating)
+    if(adsWithData.length<2)return
+
+    // Hook type analysis
+    const hookPerf:Record<string,number[]>={}
+    adsWithData.forEach(a=>{
+      const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK")
+      const hookType=hook?.hookType||"Unknown"
+      const rate=parseFloat(a.metadata?.hook_rate||"0")
+      if(rate>0){if(!hookPerf[hookType])hookPerf[hookType]=[];hookPerf[hookType].push(rate)}
+    })
+    const avg=(arr:number[])=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10:0
+    const hookEntries=Object.entries(hookPerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(b[1])-avg(a[1]))
+    const best_hook_types=hookEntries.filter(([,v])=>avg(v)>=40).map(([k])=>k)
+    const worst_hook_types=hookEntries.filter(([,v])=>avg(v)<30).map(([k])=>k)
+
+    // Hook pattern analysis from top-performing ads
+    const topAds=adsWithData.filter(a=>parseFloat(a.metadata?.hook_rate||"0")>=45)
+    const best_hook_patterns:string[]=[]
+    topAds.forEach(a=>{
+      const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK")
+      const words=(hook?.spokenWords||"").trim()
+      if(!words)return
+      if(/^\d/.test(words.split(" ")[0]))best_hook_patterns.push("Opens with a number")
+      if(/I |My |We /.test(words.substring(0,20)))best_hook_patterns.push("First-person opening")
+      if(/\?$/.test(words))best_hook_patterns.push("Question hook")
+      if(words.split(" ").length<=6)best_hook_patterns.push("Short punchy hook (under 7 words)")
+    })
+    const uniquePatterns=[...new Set(best_hook_patterns)]
+
+    // Content type analysis by CPA
+    const ctypePerf:Record<string,number[]>={}
+    adsWithData.forEach(a=>{
+      const ct=a.metadata?.contentType||"Unknown"
+      const cpa=parseFloat(a.metadata?.cpa||"0")
+      if(cpa>0){if(!ctypePerf[ct])ctypePerf[ct]=[];ctypePerf[ct].push(cpa)}
+    })
+    const ctypeEntries=Object.entries(ctypePerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(a[1])-avg(b[1]))
+    const best_content_type=ctypeEntries[0]?.[0]||""
+
+    // Top creators by star rating
+    const creatorRatings:Record<string,number[]>={}
+    adsWithData.forEach(a=>{
+      if(!a.star_rating)return
+      ;(a.sections||[]).forEach((s:any)=>{
+        const clip=items.find((i:Item)=>i.id===s.selectedClipId)
+        if(clip?.creator){if(!creatorRatings[clip.creator])creatorRatings[clip.creator]=[];creatorRatings[clip.creator].push(a.star_rating!)}
+      })
+    })
+    const top_creators=Object.entries(creatorRatings).filter(([,v])=>v.length>=2).sort((a,b)=>avg(b[1])-avg(a[1])).slice(0,3).map(([k])=>k)
+
+    // Avg hook word count in top performers
+    const hookLengths=topAds.map(a=>{const h=(a.sections||[]).find((s:any)=>s.type==="HOOK");return(h?.spokenWords||"").trim().split(/\s+/).filter(Boolean).length}).filter(l=>l>0)
+    const avg_winning_hook_length=hookLengths.length?Math.round(hookLengths.reduce((a,b)=>a+b,0)/hookLengths.length):0
+
+    const intel={best_hook_types,worst_hook_types,best_hook_patterns:uniquePatterns,best_content_type,top_creators,avg_winning_hook_length,total_ads_analysed:adsWithData.length,last_updated:new Date().toISOString()}
+
+    const updated={...brand,brand_intelligence:intel}
+    setBrand(updated)
+    if(brand.id)await supabase.from("brand_profile").update({brand_intelligence:intel}).eq("id",brand.id)
+  }
   const [previewId,setPreviewId]=useState<string|null>(null)
   const [search,setSearch]=useState("")
   const [activeTag,setActiveTag]=useState<string|null>(null)
@@ -2473,9 +2534,20 @@ function ForgedAdsTab({ads,items,onRefresh,onEditAd,onCreateV2}:{ads:ForgedAd[],
   const [selectedIds,setSelectedIds]=useState<string[]>([])
   const [deleting,setDeleting]=useState(false)
   const [autoRendering,setAutoRendering]=useState(false)
+  const [perfOpen,setPerfOpen]=useState(false)
+  const [perfVals,setPerfVals]=useState<Record<string,string>>({})
+  const [perfSaving,setPerfSaving]=useState(false)
   const pollRef=useRef<any>(null)
 
   const previewAd=previewId?ads.find(a=>a.id===previewId):null
+
+  // Reset perf vals when preview ad changes
+  useEffect(()=>{
+    if(previewAd){
+      setPerfVals({hook_rate:previewAd.metadata?.hook_rate||"",cpa:previewAd.metadata?.cpa||"",roas:previewAd.metadata?.roas||"",spend:previewAd.metadata?.spend||""})
+      setPerfOpen(false)
+    }
+  },[previewId])
 
   // Auto-poll render status every 15 seconds
   useEffect(()=>{
@@ -2498,6 +2570,15 @@ function ForgedAdsTab({ads,items,onRefresh,onEditAd,onCreateV2}:{ads:ForgedAd[],
   async function deleteAd(id:string){await supabase.from("forged_ads").delete().eq("id",id);onRefresh()}
   async function markComplete(id:string){await supabase.from("forged_ads").update({status:"complete",updated_at:new Date().toISOString()}).eq("id",id);onRefresh()}
   async function saveNotes(id:string){await supabase.from("forged_ads").update({notes:notesVal}).eq("id",id);setEditingNotes(null);onRefresh()}
+  async function savePerf(){
+    if(!previewAd)return
+    setPerfSaving(true)
+    const newMeta={...previewAd.metadata,...perfVals}
+    await supabase.from("forged_ads").update({metadata:newMeta}).eq("id",previewAd.id)
+    const updatedAds=ads.map(a=>a.id===previewAd.id?{...a,metadata:newMeta}:a)
+    await updateBrandIntelligence(updatedAds)
+    setPerfSaving(false);onRefresh();setPerfOpen(false)
+  }
 
   async function bulkDelete(){
     if(!window.confirm(`Delete ${selectedIds.length} ad(s)?`))return
@@ -2599,13 +2680,32 @@ function ForgedAdsTab({ads,items,onRefresh,onEditAd,onCreateV2}:{ads:ForgedAd[],
             {previewAd.mode!=="broll"&&<Btn onClick={()=>{onCreateV2(previewAd);setPreviewId(null)}} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontSize:12,padding:"6px 12px"}}>⚡ Create v2</Btn>}
             {previewAd.status==="draft"&&<Btn onClick={()=>{markComplete(previewAd.id);setPreviewId(null)}} style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
             <Btn onClick={()=>{deleteAd(previewAd.id);setPreviewId(null)}} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",fontSize:12,padding:"6px 12px"}}>Delete</Btn>
-            <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
+            <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕</Btn>
           </div>
         </div>
         {previewAd.sections&&previewAd.sections.length>0&&<div style={{marginBottom:20}}><StitchedPreview sections={previewAd.sections} libraryItems={items} voiceoverUrl={previewAd.voiceover_url} musicUrl={previewAd.music_url}/></div>}
         <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
           {previewAd.voiceover_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover · {previewAd.voiceover_voice}</div><audio src={previewAd.voiceover_url} controls style={{width:"100%",height:36}}/></div>}
           {previewAd.music_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls style={{width:"100%",height:36}}/></div>}
+        </div>
+        {/* Performance logging */}
+        <div style={{marginBottom:16}}>
+          {!perfOpen
+            ?<button onClick={()=>setPerfOpen(true)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,width:"100%",textAlign:"left" as const}}>
+              📊 {previewAd.metadata?.hook_rate?`Hook rate: ${previewAd.metadata.hook_rate}%${previewAd.metadata?.cpa?` · CPA: £${previewAd.metadata.cpa}`:""}${previewAd.metadata?.roas?` · ROAS: ${previewAd.metadata.roas}x`:""}`:"+  Log performance data"}
+            </button>
+            :<div style={{background:C.bg,border:"1px solid "+C.border,borderRadius:10,padding:14}}>
+              <div style={{fontWeight:700,fontSize:13,marginBottom:10}}>📊 Log Performance Data</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+                {([["Hook Rate %","hook_rate","e.g. 42"],["CPA (£)","cpa","e.g. 18"],["ROAS","roas","e.g. 3.2"],["Spend (£)","spend","e.g. 500"]] as [string,string,string][]).map(([label,key,ph])=>
+                  <div key={key}><Label>{label}</Label><input value={perfVals[key]||""} onChange={e=>setPerfVals(v=>({...v,[key]:e.target.value}))} placeholder={ph} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"7px 10px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const}}/></div>
+                )}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <Btn onClick={savePerf} disabled={perfSaving} style={{background:C.accent,color:"#fff",flex:1}}>{perfSaving?"Saving…":"💾 Save + Update Intelligence"}</Btn>
+                <Btn onClick={()=>setPerfOpen(false)} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn>
+              </div>
+            </div>}
         </div>
         <ForgedAdDownload ad={previewAd} onRefresh={onRefresh}/>
       </div>
@@ -2700,8 +2800,62 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
   function deleteAvatar(id:string){setBrand({...brand,customer_avatars:(brand.customer_avatars||[]).filter((a:CustomerAvatar)=>a.id!==id)})}
   const navBtn=(id:string,label:string)=><button style={{padding:"8px 18px",borderRadius:99,fontSize:13,fontWeight:600,cursor:"pointer",border:"none",background:section===id?C.accent:"transparent",color:section===id?"#fff":C.muted}} onClick={()=>setSection(id)}>{label}</button>
 
+  // Fix 3: Brand Intelligence Score
+  function calcScore():{score:number,items:{label:string,pts:number,earned:boolean,tip:string}[]}{
+    const b=brand;const ps=products
+    const checks=[
+      {label:"Brand name",pts:2,earned:!!(b.name?.trim()),tip:"Add your brand name"},
+      {label:"Brand description (100+ chars)",pts:5,earned:(b.description||"").length>=100,tip:"Describe what your brand does in detail"},
+      {label:"Brand voice & tone",pts:5,earned:(b.voice||"").length>=50,tip:"Describe your brand's personality and tone"},
+      {label:"Target customer",pts:5,earned:(b.target_customer||"").length>=50,tip:"Describe who your ideal customer is"},
+      {label:"Social proof / reviews",pts:5,earned:(b.reviews||"").length>=30,tip:"Paste customer reviews or social proof"},
+      {label:"Additional info",pts:3,earned:(b.additional_info||"").length>=30,tip:"Ingredients, certifications, backstory — anything else"},
+      {label:"At least 1 customer avatar",pts:5,earned:(b.customer_avatars||[]).length>=1,tip:"Create a customer avatar with pains, desires & objections"},
+      {label:"At least 1 product",pts:5,earned:ps.length>=1,tip:"Add your first product"},
+      {label:"Product benefits & claims",pts:5,earned:ps.some((p:Product)=>(p.benefits||"").length>20&&(p.claims||"").length>20),tip:"Fill in product benefits and specific claims"},
+      {label:"Product differentiators",pts:5,earned:ps.some((p:Product)=>(p.differentiators||"").length>20),tip:"What makes your product unique vs competitors?"},
+      {label:"Product reviews",pts:5,earned:ps.some((p:Product)=>(p.reviews||"").length>20),tip:"Paste specific product reviews — these get quoted in scripts"},
+      {label:"Product price",pts:5,earned:ps.some((p:Product)=>!!(p.price?.trim())),tip:"Add price — unlocks specific CTA copy"},
+    ]
+    const score=checks.reduce((acc,c)=>acc+(c.earned?c.pts:0),0)
+    return{score,items:checks}
+  }
+
+  const {score:intellScore,items:intellItems}=calcScore()
+  const maxStaticScore=55 // 90pts max from data; 10 from usage
+  const displayPct=Math.min(90,Math.round(intellScore/maxStaticScore*90))
+
   return<div style={{maxWidth:820,margin:"0 auto",padding:28}}>
     <STitle size={22}>Brand & Products</STitle>
+
+    {/* Intelligence Score */}
+    <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,padding:20,marginBottom:24}}>
+      <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:12}}>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>🧠 Platform Intelligence Score</div>
+          <div style={{fontSize:12,color:C.muted}}>How well the platform knows your brand. Higher = better scripts, smarter clip matching, stronger captions.</div>
+        </div>
+        <div style={{fontSize:36,fontWeight:900,color:displayPct>=80?C.green:displayPct>=50?C.accent:C.yellow,minWidth:64,textAlign:"right"}}>{displayPct}%</div>
+      </div>
+      <div style={{height:8,background:C.border,borderRadius:4,overflow:"hidden",marginBottom:12}}>
+        <div style={{height:"100%",width:displayPct+"%",background:displayPct>=80?"linear-gradient(90deg,#16A34A,#22c55e)":displayPct>=50?"linear-gradient(90deg,"+C.accent+",#8B7FFF)":"linear-gradient(90deg,#D97706,#FBBF24)",borderRadius:4,transition:"width 0.6s ease"}}/>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:intellItems.filter(i=>!i.earned).length>0?12:0}}>
+        {intellItems.filter(i=>i.earned).map(i=><span key={i.label} style={{background:"#22c55e11",color:C.green,border:"1px solid #22c55e33",borderRadius:99,fontSize:10,fontWeight:700,padding:"2px 8px"}}>✓ {i.label}</span>)}
+      </div>
+      {intellItems.filter(i=>!i.earned).length>0&&<div>
+        <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Missing — fill these to improve:</div>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          {intellItems.filter(i=>!i.earned).map(i=><div key={i.label} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:C.text}}>
+            <span style={{color:C.yellow,fontWeight:700,fontSize:11,minWidth:24}}>+{i.pts}</span>
+            <span style={{color:C.muted}}>{i.tip}</span>
+          </div>)}
+        </div>
+      </div>}
+      {displayPct>=90&&<div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:8,padding:"8px 12px",fontSize:12,color:C.green,marginTop:8}}>🎯 The final 10% comes from platform usage. Keep logging performance data on your ads — the platform learns from every result.</div>}
+      {displayPct<90&&displayPct>=70&&<div style={{fontSize:11,color:C.muted,marginTop:8}}>🎯 The last 10% is earned through usage — the platform learns from your ad performance data over time.</div>}
+    </div>
+
     <div style={{display:"flex",gap:8,marginBottom:24}}>{navBtn("brand","Brand Profile")}{navBtn("avatars",`Customer Avatars (${(brand.customer_avatars||[]).length})`)}{navBtn("products",`Products (${products.length})`)}</div>
 
     {section==="brand"&&<Card>
@@ -2857,7 +3011,7 @@ export default function AdForgeApp(){
     <div style={{marginLeft:220,flex:1,minHeight:"100vh",background:C.bg}}>
       {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} onGoToBrand={()=>setTab("brand")}/>}
       {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode} editingAd={editingAd} onEditingAdConsumed={()=>setEditingAd(null)} v2SourceAd={v2SourceAd} onV2Consumed={()=>setV2SourceAd(null)}/>}
-      {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} onRefresh={loadData} onEditAd={(ad:ForgedAd)=>{setEditingAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}} onCreateV2={(ad:ForgedAd)=>{setV2SourceAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}}/>}
+      {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} brand={brand} setBrand={setBrand} onRefresh={loadData} onEditAd={(ad:ForgedAd)=>{setEditingAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}} onCreateV2={(ad:ForgedAd)=>{setV2SourceAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}}/>}
       {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
     </div>
   </div>
