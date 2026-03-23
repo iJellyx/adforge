@@ -16,7 +16,7 @@ type Script = { id: string; product_name?: string; metadata?: any; sections?: an
 type BrandProfile = { id?: string; name: string; website: string; description: string; voice: string; target_customer: string; reviews: string; additional_info: string; customer_avatars: CustomerAvatar[] }
 type CustomerAvatar = { id: string; name: string; age: string; gender: string; description: string; pains: string; desires: string; objections: string }
 type Product = { id?: string; name: string; description: string; benefits: string; target_customer: string; claims: string; ingredients: string; differentiators: string; reviews: string; notes: string; price: string; url: string }
-type ForgedAd = { id: string; title: string; status: 'draft'|'complete'; mode?: 'script'|'broll'; script_id?: string; sections?: any[]; voiceover_url?: string; voiceover_voice?: string; music_url?: string; music_name?: string; render_id?: string; render_url?: string; render_status?: string; render_error?: string; notes?: string; star_rating?: number; metadata?: any; created_at?: string; updated_at?: string }
+type ForgedAd = { id: string; title: string; status: 'draft'|'complete'; mode?: 'script'|'broll'; script_id?: string; sections?: any[]; voiceover_url?: string; voiceover_voice?: string; music_url?: string; music_name?: string; render_id?: string; render_url?: string; render_status?: string; notes?: string; star_rating?: number; metadata?: any; created_at?: string; updated_at?: string }
 
 
 const C = { bg:"#F4F2FF",surface:"#ffffff",card:"#ffffff",border:"rgba(91,73,255,0.12)",accent:"#5B49FF",accentSoft:"#EDE8FF",text:"#0F1133",muted:"#6B6894",green:"#16A34A",yellow:"#D97706",red:"#DC2626" }
@@ -147,7 +147,7 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl,onSave}:any){
   }).filter(Boolean)
 
   async function doExport(){
-    if(!clips.length){setMsg("No clips assigned — assign clips to all sections before exporting.");return}
+  if(!clips.length){alert("No clips assigned.");return}
   setExporting(true);setDone(false);setProgress(10);setMsg("Submitting to Shotstack…")
   try{
     const itemIds=clips.map((c:any)=>c.item.id)
@@ -1774,9 +1774,36 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
 }
 
 // ── Scripts Tab ───────────────────────────────────────────────────────────
-function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode}:any){
-  const [view,setView]=useState("list")  // list | chooseMode | generate | broll | review | detail
+function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode,editingAd,onEditingAdConsumed,v2SourceAd,onV2Consumed}:any){
+  const [view,setView]=useState("list")
   useEffect(()=>{if(startAtChooseMode>0)setView("chooseMode")},[startAtChooseMode])
+
+  // Edit mode — load a forged ad back into the review flow
+  useEffect(()=>{
+    if(!editingAd)return
+    setSections(editingAd.sections||[])
+    setVoiceoverUrl(editingAd.voiceover_url||null)
+    setVoiceoverVoice(editingAd.voiceover_voice||null)
+    setMusicUrl(editingAd.music_url||null)
+    setMusicName(editingAd.music_name||null)
+    setAdTitle(editingAd.title||"")
+    setGenMeta({form:{contentType:editingAd.metadata?.contentType,adLength:editingAd.metadata?.adLength,awarenessStage:editingAd.metadata?.awarenessStage},productName:editingAd.metadata?.productName})
+    setView("review");setStep("clips")
+    onEditingAdConsumed?.()
+  },[editingAd])
+
+  // v2 mode — load source ad structure, clear voiceover/music, go to script step for hook swap
+  useEffect(()=>{
+    if(!v2SourceAd)return
+    setSections((v2SourceAd.sections||[]).map((s:any)=>({...s,voiceover_url:null})))
+    setVoiceoverUrl(null);setVoiceoverVoice(null)
+    setMusicUrl(null);setMusicName(null)
+    setAdTitle(v2SourceAd.title.replace(/_v\d+$/,"")+"_v2")
+    setGenMeta({form:{contentType:v2SourceAd.metadata?.contentType,adLength:v2SourceAd.metadata?.adLength,awarenessStage:v2SourceAd.metadata?.awarenessStage},productName:v2SourceAd.metadata?.productName,isV2:true,sourceTitle:v2SourceAd.title})
+    setHookVariations([])
+    setView("review");setStep("script")
+    onV2Consumed?.()
+  },[v2SourceAd])
   const [selected,setSelected]=useState<Script|null>(null)
   const [sections,setSections]=useState<any[]>([])
   const [genMeta,setGenMeta]=useState<any>(null)
@@ -2049,6 +2076,7 @@ Return ONLY valid JSON:
             }} style={{background:C.accent,color:"#fff"}}>Next: Audio →</Btn>
           </div>
         </div>
+        {genMeta?.isV2&&<div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#15803D",marginBottom:12}}>⚡ Creating v2 from <strong>"{genMeta.sourceTitle}"</strong> — same structure, ready for a new hook or voiceover. Hit "Generate 3 Hook Variations" to test a different opening.</div>}
         <div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,marginBottom:16}}>✏️ Review and edit your script below. Use "Generate 3 Hook Variations" to create testable hook options.</div>
 
         {/* Hook variations */}
@@ -2187,28 +2215,6 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
             <Btn onClick={()=>handleSaveForged("complete")} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Save {selectedHooks.length>1?`${selectedHooks.length} Hook Variations`:"& Complete"}</Btn>
           </div>
         </div>
-        {/* Voiceover sync check */}
-        {(()=>{
-          if(!voiceoverUrl)return null
-          const totalClipDur=sections.reduce((acc:number,s:any)=>{
-            const segs=s.clipSegments?.length?s.clipSegments:[{clipId:s.selectedClipId,trimStart:null,trimEnd:null}]
-            return acc+segs.reduce((a2:number,seg:any)=>{
-              const item=items.find((i:Item)=>i.id===seg.clipId)
-              if(!item)return a2
-              const start=seg.trimStart??item.start_seconds??0
-              const end=seg.trimEnd??item.end_seconds??(start+(item.duration_seconds||3))
-              return a2+Math.max(0,end-start)
-            },0)
-          },0)
-          // Estimate voiceover length from script word count (~2.5 words/sec average speaking rate)
-          const totalWords=sections.reduce((acc:number,s:any)=>acc+((s.spokenWords||"").trim().split(/\s+/).filter(Boolean).length),0)
-          const estVoDur=totalWords/2.5
-          if(totalClipDur===0||estVoDur===0)return null
-          const ratio=estVoDur/totalClipDur
-          if(ratio>1.25)return<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#92400E",marginBottom:16}}>⚠️ Voiceover may be longer than your clips (~{Math.round(estVoDur)}s script vs ~{Math.round(totalClipDur)}s clips). Consider adding more clips or trimming the script.</div>
-          if(ratio<0.7)return<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#92400E",marginBottom:16}}>⚠️ Your clips are longer than the voiceover (~{Math.round(estVoDur)}s script vs ~{Math.round(totalClipDur)}s clips). The video will continue after the voiceover ends.</div>
-          return null
-        })()}
         <div style={{marginBottom:16}}>
           <Label>Ad Name (optional)</Label>
           <input value={adTitle} onChange={e=>setAdTitle(e.target.value)} placeholder={`e.g. ProblemAware_${form.contentType||"UGC"}_${(form.adLength||"30s").replace(" seconds","s")}_v1`} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
@@ -2330,9 +2336,7 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
     </div>}
 
     {renderStatus==="failed"&&<div>
-      <div style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#DC2626",marginBottom:8}}>❌ Render failed.</div>
-      {ad.render_error&&<div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:8,padding:"8px 12px",fontSize:11,color:C.muted,fontFamily:"monospace",marginBottom:12,wordBreak:"break-all" as const}}>{ad.render_error}</div>}
-      {!ad.render_error&&<div style={{fontSize:12,color:C.muted,marginBottom:12}}>Common causes: missing clips, expired Mux URLs, or invalid audio. Try re-matching clips and re-rendering.</div>}
+      <div style={{background:"#ef444411",border:"1px solid #ef444433",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#ef4444",marginBottom:12}}>❌ Render failed. Try again.</div>
       <Btn onClick={startRender} style={{background:C.accent,color:"#fff",width:"100%",padding:12}}>🔄 Retry Render</Btn>
     </div>}
   </div>
@@ -2456,7 +2460,7 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
   </div>
 }
 
-function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefresh:()=>void}){
+function ForgedAdsTab({ads,items,onRefresh,onEditAd,onCreateV2}:{ads:ForgedAd[],items:Item[],onRefresh:()=>void,onEditAd:(ad:ForgedAd)=>void,onCreateV2:(ad:ForgedAd)=>void}){
   const supabase=createClient()
   const [previewId,setPreviewId]=useState<string|null>(null)
   const [search,setSearch]=useState("")
@@ -2590,7 +2594,9 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
                 {(previewAd as any).notes?`📝 ${(previewAd as any).notes}`:"+ Add notes"}
               </div>}
           </div>
-          <div style={{display:"flex",gap:8,flexShrink:0}}>
+          <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap"}}>
+            {previewAd.mode!=="broll"&&<Btn onClick={()=>{onEditAd(previewAd);setPreviewId(null)}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px"}}>✏️ Edit Ad</Btn>}
+            {previewAd.mode!=="broll"&&<Btn onClick={()=>{onCreateV2(previewAd);setPreviewId(null)}} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontSize:12,padding:"6px 12px"}}>⚡ Create v2</Btn>}
             {previewAd.status==="draft"&&<Btn onClick={()=>{markComplete(previewAd.id);setPreviewId(null)}} style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
             <Btn onClick={()=>{deleteAd(previewAd.id);setPreviewId(null)}} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",fontSize:12,padding:"6px 12px"}}>Delete</Btn>
             <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
@@ -2772,6 +2778,8 @@ export default function AdForgeApp(){
   const [brand,setBrand]=useState<BrandProfile>({...DEFAULT_BRAND})
   const [products,setProducts]=useState<Product[]>([])
   const [scriptsStartMode,setScriptsStartMode]=useState(0)
+  const [editingAd,setEditingAd]=useState<ForgedAd|null>(null)
+  const [v2SourceAd,setV2SourceAd]=useState<ForgedAd|null>(null)
   const [loading,setLoading]=useState(true)
 
   const loadData=useCallback(async()=>{
@@ -2848,8 +2856,8 @@ export default function AdForgeApp(){
     {/* Main content */}
     <div style={{marginLeft:220,flex:1,minHeight:"100vh",background:C.bg}}>
       {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} onGoToBrand={()=>setTab("brand")}/>}
-      {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode}/>}
-      {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} onRefresh={loadData}/>}
+      {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode} editingAd={editingAd} onEditingAdConsumed={()=>setEditingAd(null)} v2SourceAd={v2SourceAd} onV2Consumed={()=>setV2SourceAd(null)}/>}
+      {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} onRefresh={loadData} onEditAd={(ad:ForgedAd)=>{setEditingAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}} onCreateV2={(ad:ForgedAd)=>{setV2SourceAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}}/>}
       {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
     </div>
   </div>
