@@ -153,19 +153,17 @@ function buildAudioClips(
 
   if (voiceoverUrl) {
     clips.push({
-      asset: { type: 'audio', src: voiceoverUrl },
+      asset: { type: 'audio', src: voiceoverUrl, volume: 1 },
       start: 0,
       length: totalDuration,
-      volume: 1,
     })
   }
 
   if (musicUrl) {
     clips.push({
-      asset: { type: 'audio', src: musicUrl },
+      asset: { type: 'audio', src: musicUrl, volume: 0.2 },
       start: 0,
       length: totalDuration,
-      volume: 0.2, // music at 20% — same as preview default
     })
   }
 
@@ -195,7 +193,6 @@ function buildCaptionClips(
       height: Math.round(videoHeight * 0.15),
       background: 'transparent',
     },
-    type: 'overlay',
     start: chunk.start,
     length: chunk.duration,
     position: 'bottom',
