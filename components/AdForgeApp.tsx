@@ -19,20 +19,7 @@ type Product = { id?: string; name: string; description: string; benefits: strin
 type ForgedAd = { id: string; title: string; status: 'draft'|'complete'; mode?: 'script'|'broll'; script_id?: string; sections?: any[]; voiceover_url?: string; voiceover_voice?: string; music_url?: string; music_name?: string; render_id?: string; render_url?: string; render_status?: string; notes?: string; star_rating?: number; metadata?: any; created_at?: string; updated_at?: string }
 
 
-const C = {
-  bg:          "#07090F",
-  surface:     "#0C1018",
-  card:        "#0F1520",
-  border:      "rgba(255,255,255,0.07)",
-  accent:      "#6366F1",
-  accentSoft:  "rgba(99,102,241,0.1)",
-  accentGlow:  "rgba(99,102,241,0.2)",
-  text:        "#DDE2F0",
-  muted:       "#48506A",
-  green:       "#10B981",
-  yellow:      "#F59E0B",
-  red:         "#EF4444",
-}
+const C = { bg:"#F4F2FF",surface:"#ffffff",card:"#ffffff",border:"rgba(91,73,255,0.12)",accent:"#5B49FF",accentSoft:"#EDE8FF",text:"#0F1133",muted:"#6B6894",green:"#16A34A",yellow:"#D97706",red:"#DC2626" }
 const GENDERS = ["Male","Female","Non-binary","Other"]
 const AGE_RANGES = ["Under 18","18-24","25-34","35-44","45+"]
 const SEC_TYPES = ["HOOK","PROBLEM","AGITATE","SOLUTION","SOCIAL PROOF","BODY","CTA"]
@@ -43,7 +30,7 @@ const STAGES = [
   {value:"product_aware",label:"Product Aware",desc:"Know your product, haven't bought"},
   {value:"most_aware",label:"Most Aware",desc:"Need a reason to buy now"},
 ]
-const STAGE_COLORS: Record<string,string> = { unaware:"#A78BFA",problem_aware:"#F87171",solution_aware:"#FBBF24",product_aware:"#60A5FA",most_aware:"#34D399" }
+const STAGE_COLORS: Record<string,string> = { unaware:"#7C3AED",problem_aware:"#DC2626",solution_aware:"#D97706",product_aware:"#2563EB",most_aware:"#16A34A" }
 const AD_LENGTHS = ["15 seconds","30 seconds","45 seconds","60 seconds","90 seconds"]
 const FORM_CTYPES = ["UGC","Talking Head","Founder Story","Mashup","Testimonial","Problem-Solution","Tutorial","Before & After"]
 const SORTS = ["Newest first","Oldest first","A → Z","Z → A"]
@@ -66,12 +53,12 @@ function muxThumb(playbackId: string, time = 0) { return `https://image.mux.com/
 function muxMp4(playbackId: string) { return `https://stream.mux.com/${playbackId}/high.mp4` }
 function fmt(s?: number) { if(!s&&s!==0)return"0:00"; return`${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,"0")}` }
 function typeColor(t?: string) {
-  const m: Record<string,any> = { "UGC":{bg:"rgba(99,102,241,0.12)",color:"#818CF8"},"Founder Clip":{bg:"rgba(59,130,246,0.12)",color:"#60A5FA"},"Tutorial":{bg:"rgba(16,185,129,0.12)",color:"#34D399"},"Behind the Scenes":{bg:"rgba(245,158,11,0.12)",color:"#FBBF24"},"High Production":{bg:"rgba(236,72,153,0.12)",color:"#F472B6"},"Testimonial":{bg:"rgba(59,130,246,0.12)",color:"#93C5FD"},"Product Demo":{bg:"rgba(5,150,105,0.12)",color:"#6EE7B7"},"Clip":{bg:"rgba(249,115,22,0.12)",color:"#FB923C"},"Talking Head":{bg:"rgba(124,58,237,0.12)",color:"#A78BFA"} }
-  return m[t||""]||{bg:"rgba(99,102,241,0.12)",color:"#818CF8"}
+  const m: Record<string,any> = { "UGC":{bg:"#EDE8FF",color:"#5B49FF"},"Founder Clip":{bg:"#EFF6FF",color:"#2563EB"},"Tutorial":{bg:"#F0FDF4",color:"#16A34A"},"Behind the Scenes":{bg:"#FFFBEB",color:"#D97706"},"High Production":{bg:"#FDF2F8",color:"#9D174D"},"Testimonial":{bg:"#EFF6FF",color:"#1D4ED8"},"Product Demo":{bg:"#ECFDF5",color:"#059669"},"Clip":{bg:"#FFF7ED",color:"#C2410C"},"Talking Head":{bg:"#F5F3FF",color:"#7C3AED"} }
+  return m[t||""]||{bg:"#EDE8FF",color:"#5B49FF"}
 }
 function secColor(t?: string) {
-  const m: Record<string,any> = { "HOOK":{bg:"rgba(239,68,68,0.1)",color:"#F87171",bd:"rgba(239,68,68,0.25)"},"PROBLEM":{bg:"rgba(245,158,11,0.1)",color:"#FBBF24",bd:"rgba(245,158,11,0.25)"},"AGITATE":{bg:"rgba(249,115,22,0.1)",color:"#FB923C",bd:"rgba(249,115,22,0.25)"},"SOLUTION":{bg:"rgba(16,185,129,0.1)",color:"#34D399",bd:"rgba(16,185,129,0.25)"},"SOCIAL PROOF":{bg:"rgba(59,130,246,0.1)",color:"#60A5FA",bd:"rgba(59,130,246,0.25)"},"CTA":{bg:"rgba(99,102,241,0.1)",color:"#818CF8",bd:"rgba(99,102,241,0.25)"},"BODY":{bg:"rgba(100,116,139,0.1)",color:"#94A3B8",bd:"rgba(100,116,139,0.25)"} }
-  return m[t||""]||{bg:"rgba(100,116,139,0.08)",color:C.muted,bd:C.border}
+  const m: Record<string,any> = { "HOOK":{bg:"#FEF2F2",color:"#DC2626",bd:"#FECACA"},"PROBLEM":{bg:"#FFFBEB",color:"#D97706",bd:"#FCD34D"},"AGITATE":{bg:"#FFF7ED",color:"#C2410C",bd:"#FED7AA"},"SOLUTION":{bg:"#F0FDF4",color:"#16A34A",bd:"#86EFAC"},"SOCIAL PROOF":{bg:"#EFF6FF",color:"#2563EB",bd:"#BFDBFE"},"CTA":{bg:"#EDE8FF",color:"#5B49FF",bd:"#C4B5FD"},"BODY":{bg:"#F9FAFB",color:"#6B7280",bd:"#E5E7EB"} }
+  return m[t||""]||{bg:"#EDE8FF",color:C.muted,bd:C.border}
 }
 function getDurationRange(secs?: number){if(!secs)return"";if(secs<5)return"Under 5s";if(secs<15)return"5–15s";if(secs<30)return"15–30s";if(secs<60)return"30–60s";return"Over 60s"}
 async function callClaude(messages: any[], maxTokens = 1500) {
@@ -80,13 +67,13 @@ async function callClaude(messages: any[], maxTokens = 1500) {
 }
 
 // ── UI Primitives ─────────────────────────────────────────────────────────
-function Btn({onClick,disabled,style,children}:any){return<button onClick={onClick} disabled={disabled} style={{border:"none",borderRadius:8,padding:"8px 18px",fontWeight:600,fontSize:12,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.35:1,fontFamily:"inherit",transition:"opacity 0.15s",letterSpacing:"0.01em",...style}}>{children}</button>}
-function Label({children}:any){return<div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:5,letterSpacing:"0.06em",textTransform:"uppercase" as const}}>{children}</div>}
-function Card({children,style,pad}:any){return<div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:pad||18,...style}}>{children}</div>}
-function STitle({children,size,mb}:any){return<div style={{fontWeight:700,fontSize:size||16,marginBottom:mb!=null?mb:14,color:C.text,letterSpacing:"-0.02em"}}>{children}</div>}
-function Chip({label,color}:any){const cl=color||typeColor(label);return<span style={{background:cl.bg,color:cl.color,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700,whiteSpace:"nowrap" as const,letterSpacing:"0.03em"}}>{label}</span>}
+function Btn({onClick,disabled,style,children}:any){return<button onClick={onClick} disabled={disabled} style={{border:"none",borderRadius:50,padding:"9px 20px",fontWeight:700,fontSize:13,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.4:1,fontFamily:"inherit",transition:"opacity 0.15s",...style}}>{children}</button>}
+function Label({children}:any){return<div style={{fontSize:12,fontWeight:700,color:C.muted,marginBottom:6,letterSpacing:"0.02em"}}>{children}</div>}
+function Card({children,style,pad}:any){return<div style={{background:C.card,border:"1.5px solid "+C.border,borderRadius:16,padding:pad||20,boxShadow:"0 2px 12px rgba(91,73,255,0.06)",...style}}>{children}</div>}
+function STitle({children,size,mb}:any){return<div style={{fontWeight:800,fontSize:size||17,marginBottom:mb!=null?mb:16,color:C.text,letterSpacing:"-0.02em"}}>{children}</div>}
+function Chip({label,color}:any){const cl=color||typeColor(label);return<span style={{background:cl.bg,color:cl.color,padding:"3px 10px",borderRadius:50,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{label}</span>}
 function Input({value,onChange,placeholder,type,textarea,rows,onKeyDown,style}:any){
-  const s={background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const,fontFamily:"inherit",...style}
+  const s={background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",boxSizing:"border-box" as const,fontFamily:"inherit",...style}
   if(textarea)return<textarea value={value} onChange={onChange} onKeyDown={onKeyDown} placeholder={placeholder} rows={rows||3} style={{...s,resize:"vertical" as const}}/>
   return<input value={value} onChange={onChange} placeholder={placeholder} type={type||"text"} style={s} onKeyDown={onKeyDown}/>
 }
@@ -479,25 +466,85 @@ function MusicPicker({suggestedMood,onSave}:any){
 }
 
 // ── Stitched Preview ──────────────────────────────────────────────────────
-function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
- const [clipIdx,setClipIdx]=useState(0)
+// ── Caption System ────────────────────────────────────────────────────────
+type CaptionStyle = "word"|"line"|"karaoke"
+type CaptionSettings = {enabled:boolean,style:CaptionStyle,accentColor:string,fontSize:number}
+const DEFAULT_CAPTIONS:CaptionSettings={enabled:false,style:"word",accentColor:C.accent,fontSize:22}
+
+function isKeyWord(word:string,idx:number,all:string[]):boolean{
+  const clean=word.replace(/[^a-zA-Z0-9%$£€]/g,"")
+  if(!clean)return false
+  if(/^\d/.test(clean))return true
+  if(/%|€|\$|£/.test(word))return true
+  if(clean===clean.toUpperCase()&&clean.length>1)return true
+  if(idx>0&&/[.!?]$/.test(all[idx-1]))return true
+  if((idx+1)%4===0)return true
+  return false
+}
+
+function buildCaptionChunks(text:string,style:CaptionStyle,totalDur:number):{words:string[],start:number,end:number}[]{
+  const words=text.trim().split(/\s+/).filter(Boolean)
+  if(!words.length)return[]
+  if(style==="line")return[{words,start:0,end:totalDur}]
+  if(style==="karaoke")return[{words,start:0,end:totalDur}]
+  const chunks:{words:string[],start:number,end:number}[]=[]
+  for(let i=0;i<words.length;i+=2){
+    const group=words.slice(i,i+2)
+    chunks.push({words:group,start:0,end:0})
+  }
+  const durEach=totalDur/chunks.length
+  return chunks.map((c,i)=>({...c,start:i*durEach,end:(i+1)*durEach}))
+}
+
+function CaptionOverlay({spoken,elapsed,clipDur,settings}:{spoken:string,elapsed:number,clipDur:number,settings:CaptionSettings}){
+  if(!settings.enabled||!spoken.trim())return null
+  const chunks=buildCaptionChunks(spoken,settings.style,clipDur)
+  if(!chunks.length)return null
+  const allWords=spoken.trim().split(/\s+/).filter(Boolean)
+  const progress=Math.min(1,elapsed/clipDur)
+  const activeWordIdx=Math.floor(progress*allWords.length)
+  let displayWords:string[]=[];let chunkStart=0
+  if(settings.style==="karaoke"){displayWords=allWords;chunkStart=0}
+  else{
+    const active=chunks.find(c=>elapsed>=c.start&&elapsed<c.end)||chunks[chunks.length-1]
+    if(!active)return null
+    displayWords=active.words
+    let off=0;for(const c of chunks){if(c===active)break;off+=c.words.length}
+    chunkStart=off
+  }
+  const {fontSize,accentColor,style}=settings
+  return<div style={{position:"absolute",bottom:"18%",left:"50%",transform:"translateX(-50%)",width:"88%",textAlign:"center",pointerEvents:"none",zIndex:10,filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.9))"}}>
+    <div style={{display:"inline-flex",flexWrap:"wrap",justifyContent:"center",gap:"0 6px",lineHeight:1.25}}>
+      {displayWords.map((word,i)=>{
+        const globalIdx=chunkStart+i
+        const isKey=isKeyWord(word,globalIdx,allWords)
+        const isActive=style==="karaoke"&&globalIdx===activeWordIdx
+        const isPast=style==="karaoke"&&globalIdx<activeWordIdx
+        return<span key={i} style={{fontFamily:"'Plus Jakarta Sans','Arial Black',system-ui,sans-serif",fontSize:fontSize+"px",fontWeight:900,color:isActive||isKey?accentColor:"#fff",opacity:style==="karaoke"?(isPast?0.55:1):1,textShadow:"0 0 8px rgba(0,0,0,0.8), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000",transition:"color 0.05s"}}>{word}</span>
+      })}
+    </div>
+  </div>
+}
+
+function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSettings,onCaptionChange}:any){
+  const [clipIdx,setClipIdx]=useState(0)
   const [playing,setPlaying]=useState(false)
+  const [elapsed,setElapsed]=useState(0)
+  const [captions,setCaptions]=useState<CaptionSettings>(captionSettings||DEFAULT_CAPTIONS)
+  const [showCaptionPanel,setShowCaptionPanel]=useState(false)
   const vidRef=useRef<HTMLVideoElement>(null)
   const voiceRef=useRef<HTMLAudioElement>(null)
   const musicRef=useRef<HTMLAudioElement>(null)
   const clipStartTimesRef=useRef<number[]>([])
 
-    const clips=(sections||[]).flatMap((s:any,sectionIdx:number)=>{
+  useEffect(()=>{if(captionSettings)setCaptions(captionSettings)},[captionSettings])
+  function updateCaptions(patch:Partial<CaptionSettings>){const next={...captions,...patch};setCaptions(next);onCaptionChange?.(next)}
+
+  const clips=(sections||[]).flatMap((s:any,sectionIdx:number)=>{
     const segments=s.clipSegments&&s.clipSegments.length>0?s.clipSegments:[{clipId:s.selectedClipId}]
     const validSegs=segments.filter((seg:any)=>seg.clipId&&libraryItems.find((i:Item)=>i.id===seg.clipId))
     const segCount=validSegs.length
-    // Calculate natural durations for proportional time distribution
-    const naturalDurs=validSegs.map((seg:any)=>{
-      const item=libraryItems.find((i:Item)=>i.id===seg.clipId)
-      const start=seg.trimStart??item?.start_seconds??0
-      const end=seg.trimEnd??item?.end_seconds??(start+(item?.duration_seconds||5))
-      return Math.max(0.5,end-start)
-    })
+    const naturalDurs=validSegs.map((seg:any)=>{const item=libraryItems.find((i:Item)=>i.id===seg.clipId);const start=seg.trimStart??item?.start_seconds??0;const end=seg.trimEnd??item?.end_seconds??(start+(item?.duration_seconds||5));return Math.max(0.5,end-start)})
     const totalNatural=naturalDurs.reduce((a:number,b:number)=>a+b,0)||1
     return validSegs.map((seg:any,segIdx:number)=>{
       const item=libraryItems.find((i:Item)=>i.id===seg.clipId)
@@ -505,40 +552,15 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
       const trimStart=seg.trimStart??item.start_seconds??0
       const trimEnd=seg.trimEnd??item.end_seconds??(trimStart+(item.duration_seconds||5))
       const naturalDur=naturalDurs[segIdx]
-      const naturalFraction=naturalDur/totalNatural
-      return{
-        item,
-        start:trimStart,
-        end:trimEnd,
-        naturalDur,
-        naturalFraction,
-        sectionIdx,
-        label:s.type,
-        spoken:segIdx===0?s.spokenWords||"":"",
-        muted:s.muted||false,
-        voiceover_url:s.voiceover_url||null,
-        sectionVoUrl:s.voiceover_url||null,
-        isFirstInSection:segIdx===0,
-        isLastInSection:segIdx===segCount-1,
-        segCount,
-        segIdx,
-      }
+      return{item,start:trimStart,end:trimEnd,naturalDur,naturalFraction:naturalDur/totalNatural,sectionIdx,label:s.type,spoken:segIdx===0?s.spokenWords||"":"",muted:s.muted||false,voiceover_url:s.voiceover_url||null,sectionVoUrl:s.voiceover_url||null,isFirstInSection:segIdx===0,isLastInSection:segIdx===segCount-1,segCount,segIdx}
     }).filter(Boolean)
   }).filter(Boolean)
 
   const cur=clips[clipIdx]
 
-   useEffect(()=>{
-    // Use clip segment duration (end - start), not full video duration
-    let elapsed=0
-    const times=clips.map((c:any)=>{
-      const t=elapsed
-      const segDur=(c.end!=null&&c.start!=null&&c.end>c.start)?(c.end-c.start):3
-      elapsed+=segDur
-      return t
-    })
-    clipStartTimesRef.current=times
-    console.log("Clip voice times:",times)
+  useEffect(()=>{
+    let acc=0
+    clipStartTimesRef.current=clips.map((c:any)=>{const t=acc;acc+=(c.end!=null&&c.start!=null&&c.end>c.start)?(c.end-c.start):3;return t})
   },[clips.length])
 
   useEffect(()=>{
@@ -547,103 +569,93 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     function seek(){if(v)v.currentTime=cur!.start}
     if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true})
     if(playing)v.play().catch(()=>{})
+    setElapsed(0)
   },[clipIdx])
 
-  function getClipPlayDuration(idx:number):number{
-    const clip=clips[idx]
-    if(!clip)return 3
-    const voiceDur=voiceRef.current?.duration||0
-    if(voiceDur>0&&clip.sectionVoUrl){
-      return Math.max(1,voiceDur*clip.naturalFraction)
-    }
-    return Math.max(1,clip.naturalDur||3)
-  }
+  function getClipPlayDuration(idx:number):number{const clip=clips[idx];if(!clip)return 3;const voiceDur=voiceRef.current?.duration||0;if(voiceDur>0&&clip.sectionVoUrl)return Math.max(1,voiceDur*clip.naturalFraction);return Math.max(1,clip.naturalDur||3)}
+  function getVoiceTime(idx:number){const f=clipStartTimesRef.current[idx]||0;const d=voiceRef.current?.duration||0;return f*d}
 
   function onTimeUpdate(){
     const v=vidRef.current;if(!v||!cur)return
-    const clipDur=getClipPlayDuration(clipIdx)
-    const elapsed=v.currentTime-cur.start
-    if(elapsed>=clipDur){
-      if(clipIdx<clips.length-1){
-        const next=clips[clipIdx+1]
-        // Only pause voiceover when moving to a NEW section
-        if(next?.sectionIdx!==cur.sectionIdx){
-          voiceRef.current?.pause()
-        }
-        setClipIdx(i=>i+1)
-      } else {
-        v.pause();setPlaying(false);setClipIdx(0)
-        voiceRef.current?.pause();musicRef.current?.pause()
-      }
+    const e=v.currentTime-cur.start;setElapsed(e)
+    if(e>=getClipPlayDuration(clipIdx)){
+      if(clipIdx<clips.length-1){const next=clips[clipIdx+1];if(next?.sectionIdx!==cur.sectionIdx)voiceRef.current?.pause();setClipIdx(i=>i+1)}
+      else{v.pause();setPlaying(false);setClipIdx(0);voiceRef.current?.pause();musicRef.current?.pause()}
     }
-  }
-    function getVoiceTime(idx:number){
-    const fraction=clipStartTimesRef.current[idx]||0
-    const voiceDur=voiceRef.current?.duration||0
-    return fraction*voiceDur
   }
 
   function toggle(){
     const v=vidRef.current;if(!v)return
-    if(playing){
-      v.pause();voiceRef.current?.pause();musicRef.current?.pause();setPlaying(false)
-    } else {
-      v.play().catch(()=>{})
-      if(voiceRef.current){voiceRef.current.currentTime=0;voiceRef.current.play().catch(()=>{})}
-      if(musicRef.current){musicRef.current.currentTime=0;musicRef.current.volume=0.2;musicRef.current.play().catch(()=>{})}
-      setPlaying(true)
-    }
+    if(playing){v.pause();voiceRef.current?.pause();musicRef.current?.pause();setPlaying(false)}
+    else{v.play().catch(()=>{});if(voiceRef.current){voiceRef.current.currentTime=0;voiceRef.current.play().catch(()=>{})}if(musicRef.current){musicRef.current.currentTime=0;musicRef.current.volume=0.2;musicRef.current.play().catch(()=>{})}setPlaying(true)}
   }
 
-  useEffect(()=>{
-    if(playing&&cur?.isFirstInSection&&voiceRef.current){
-      // Only restart voiceover at start of a new section
-      voiceRef.current.currentTime=0
-      voiceRef.current.play().catch(()=>{})
-    }
-    // For secondary clips in same section, voiceover keeps playing — no action needed
-  },[clipIdx])
+  useEffect(()=>{if(playing&&cur?.isFirstInSection&&voiceRef.current){voiceRef.current.currentTime=0;voiceRef.current.play().catch(()=>{})}},[clipIdx])
 
   if(clips.length===0)return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:32,textAlign:"center",color:C.muted}}><div style={{fontSize:28,marginBottom:8}}>🎬</div><div style={{fontSize:13}}>Assign clips to sections to preview the full ad</div></div>
 
   const sc=secColor(cur?.label)
+  const clipDur=getClipPlayDuration(clipIdx)
 
-  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden"}}>
-    {/* Hidden audio elements — per section voiceover */}
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
     {cur?.sectionVoUrl&&<audio ref={voiceRef} key={cur.sectionVoUrl} src={cur.sectionVoUrl} style={{display:"none"}}/>}
     {voiceoverUrl&&!cur?.sectionVoUrl&&<audio ref={voiceRef} key={voiceoverUrl} src={voiceoverUrl} style={{display:"none"}}/>}
     {musicUrl&&<audio ref={musicRef} src={musicUrl} style={{display:"none"}} loop/>}
 
-    <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10}}>
-      <div style={{fontWeight:700,fontSize:14}}>🎬 Full Ad Preview</div>
-      <span style={{fontSize:12,color:C.muted}}>{clips.length} clips · section {clipIdx+1}</span>
-      {(voiceoverUrl||musicUrl)&&<div style={{display:"flex",gap:6}}>
-        {voiceoverUrl&&<span style={{fontSize:10,color:C.green,background:"#22c55e11",padding:"2px 7px",borderRadius:99,border:"1px solid #22c55e33"}}>🎙️ Voiceover</span>}
-        {musicUrl&&<span style={{fontSize:10,color:C.accent,background:C.accentSoft,padding:"2px 7px",borderRadius:99,border:"1px solid "+C.accent+"33"}}>🎵 Music</span>}
-      </div>}
+    <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <div style={{fontWeight:700,fontSize:14}}>🎬 Preview</div>
+      <span style={{fontSize:11,color:C.muted}}>{clips.length} clips</span>
+      {voiceoverUrl&&<span style={{fontSize:10,color:C.green,background:"#22c55e11",padding:"2px 7px",borderRadius:99,border:"1px solid #22c55e33"}}>🎙️</span>}
+      {musicUrl&&<span style={{fontSize:10,color:C.accent,background:C.accentSoft,padding:"2px 7px",borderRadius:99,border:"1px solid "+C.accent+"33"}}>🎵</span>}
       <div style={{flex:1}}/>
+      <button onClick={()=>updateCaptions({enabled:!captions.enabled})} style={{background:captions.enabled?C.accent:C.surface,color:captions.enabled?"#fff":C.muted,border:"1.5px solid "+(captions.enabled?C.accent:C.border),borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>CC {captions.enabled?"On":"Off"}</button>
+      <button onClick={()=>setShowCaptionPanel(v=>!v)} style={{background:showCaptionPanel?C.accentSoft:C.surface,border:"1px solid "+(showCaptionPanel?C.accent:C.border),color:showCaptionPanel?C.accent:C.muted,borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11}}>⚙ Captions</button>
       <span style={{background:sc?.bg,color:sc?.color,border:"1px solid "+sc?.bd,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5}}>{cur?.label}</span>
     </div>
+
+    {showCaptionPanel&&<div style={{background:C.bg,borderBottom:"1px solid "+C.border,padding:"12px 14px",display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
+      <div>
+        <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:6}}>Style</div>
+        <div style={{display:"flex",gap:6}}>
+          {([["word","Word by word"],["line","Full line"],["karaoke","Karaoke"]] as [CaptionStyle,string][]).map(([v,l])=>
+            <button key={v} onClick={()=>updateCaptions({style:v})} style={{background:captions.style===v?C.accent:C.surface,color:captions.style===v?"#fff":C.muted,border:"1px solid "+(captions.style===v?C.accent:C.border),borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:captions.style===v?700:400}}>{l}</button>
+          )}
+        </div>
+      </div>
+      <div>
+        <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:6}}>Size</div>
+        <div style={{display:"flex",gap:6}}>
+          {([[18,"S"],[22,"M"],[28,"L"],[34,"XL"]] as [number,string][]).map(([v,l])=>
+            <button key={v} onClick={()=>updateCaptions({fontSize:v})} style={{background:captions.fontSize===v?C.accent:C.surface,color:captions.fontSize===v?"#fff":C.muted,border:"1px solid "+(captions.fontSize===v?C.accent:C.border),borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:captions.fontSize===v?700:400}}>{l}</button>
+          )}
+        </div>
+      </div>
+      <div>
+        <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:6}}>Accent colour</div>
+        <div style={{display:"flex",gap:6}}>
+          {[C.accent,"#FFD700","#FF3B5C","#00C4B4","#FF6B35","#fff"].map(col=>
+            <button key={col} onClick={()=>updateCaptions({accentColor:col})} style={{width:24,height:24,borderRadius:"50%",background:col,border:"2px solid "+(captions.accentColor===col?"#fff":C.border),cursor:"pointer",outline:captions.accentColor===col?"2px solid "+C.accent:"none",outlineOffset:"1px"}}/>
+          )}
+          <input type="color" value={captions.accentColor} onChange={e=>updateCaptions({accentColor:e.target.value})} style={{width:24,height:24,borderRadius:"50%",border:"none",cursor:"pointer",padding:0,background:"none"}} title="Custom colour"/>
+        </div>
+      </div>
+    </div>}
 
     <div style={{display:"grid",gridTemplateColumns:"1fr 260px"}}>
       <div style={{position:"relative",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:320}}>
         <video ref={vidRef} playsInline preload="metadata" muted={cur?.muted||false} style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
-        {!playing&&<div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+        {captions.enabled&&<CaptionOverlay spoken={cur?.spoken||""} elapsed={elapsed} clipDur={clipDur} settings={captions}/>}
+        {!playing&&<div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:5}}>
           <div style={{width:52,height:52,borderRadius:"50%",background:"#000a",border:"2px solid #fff4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>▶</div>
           {(voiceoverUrl||musicUrl)&&<div style={{position:"absolute",bottom:16,fontSize:11,color:"#fff",background:"#000a",padding:"3px 10px",borderRadius:99}}>{[voiceoverUrl?"🎙️ Voiceover":"",musicUrl?"🎵 Music":""].filter(Boolean).join(" + ")} will play</div>}
         </div>}
       </div>
       <div style={{borderLeft:"1px solid "+C.border,overflowY:"auto",maxHeight:480}}>
-        <div style={{padding:"8px 10px",borderBottom:"1px solid "+C.border,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>Timeline</div>
-        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>{
-          setClipIdx(i);setPlaying(false);
-          if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}
-          if(musicRef.current){musicRef.current.pause()}
-        }} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
+        <div style={{padding:"8px 10px",borderBottom:"1px solid "+C.border,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1}}>Timeline</div>
+        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false);setElapsed(0);if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}if(musicRef.current)musicRef.current.pause()}} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
           <div style={{width:34,position:"relative",paddingTop:"60px",flexShrink:0,borderRadius:5,overflow:"hidden",background:"#111",border:"1px solid "+(active?C.accent:C.border)}}>{clip.item.mux_playback_id&&<img src={muxThumb(clip.item.mux_playback_id,clip.item.thumbnail_time||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>}</div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{background:sc2.bg,color:sc2.color,fontSize:8,fontWeight:800,padding:"1px 5px",borderRadius:3,display:"inline-block",marginBottom:3}}>{clip.label}</div>
-            {clip.muted&&<span style={{fontSize:8,color:"#ef4444",marginLeft:4}}>🔇</span>}
             <div style={{fontSize:10,color:active?C.text:C.muted,lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{clip.spoken||clip.item.title}</div>
           </div>
         </div>})}
@@ -651,39 +663,23 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl}:any){
     </div>
 
     <div style={{padding:"10px 16px",borderTop:"1px solid "+C.border}}>
-      {/* Timeline scrubber */}
-      <div style={{display:"flex",gap:2,marginBottom:10}}>
-        {clips.map((clip:any,i:number)=>{
-          const sc2=secColor(clip.label)
-          const active=i===clipIdx
-          return<div key={i} onClick={()=>{
-            setClipIdx(i);setPlaying(false);
-            if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}
-            if(musicRef.current){musicRef.current.pause()}
-          }} title={clip.label} style={{flex:1,height:6,borderRadius:3,background:active?sc2.color:sc2.bg,cursor:"pointer",border:active?"1px solid "+sc2.color:"1px solid transparent",transition:"all 0.15s"}}/>
-        })}
+      <div style={{display:"flex",gap:2,marginBottom:8}}>
+        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false);setElapsed(0);if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}if(musicRef.current)musicRef.current.pause()}} title={clip.label} style={{flex:1,height:5,borderRadius:3,background:active?sc2.color:sc2.bg,cursor:"pointer",transition:"all 0.15s"}}/>})}
       </div>
-      {/* Section labels */}
-      <div style={{display:"flex",gap:2,marginBottom:10}}>
-        {clips.map((clip:any,i:number)=>{
-          const sc2=secColor(clip.label)
-          const active=i===clipIdx
-          return<div key={i} onClick={()=>{
-            setClipIdx(i);setPlaying(false);
-            if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}
-            if(musicRef.current){musicRef.current.pause()}
-          }} style={{flex:1,textAlign:"center",fontSize:7,fontWeight:800,color:active?sc2.color:C.muted,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap"}}>{clip.label?.substring(0,4)}</div>
-        })}
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <button onClick={()=>{setClipIdx(i=>Math.max(0,i-1));setPlaying(false)}} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <button onClick={()=>{setClipIdx(i=>Math.max(0,i-1));setPlaying(false);setElapsed(0)}} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
         <button onClick={toggle} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>{playing?"⏸ Pause":"▶ Play Full Ad"}</button>
-        <button onClick={()=>{setClipIdx(i=>Math.min(clips.length-1,i+1));setPlaying(false)}} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
-        <span style={{fontSize:11,color:C.muted,marginLeft:"auto"}}>{clipIdx+1} / {clips.length}</span>
+        <button onClick={()=>{setClipIdx(i=>Math.min(clips.length-1,i+1));setPlaying(false);setElapsed(0)}} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
+        <span style={{fontSize:11,color:C.muted}}>{clipIdx+1}/{clips.length}</span>
+        {musicUrl&&<div style={{display:"flex",alignItems:"center",gap:5,marginLeft:"auto"}}>
+          <span style={{fontSize:10,color:C.muted}}>🎵</span>
+          <input type="range" min="0" max="1" step="0.05" defaultValue="0.2" onChange={e=>{if(musicRef.current)musicRef.current.volume=parseFloat(e.target.value)}} style={{width:60,accentColor:C.accent,cursor:"pointer"}}/>
+        </div>}
       </div>
     </div>
   </div>
 }
+
 
 // ── Auto-Mash Mode ────────────────────────────────────────────────────────
 function AutoMashMode({libraryItems,brand,products,onSaveForgedAd,onGoToForged,onBack}:any){
@@ -809,7 +805,7 @@ Return ONLY valid JSON:
     <STitle size={24} mb={6}>⚡ Auto-Mash from Library</STitle>
     <div style={{color:C.muted,fontSize:14,marginBottom:32,lineHeight:1.6}}>AI analyses your clip library and assembles a complete direct response ad using your creators' real voices — no scripting needed.</div>
 
-    {usableClips.length<3&&<div style={{background:"rgba(245,158,11,0.08)",border:"1.5px solid rgba(245,158,11,0.3)",borderRadius:12,padding:"12px 16px",fontSize:13,color:C.yellow,marginBottom:20}}>⚠️ You need at least 3 clips with transcripts. Upload more content first, or wait for AI analysis to complete.</div>}
+    {usableClips.length<3&&<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:12,padding:"12px 16px",fontSize:13,color:C.yellow,marginBottom:20}}>⚠️ You need at least 3 clips with transcripts. Upload more content first, or wait for AI analysis to complete.</div>}
 
     <Card style={{marginBottom:16}}>
       <STitle size={14} mb={14}>Ad Parameters</STitle>
@@ -838,7 +834,7 @@ Return ONLY valid JSON:
       </div>
     </Card>
 
-    <div style={{background:C.accentSoft,border:"1.5px solid "+C.accent,borderRadius:12,padding:"12px 16px",fontSize:13,color:C.accent,marginBottom:20}}>
+    <div style={{background:"#EDE8FF",border:"1.5px solid "+C.accent,borderRadius:12,padding:"12px 16px",fontSize:13,color:C.accent,marginBottom:20}}>
       ✦ {usableClips.length} clips ready in your library — AI will pick the best combination
     </div>
 
@@ -855,7 +851,7 @@ Return ONLY valid JSON:
         <div style={{fontSize:13,color:C.muted}}>{sections.length} clips assembled · original audio</div>
       </div>
       <div style={{display:"flex",gap:10}}>
-        <Btn onClick={generateMash} disabled={generating} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44"}}>{generating?"⏳ Regenerating…":"🔄 Regenerate"}</Btn>
+        <Btn onClick={generateMash} disabled={generating} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44"}}>{generating?"⏳ Regenerating…":"🔄 Regenerate"}</Btn>
         <Btn onClick={saveMash} disabled={saving} style={{background:C.green,color:"#fff",fontWeight:700}}>{saving?"💾 Saving…":"✓ Save & Render"}</Btn>
       </div>
     </div>
@@ -1140,7 +1136,7 @@ function TrimSlider({item,trimStart,trimEnd,onUpdate}:any){
       <input type="range" min={0} max={dur} step={0.1} value={end} onChange={e=>{const v=parseFloat(e.target.value);preview(v);onUpdate({trimStart:Math.min(start,v-0.5),trimEnd:v})}} style={{width:"100%",accentColor:"#DC2626"}}/>
     </div>
     <div style={{display:"flex",gap:4}}>
-      <button onClick={()=>onUpdate({trimStart:item.start_seconds??0,trimEnd:item.end_seconds??dur})} style={{flex:1,background:C.accentSoft,color:C.accent,border:"none",borderRadius:6,padding:"4px",cursor:"pointer",fontSize:9,fontWeight:700}}>Reset</button>
+      <button onClick={()=>onUpdate({trimStart:item.start_seconds??0,trimEnd:item.end_seconds??dur})} style={{flex:1,background:"#EDE8FF",color:C.accent,border:"none",borderRadius:6,padding:"4px",cursor:"pointer",fontSize:9,fontWeight:700}}>Reset</button>
       <button onClick={()=>preview(start)} style={{flex:1,background:C.surface,color:C.muted,border:"1.5px solid "+C.border,borderRadius:6,padding:"4px",cursor:"pointer",fontSize:9}}>Preview In</button>
       <button onClick={()=>preview(end-0.5)} style={{flex:1,background:C.surface,color:C.muted,border:"1.5px solid "+C.border,borderRadius:6,padding:"4px",cursor:"pointer",fontSize:9}}>Preview Out</button>
     </div>
@@ -1229,7 +1225,7 @@ function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,onClose
           <div style={{fontWeight:800,fontSize:15,color:C.text}}>✂️ Trim Clip</div>
           <div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.title}</div>
         </div>
-        <div style={{background:C.accentSoft,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:C.accent}}>{selDur.toFixed(1)}s selected</div>
+        <div style={{background:"#EDE8FF",border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:C.accent}}>{selDur.toFixed(1)}s selected</div>
         <button onClick={onClose} style={{background:"none",border:"1px solid "+C.border,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,color:C.muted,fontFamily:"inherit"}}>Cancel</button>
         <button onClick={()=>onSave({trimStart:inPt,trimEnd:outPt})} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Save Trim</button>
       </div>
@@ -1270,7 +1266,7 @@ function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,onClose
           <button onClick={()=>seekTo(inPt)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>⏮ In</button>
           <button onClick={togglePlay} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"9px 0",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",flex:1}}>{playing?"⏸ Pause":"▶ Play Selection"}</button>
           <button onClick={()=>seekTo(outPt-0.1)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Out ⏭</button>
-          <button onClick={()=>{setInPt(item.start_seconds??0);setOutPt(item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||fullDur))}} style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.3)",color:C.red,borderRadius:8,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Reset</button>
+          <button onClick={()=>{setInPt(item.start_seconds??0);setOutPt(item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||fullDur))}} style={{background:"#FEF2F2",border:"1px solid #FECACA",color:C.red,borderRadius:8,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Reset</button>
         </div>
       </div>
     </div>
@@ -1395,8 +1391,8 @@ function toggleMuteClip(idx:number){
                 const newSeg={id:`seg-${idx}-${Date.now()}`,clipId:null}
                 updM(idx,{clipSegments:[...currentSegs,newSeg]})
                 setPickerIdx(idx*1000+currentSegs.length)
-              }} style={{width:"100%",background:C.accentSoft,border:"1.5px dashed "+C.accent,color:C.accent,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:10,fontWeight:700,marginBottom:8}}>+ Add clip to section</button>}
-              {!readOnly&&!(row.clipSegments?.length>0||row.selectedClipId)&&(row.matchedClipIds||[]).length>0&&<button onClick={()=>setPickerIdx(idx*1000)} style={{width:"100%",background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.3)",color:C.yellow,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8}}>+ Pick ({row.matchedClipIds.length} matched)</button>}
+              }} style={{width:"100%",background:"#EDE8FF",border:"1.5px dashed "+C.accent,color:C.accent,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:10,fontWeight:700,marginBottom:8}}>+ Add clip to section</button>}
+              {!readOnly&&!(row.clipSegments?.length>0||row.selectedClipId)&&(row.matchedClipIds||[]).length>0&&<button onClick={()=>setPickerIdx(idx*1000)} style={{width:"100%",background:"#FFFBEB",border:"1px solid #FCD34D",color:C.yellow,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8}}>+ Pick ({row.matchedClipIds.length} matched)</button>}
               {alternatives.length>0&&<div><div style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>Alternatives</div><div style={{display:"flex",gap:5}}>{alternatives.map((alt:Item)=><div key={alt.id} title={alt.title} onClick={()=>!readOnly&&updM(idx,{selectedClipId:alt.id,autoSelected:false})} style={{flex:1,position:"relative",paddingTop:"177.78%",background:"#111",borderRadius:6,overflow:"hidden",cursor:readOnly?"default":"pointer",border:"2px solid "+(alt.id===row.selectedClipId?C.accent:C.border)}}>{alt.mux_playback_id?<img src={muxThumb(alt.mux_playback_id,alt.thumbnail_time||alt.start_seconds||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🎬</div>}</div>)}</div></div>}
             </div>
             <div style={{padding:"10px 12px",background:C.surface,borderTop:"1px solid "+C.border,flex:1}}>
@@ -1618,7 +1614,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
             {uploadQueue.filter((e:any)=>e.status==="duplicate").length>0&&<div style={{marginTop:6,fontSize:12,color:C.yellow}}>⚠️ {uploadQueue.filter((e:any)=>e.status==="duplicate").length} duplicate{uploadQueue.filter((e:any)=>e.status==="duplicate").length!==1?"s":""} blocked</div>}
           </div>
           {/* Show individual errors only */}
-          {uploadQueue.filter((e:any)=>e.status==="error").map((entry:any,idx:number)=><div key={entry.id} style={{background:"rgba(239,68,68,0.08)",border:"1.5px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:12,color:C.red}}>❌ {entry.title} — {entry.msg}</div>)}
+          {uploadQueue.filter((e:any)=>e.status==="error").map((entry:any,idx:number)=><div key={entry.id} style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:12,color:C.red}}>❌ {entry.title} — {entry.msg}</div>)}
           {/* Pending uploads that still need a title */}
           {uploadQueue.filter((e:any)=>e.status==="pending").map((entry:any,idx:number)=>{
             const realIdx=uploadQueue.indexOf(entry)
@@ -1641,12 +1637,12 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
 
     {/* While uploading — prompt for brand/product info */}
     {uploadQueue.some((e:any)=>e.status==="uploading"||e.status==="processing"||e.status==="done")&&<div style={{marginBottom:12}}>
-      {(!brand?.name||!brand?.description)&&<div style={{background:"rgba(245,158,11,0.08)",border:"1.5px solid rgba(245,158,11,0.3)",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+      {(!brand?.name||!brand?.description)&&<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
         <div style={{fontWeight:700,fontSize:13,color:C.yellow,marginBottom:4}}>💡 While you wait — set up your Brand Profile</div>
         <div style={{fontSize:12,color:C.muted,marginBottom:10}}>Your brand name, voice, and description help AI write better scripts and match clips more accurately.</div>
        <button onClick={onGoToBrand} style={{background:C.yellow,color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>Set up Brand →</button>
       </div>}
-      {brand?.name&&(!products||products.length===0)&&<div style={{background:"rgba(59,130,246,0.08)",border:"1.5px solid #BFDBFE",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+      {brand?.name&&(!products||products.length===0)&&<div style={{background:"#EFF6FF",border:"1.5px solid #BFDBFE",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
         <div style={{fontWeight:700,fontSize:13,color:"#2563EB",marginBottom:4}}>💡 Add your products while you wait</div>
         <div style={{fontSize:12,color:C.muted,marginBottom:10}}>Products let AI create targeted scripts with specific benefits, claims, and pricing.</div>
        <button onClick={()=>{onRefresh();setView("grid");}} style={{background:"#2563EB",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>Add Products →</button>
@@ -1714,7 +1710,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
       {selected.transcript&&<Card style={{marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📝 Auto-Transcript</div><div style={{fontSize:13,lineHeight:1.7,color:C.muted,maxHeight:120,overflowY:"auto"}}>{selected.transcript}</div></Card>}
       {a.key_quotes?.length>0&&<Card style={{marginBottom:12}}><Label>Key Quotes</Label>{a.key_quotes.map((q:string,i:number)=><div key={i} style={{borderLeft:"3px solid "+C.accent,paddingLeft:12,marginBottom:8,fontSize:14,fontStyle:"italic"}}>"{q}"</div>)}</Card>}
       {a.ad_notes&&<Card style={{background:adPotColor+"18",border:"1px solid "+adPotColor+"44",marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:adPotColor,marginBottom:6}}>📢 AD USAGE</div><div style={{fontSize:14,lineHeight:1.6}}>{a.ad_notes}</div></Card>}
-     {selected.type==="original"&&clips.length===0&&selected.mux_status==="ready"&&<Card style={{marginBottom:12,background:"rgba(245,158,11,0.08)",border:"1.5px solid rgba(245,158,11,0.3)"}}>
+     {selected.type==="original"&&clips.length===0&&selected.mux_status==="ready"&&<Card style={{marginBottom:12,background:"#FFFBEB",border:"1.5px solid #FCD34D"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <div style={{fontWeight:700,fontSize:13,color:C.yellow,marginBottom:2}}>⚠️ No clips generated</div>
@@ -1744,7 +1740,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
       <select value={sortIdx} onChange={e=>setSortIdx(Number(e.target.value))} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 12px",color:C.text,fontSize:13,outline:"none",cursor:"pointer"}}>{SORTS.map((s,i)=><option key={i} value={i}>{s}</option>)}</select>
       {!selectMode&&<Btn onClick={()=>setSelectMode(true)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"9px 14px"}}>Select</Btn>}
       {selectMode&&<div style={{display:"flex",gap:8,alignItems:"center"}}>
-        <Btn onClick={()=>setSelectedIds(filtered.map(i=>i.id))} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",padding:"9px 14px"}}>Select All ({filtered.length})</Btn>
+        <Btn onClick={()=>setSelectedIds(filtered.map(i=>i.id))} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44",padding:"9px 14px"}}>Select All ({filtered.length})</Btn>
         <Btn onClick={bulkDelete} disabled={selectedIds.length===0||deleting} style={{background:selectedIds.length>0?"#ef444433":C.border,color:selectedIds.length>0?"#ef4444":C.muted,border:"1px solid "+(selectedIds.length>0?"#ef444466":C.border)}}>Delete ({selectedIds.length})</Btn>
         <Btn onClick={()=>{setSelectMode(false);setSelectedIds([])}} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn>
       </div>}
@@ -1787,9 +1783,34 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
 }
 
 // ── Scripts Tab ───────────────────────────────────────────────────────────
-function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode}:any){
-  const [view,setView]=useState("list")  // list | chooseMode | generate | broll | review | detail
+function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode,editingAd,onEditingAdConsumed,v2SourceAd,onV2Consumed,forgedAds}:any){
+  const [view,setView]=useState("list")
   useEffect(()=>{if(startAtChooseMode>0)setView("chooseMode")},[startAtChooseMode])
+
+  // Edit mode — load forged ad back into review flow
+  useEffect(()=>{
+    if(!editingAd)return
+    setSections(editingAd.sections||[])
+    setVoiceoverUrl(editingAd.voiceover_url||null)
+    setVoiceoverVoice(editingAd.voiceover_voice||null)
+    setMusicUrl(editingAd.music_url||null)
+    setMusicName(editingAd.music_name||null)
+    setAdTitle(editingAd.title||"")
+    setGenMeta({form:{contentType:editingAd.metadata?.contentType,adLength:editingAd.metadata?.adLength,awarenessStage:editingAd.metadata?.awarenessStage},productName:editingAd.metadata?.productName})
+    setView("review");setStep("clips")
+    onEditingAdConsumed?.()
+  },[editingAd])
+
+  // v2 mode — same structure, clear audio, go to script step
+  useEffect(()=>{
+    if(!v2SourceAd)return
+    setSections((v2SourceAd.sections||[]).map((s:any)=>({...s,voiceover_url:null})))
+    setVoiceoverUrl(null);setVoiceoverVoice(null);setMusicUrl(null);setMusicName(null)
+    setAdTitle(v2SourceAd.title.replace(/_v\d+$/,"")+"_v2")
+    setGenMeta({form:{contentType:v2SourceAd.metadata?.contentType,adLength:v2SourceAd.metadata?.adLength,awarenessStage:v2SourceAd.metadata?.awarenessStage},productName:v2SourceAd.metadata?.productName,isV2:true,sourceTitle:v2SourceAd.title})
+    setHookVariations([]);setView("review");setStep("script")
+    onV2Consumed?.()
+  },[v2SourceAd])
   const [selected,setSelected]=useState<Script|null>(null)
   const [sections,setSections]=useState<any[]>([])
   const [genMeta,setGenMeta]=useState<any>(null)
@@ -1802,6 +1823,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [musicName,setMusicName]=useState<string|null>(null)
   const [suggestedMood,setSuggestedMood]=useState("Uplifting")
   const [adTitle,setAdTitle]=useState("")
+  const [captionSettings,setCaptionSettings]=useState<CaptionSettings>({...DEFAULT_CAPTIONS})
   const [hookVariations,setHookVariations]=useState<any[][]>([])
   const [selectedHooks,setSelectedHooks]=useState<number[]>([0])
   const [activeHookIdx,setActiveHookIdx]=useState(0)
@@ -2062,6 +2084,7 @@ Return ONLY valid JSON:
             }} style={{background:C.accent,color:"#fff"}}>Next: Audio →</Btn>
           </div>
         </div>
+        {genMeta?.isV2&&<div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#15803D",marginBottom:12}}>⚡ Creating v2 from <strong>"{genMeta.sourceTitle}"</strong> — same structure, ready for a new hook. Hit "Generate 3 Hook Variations" to test a different opening.</div>}
         <div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,marginBottom:16}}>✏️ Review and edit your script below. Use "Generate 3 Hook Variations" to create testable hook options.</div>
 
         {/* Hook variations */}
@@ -2184,11 +2207,11 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
             <Btn onClick={()=>setStep("forge")} style={{background:C.accent,color:"#fff"}}>Next: Forge →</Btn>
           </div>
         </div>
-        {autoCount>0&&<div style={{background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:13,color:"#34D399",fontWeight:600}}>✦ AI auto-selected {autoCount} clip{autoCount!==1?"s":""} — swap any below.</div>}
+        {autoCount>0&&<div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:13,color:"#15803D",fontWeight:600}}>✦ AI auto-selected {autoCount} clip{autoCount!==1?"s":""} — swap any below.</div>}
         <Card style={{padding:0,overflow:"hidden",marginBottom:20}}>
           <ScriptTable sections={sections} onChange={(s:any[])=>{setSections(s);setHookSections(prev=>({...prev,[activeHookIdx]:s}))}} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} voiceoverUrl={voiceoverUrl}/>
         </Card>
-        <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl}/>
+        <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl} captionSettings={captionSettings} onCaptionChange={setCaptionSettings}/>
       </>}
 
       {/* Step 4: Forge */}
@@ -2200,6 +2223,20 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
             <Btn onClick={()=>handleSaveForged("complete")} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Save {selectedHooks.length>1?`${selectedHooks.length} Hook Variations`:"& Complete"}</Btn>
           </div>
         </div>
+        {/* Voiceover sync check */}
+        {voiceoverUrl&&(()=>{
+          const totalClipDur=sections.reduce((acc:number,s:any)=>{
+            const segs=s.clipSegments?.length?s.clipSegments:[{clipId:s.selectedClipId}]
+            return acc+segs.reduce((a2:number,seg:any)=>{const item=items.find((i:Item)=>i.id===seg.clipId);if(!item)return a2;const start=seg.trimStart??item.start_seconds??0;const end=seg.trimEnd??item.end_seconds??(start+(item.duration_seconds||3));return a2+Math.max(0,end-start)},0)
+          },0)
+          const totalWords=sections.reduce((acc:number,s:any)=>acc+((s.spokenWords||"").trim().split(/\s+/).filter(Boolean).length),0)
+          const estVoDur=totalWords/2.5
+          if(totalClipDur===0||estVoDur===0)return null
+          const ratio=estVoDur/totalClipDur
+          if(ratio>1.25)return<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#92400E",marginBottom:16}}>⚠️ Voiceover may be longer than your clips (~{Math.round(estVoDur)}s script vs ~{Math.round(totalClipDur)}s clips). Consider adding more clips or trimming the script.</div>
+          if(ratio<0.7)return<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#92400E",marginBottom:16}}>⚠️ Clips are longer than voiceover (~{Math.round(estVoDur)}s script vs ~{Math.round(totalClipDur)}s clips). Video will continue after voiceover ends.</div>
+          return null
+        })()}
         <div style={{marginBottom:16}}>
           <Label>Ad Name (optional)</Label>
           <input value={adTitle} onChange={e=>setAdTitle(e.target.value)} placeholder={`e.g. ProblemAware_${form.contentType||"UGC"}_${(form.adLength||"30s").replace(" seconds","s")}_v1`} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
@@ -2208,7 +2245,7 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
           <Card pad={12}><div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover</div>{voiceoverUrl?<><audio src={voiceoverUrl} controls style={{width:"100%",height:32}}/><div style={{fontSize:11,color:C.green,marginTop:4}}>✓ {voiceoverVoice}</div><button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.muted,fontSize:10,cursor:"pointer",textDecoration:"underline",padding:0}}>Change</button></>:<div style={{fontSize:12,color:C.muted}}>None — <button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,textDecoration:"underline",padding:0}}>add one</button></div>}</Card>
           <Card pad={12}><div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music</div>{musicUrl?<><audio src={musicUrl} controls style={{width:"100%",height:32}}/><div style={{fontSize:11,color:C.green,marginTop:4}}>✓ {musicName}</div><button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.muted,fontSize:10,cursor:"pointer",textDecoration:"underline",padding:0}}>Change</button></>:<div style={{fontSize:12,color:C.muted}}>None — <button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,textDecoration:"underline",padding:0}}>add some</button></div>}</Card>
         </div>
-        <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl}/>
+        <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl} captionSettings={captionSettings} onCaptionChange={setCaptionSettings}/>
       </div>}
     </div>
   }
@@ -2230,7 +2267,7 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
           <div style={{fontSize:13,color:C.muted}}>Saved {selected.created_at?new Date(selected.created_at).toLocaleDateString():""}</div>
         </div>
         <div style={{display:"flex",gap:10}}>
-          <Btn onClick={()=>{setSections(disp);setView("review");setStep("script")}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44"}}>Edit Script</Btn>
+          <Btn onClick={()=>{setSections(disp);setView("review");setStep("script")}} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44"}}>Edit Script</Btn>
           <Btn onClick={async()=>{
             const fresh=disp.map((s:any)=>({...s,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
             const matched=items.length>0?await matchClips(fresh,items):fresh
@@ -2309,7 +2346,7 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
     {renderStatus==="rendering"&&<div>
       <div style={{background:"#f59e0b11",border:"1px solid #f59e0b33",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#fbbf24",marginBottom:12}}>⏳ Rendering in progress — usually takes 1-2 minutes.</div>
       <div style={{display:"flex",gap:10}}>
-        <Btn onClick={checkStatus} disabled={checking} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",flex:1}}>{checking?"Checking…":"🔄 Check Status"}</Btn>
+        <Btn onClick={checkStatus} disabled={checking} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44",flex:1}}>{checking?"Checking…":"🔄 Check Status"}</Btn>
       </div>
       {msg&&<div style={{fontSize:12,color:C.muted,marginTop:8}}>{msg}</div>}
     </div>}
@@ -2437,7 +2474,7 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
     <div style={{padding:"10px 12px",flex:1,display:"flex",flexDirection:"column",gap:5}}>
       <div style={{fontWeight:700,fontSize:12,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{ad.title}</div>
       <div style={{display:"flex",gap:2}} onMouseLeave={()=>setHoverRating(0)}>
-        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={e=>{e.stopPropagation();setHoverRating(star)}} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:13,color:(hoverRating||rating)>=star?"#f59e0b":"#ffffff22",transition:"color 0.1s"}}>★</span>)}
+        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={e=>{e.stopPropagation();setHoverRating(star)}} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:13,color:(hoverRating||rating)>=star?"#f59e0b":"rgba(0,0,0,0.15)",transition:"color 0.1s"}}>★</span>)}
       </div>
       <div style={{fontSize:10,color:C.muted}}>{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}{ad.metadata?.adLength?` · ${ad.metadata.adLength}`:""}</div>
       {(ad as any).notes&&<div style={{fontSize:10,color:C.muted,fontStyle:"italic",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>📝 {(ad as any).notes}</div>}
@@ -2445,7 +2482,7 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
   </div>
 }
 
-function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefresh:()=>void}){
+function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{ads:ForgedAd[],items:Item[],brand:BrandProfile,setBrand:(b:BrandProfile)=>void,onRefresh:()=>void,onEditAd:(ad:ForgedAd)=>void,onCreateV2:(ad:ForgedAd)=>void}){
   const supabase=createClient()
   const [previewId,setPreviewId]=useState<string|null>(null)
   const [search,setSearch]=useState("")
@@ -2458,9 +2495,50 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
   const [selectedIds,setSelectedIds]=useState<string[]>([])
   const [deleting,setDeleting]=useState(false)
   const [autoRendering,setAutoRendering]=useState(false)
+  const [perfOpen,setPerfOpen]=useState(false)
+  const [perfVals,setPerfVals]=useState<Record<string,string>>({})
+  const [perfSaving,setPerfSaving]=useState(false)
   const pollRef=useRef<any>(null)
 
   const previewAd=previewId?ads.find(a=>a.id===previewId):null
+
+  useEffect(()=>{
+    if(previewAd){setPerfVals({hook_rate:previewAd.metadata?.hook_rate||"",cpa:previewAd.metadata?.cpa||"",roas:previewAd.metadata?.roas||"",spend:previewAd.metadata?.spend||""});setPerfOpen(false)}
+  },[previewId])
+
+  async function updateBrandIntelligence(updatedAds:ForgedAd[]){
+    const adsWithData=updatedAds.filter(a=>a.metadata?.hook_rate||a.metadata?.cpa||a.metadata?.roas||a.star_rating)
+    if(adsWithData.length<2)return
+    const hookPerf:Record<string,number[]>={}
+    adsWithData.forEach(a=>{const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK");const hookType=hook?.hookType||"Unknown";const rate=parseFloat(a.metadata?.hook_rate||"0");if(rate>0){if(!hookPerf[hookType])hookPerf[hookType]=[];hookPerf[hookType].push(rate)}})
+    const avg=(arr:number[])=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10:0
+    const hookEntries=Object.entries(hookPerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(b[1])-avg(a[1]))
+    const best_hook_types=hookEntries.filter(([,v])=>avg(v)>=40).map(([k])=>k)
+    const worst_hook_types=hookEntries.filter(([,v])=>avg(v)<30).map(([k])=>k)
+    const topAds=adsWithData.filter(a=>parseFloat(a.metadata?.hook_rate||"0")>=45)
+    const best_hook_patterns:string[]=[]
+    topAds.forEach(a=>{const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK");const words=(hook?.spokenWords||"").trim();if(!words)return;if(/^\d/.test(words.split(" ")[0]))best_hook_patterns.push("Opens with a number");if(/I |My |We /.test(words.substring(0,20)))best_hook_patterns.push("First-person opening");if(words.split(" ").length<=6)best_hook_patterns.push("Short punchy hook (under 7 words)")})
+    const ctypePerf:Record<string,number[]>={}
+    adsWithData.forEach(a=>{const ct=a.metadata?.contentType||"Unknown";const cpa=parseFloat(a.metadata?.cpa||"0");if(cpa>0){if(!ctypePerf[ct])ctypePerf[ct]=[];ctypePerf[ct].push(cpa)}})
+    const ctypeEntries=Object.entries(ctypePerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(a[1])-avg(b[1]))
+    const best_content_type=ctypeEntries[0]?.[0]||""
+    const hookLengths=topAds.map(a=>{const h=(a.sections||[]).find((s:any)=>s.type==="HOOK");return(h?.spokenWords||"").trim().split(/\s+/).filter(Boolean).length}).filter(l=>l>0)
+    const avg_winning_hook_length=hookLengths.length?Math.round(hookLengths.reduce((a,b)=>a+b,0)/hookLengths.length):0
+    const intel={best_hook_types,worst_hook_types,best_hook_patterns:[...new Set(best_hook_patterns)],best_content_type,avg_winning_hook_length,total_ads_analysed:adsWithData.length,last_updated:new Date().toISOString()}
+    const updated={...brand,brand_intelligence:intel}
+    setBrand(updated)
+    if(brand.id)await supabase.from("brand_profile").update({brand_intelligence:intel}).eq("id",brand.id)
+  }
+
+  async function savePerf(){
+    if(!previewAd)return
+    setPerfSaving(true)
+    const newMeta={...previewAd.metadata,...perfVals}
+    await supabase.from("forged_ads").update({metadata:newMeta}).eq("id",previewAd.id)
+    const updatedAds=ads.map(a=>a.id===previewAd.id?{...a,metadata:newMeta}:a)
+    await updateBrandIntelligence(updatedAds)
+    setPerfSaving(false);onRefresh();setPerfOpen(false)
+  }
 
   // Auto-poll render status every 15 seconds
   useEffect(()=>{
@@ -2530,10 +2608,10 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
         <div style={{fontSize:13,color:C.muted}}>Your complete video ad library — organised by awareness stage</div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-        {totalPending>0&&<Btn onClick={autoRenderAll} disabled={autoRendering} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"7px 14px"}}>{autoRendering?"⏳ Rendering…":`🎬 Render All (${totalPending})`}</Btn>}
+        {totalPending>0&&<Btn onClick={autoRenderAll} disabled={autoRendering} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"7px 14px"}}>{autoRendering?"⏳ Rendering…":`🎬 Render All (${totalPending})`}</Btn>}
         {!selectMode&&<Btn onClick={()=>setSelectMode(true)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"7px 14px"}}>Select</Btn>}
         {selectMode&&<>
-          <Btn onClick={()=>{setSelectedIds(allFilteredIds)}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"7px 14px"}}>Select All ({filtered.length})</Btn>
+          <Btn onClick={()=>{setSelectedIds(allFilteredIds)}} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"7px 14px"}}>Select All ({filtered.length})</Btn>
           <Btn onClick={bulkDelete} disabled={selectedIds.length===0||deleting} style={{background:selectedIds.length>0?"#ef444433":C.border,color:selectedIds.length>0?"#ef4444":C.muted,border:"1px solid "+(selectedIds.length>0?"#ef444466":C.border),fontSize:12,padding:"7px 14px"}}>Delete ({selectedIds.length})</Btn>
           <Btn onClick={()=>{setSelectMode(false);setSelectedIds([])}} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"7px 14px"}}>Cancel</Btn>
         </>}
@@ -2579,16 +2657,37 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
                 {(previewAd as any).notes?`📝 ${(previewAd as any).notes}`:"+ Add notes"}
               </div>}
           </div>
-          <div style={{display:"flex",gap:8,flexShrink:0}}>
+          <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap"}}>
+            {previewAd.mode!=="broll"&&<Btn onClick={()=>{onEditAd(previewAd);setPreviewId(null)}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px"}}>✏️ Edit Ad</Btn>}
+            {previewAd.mode!=="broll"&&<Btn onClick={()=>{onCreateV2(previewAd);setPreviewId(null)}} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontSize:12,padding:"6px 12px"}}>⚡ Create v2</Btn>}
             {previewAd.status==="draft"&&<Btn onClick={()=>{markComplete(previewAd.id);setPreviewId(null)}} style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
             <Btn onClick={()=>{deleteAd(previewAd.id);setPreviewId(null)}} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",fontSize:12,padding:"6px 12px"}}>Delete</Btn>
-            <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕ Close</Btn>
+            <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕</Btn>
           </div>
         </div>
         {previewAd.sections&&previewAd.sections.length>0&&<div style={{marginBottom:20}}><StitchedPreview sections={previewAd.sections} libraryItems={items} voiceoverUrl={previewAd.voiceover_url} musicUrl={previewAd.music_url}/></div>}
         <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
           {previewAd.voiceover_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover · {previewAd.voiceover_voice}</div><audio src={previewAd.voiceover_url} controls style={{width:"100%",height:36}}/></div>}
           {previewAd.music_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls style={{width:"100%",height:36}}/></div>}
+        </div>
+        {/* Performance logging */}
+        <div style={{marginBottom:16}}>
+          {!perfOpen
+            ?<button onClick={()=>setPerfOpen(true)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,width:"100%",textAlign:"left" as const}}>
+              📊 {previewAd.metadata?.hook_rate?`Hook rate: ${previewAd.metadata.hook_rate}%${previewAd.metadata?.cpa?` · CPA: £${previewAd.metadata.cpa}`:""}${previewAd.metadata?.roas?` · ROAS: ${previewAd.metadata.roas}x`:""}`:"+  Log performance data"}
+            </button>
+            :<div style={{background:C.bg,border:"1px solid "+C.border,borderRadius:10,padding:14}}>
+              <div style={{fontWeight:700,fontSize:13,marginBottom:10}}>📊 Log Performance Data</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+                {([["Hook Rate %","hook_rate","e.g. 42"],["CPA (£)","cpa","e.g. 18"],["ROAS","roas","e.g. 3.2"],["Spend (£)","spend","e.g. 500"]] as [string,string,string][]).map(([label,key,ph])=>
+                  <div key={key}><Label>{label}</Label><input value={perfVals[key]||""} onChange={e=>setPerfVals(v=>({...v,[key]:e.target.value}))} placeholder={ph} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"7px 10px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const}}/></div>
+                )}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <Btn onClick={savePerf} disabled={perfSaving} style={{background:C.accent,color:"#fff",flex:1}}>{perfSaving?"Saving…":"💾 Save + Update Intelligence"}</Btn>
+                <Btn onClick={()=>setPerfOpen(false)} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn>
+              </div>
+            </div>}
         </div>
         <ForgedAdDownload ad={previewAd} onRefresh={onRefresh}/>
       </div>
@@ -2614,7 +2713,7 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
             <div style={{fontWeight:600,fontSize:13,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ad.title}</div>
             <div style={{fontSize:11,color:C.muted,marginTop:2}}>{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}{ad.render_status==="failed"?<span style={{color:"#ef4444",marginLeft:8}}>❌ Last render failed</span>:""}</div>
           </div>
-          <Btn onClick={async()=>{await fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:ad.id})});onRefresh()}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px",flexShrink:0}}>🎬 Render</Btn>
+          <Btn onClick={async()=>{await fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:ad.id})});onRefresh()}} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px",flexShrink:0}}>🎬 Render</Btn>
           <Btn onClick={()=>setPreviewId(ad.id)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"6px 10px",flexShrink:0}}>Open</Btn>
         </div>)}
       </div>
@@ -2651,6 +2750,301 @@ function ForgedAdsTab({ads,items,onRefresh}:{ads:ForgedAd[],items:Item[],onRefre
   </div>
 }
 
+// ── Creator Brief Modal ───────────────────────────────────────────────────
+function CreatorBriefModal({brand,sections,onClose}:{brand:BrandProfile,sections?:any[],onClose:()=>void}){
+  const supabase=createClient()
+  const [saving,setSaving]=useState(false)
+  const [shareUrl,setShareUrl]=useState("")
+  const [copied,setCopied]=useState(false)
+  const [productName,setProductName]=useState("")
+  const defaultHooks=(sections||[]).filter((s:any)=>s.type==="HOOK"&&s.spokenWords).map((s:any)=>s.spokenWords)
+  const defaultScripts=(sections||[]).filter((s:any)=>s.spokenWords?.trim()).map((s:any)=>({type:s.type==="HOOK"?"hook":"voiceover",label:s.type,words:s.spokenWords}))
+  const [hooks,setHooks]=useState<string[]>(defaultHooks.length>0?defaultHooks:[""])
+  const [scripts,setScripts]=useState<{type:string,label:string,words:string}[]>(defaultScripts.length>0?defaultScripts:[{type:"voiceover",label:"",words:""}])
+  const [broll,setBroll]=useState<string[]>([""])
+  const [editingStyle,setEditingStyle]=useState("")
+  const [editingRefs,setEditingRefs]=useState("")
+  const [editingNotes,setEditingNotes]=useState("")
+  const [additionalNotes,setAdditionalNotes]=useState("")
+  function updHook(i:number,v:string){setHooks(h=>h.map((x,j)=>j===i?v:x))}
+  function updScript(i:number,field:string,v:string){setScripts(s=>s.map((x,j)=>j===i?{...x,[field]:v}:x))}
+  function updBroll(i:number,v:string){setBroll(b=>b.map((x,j)=>j===i?v:x))}
+  async function generateBrief(){
+    setSaving(true)
+    try{
+      const{data,error}=await supabase.from("creator_briefs").insert({brand_name:brand.name||"",product_name:productName,hooks:hooks.filter(h=>h.trim()),scripts:scripts.filter(s=>s.words.trim()),broll_shots:broll.filter(b=>b.trim()),editing_style:editingStyle.trim()||null,editing_references:editingRefs.trim()||null,editing_notes:editingNotes.trim()||null,additional_notes:additionalNotes.trim()||null}).select("share_token").single()
+      if(error)throw new Error(error.message)
+      setShareUrl(`${window.location.origin}/brief/${data.share_token}`)
+    }catch(e:any){alert("Failed to create brief: "+e.message)}
+    setSaving(false)
+  }
+  async function copyUrl(){await navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),2000)}
+  const typeColors:Record<string,{bg:string,color:string}>={voiceover:{bg:"#DBEAFE",color:"#1D4ED8"},hook:{bg:"#FEF3C7",color:"#92400E"},"talking head":{bg:"#D1FAE5",color:"#065F46"}}
+  return<div onClick={onClose} style={{position:"fixed",inset:0,background:"#000000dd",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:28,maxWidth:700,width:"100%",marginTop:20,marginBottom:40}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+        <div><STitle size={20} mb={2}>📋 Creator Brief</STitle><div style={{fontSize:13,color:C.muted}}>Everything a creator needs to record your ad</div></div>
+        <Btn onClick={onClose} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕</Btn>
+      </div>
+      {shareUrl?<>
+        <div style={{background:"#F0FDF4",border:"2px solid #86EFAC",borderRadius:14,padding:24,textAlign:"center",marginBottom:20}}>
+          <div style={{fontSize:32,marginBottom:12}}>🔗</div>
+          <div style={{fontWeight:700,fontSize:16,color:"#15803D",marginBottom:8}}>Brief ready to share!</div>
+          <div style={{background:"#fff",border:"1.5px solid #86EFAC",borderRadius:10,padding:"12px 16px",fontFamily:"monospace",fontSize:13,wordBreak:"break-all" as const,marginBottom:14,color:C.text}}>{shareUrl}</div>
+          <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+            <Btn onClick={copyUrl} style={{background:copied?"#22c55e":C.accent,color:"#fff",fontWeight:700}}>{copied?"✓ Copied!":"Copy URL"}</Btn>
+            <a href={shareUrl} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}><Btn style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44"}}>Preview →</Btn></a>
+            <Btn onClick={()=>setShareUrl("")} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Edit brief</Btn>
+          </div>
+        </div>
+        <Btn onClick={onClose} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,width:"100%"}}>Close</Btn>
+      </>:<>
+        <div style={{marginBottom:20,display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div><Label>Brand name</Label><Input value={brand.name||""} onChange={()=>{}} style={{background:"#F9FAFB",color:C.muted}}/></div>
+          <div><Label>Product (optional)</Label><Input value={productName} onChange={(e:any)=>setProductName(e.target.value)} placeholder="e.g. Vitamin C Serum"/></div>
+        </div>
+        <div style={{marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><Label>🎣 Hooks to record</Label><Btn onClick={()=>setHooks(h=>[...h,""])} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:11,padding:"4px 10px"}}>+ Add</Btn></div>
+          {hooks.map((h,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:8}}>
+            <div style={{width:22,height:22,borderRadius:99,background:C.accentSoft,color:C.accent,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:11}}>{i+1}</div>
+            <Input value={h} onChange={(e:any)=>updHook(i,e.target.value)} placeholder={`Hook ${i+1} — exact opening words`} style={{flex:1}}/>
+            {hooks.length>1&&<button onClick={()=>setHooks(h=>h.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:18,flexShrink:0}}>×</button>}
+          </div>)}
+        </div>
+        <div style={{marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><Label>📝 Scripts to record</Label><Btn onClick={()=>setScripts(s=>[...s,{type:"voiceover",label:"",words:""}])} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:11,padding:"4px 10px"}}>+ Add</Btn></div>
+          {scripts.map((s,i)=><div key={i} style={{border:"1.5px solid "+C.border,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+            <div style={{display:"flex",gap:10,marginBottom:10,alignItems:"center",flexWrap:"wrap"}}>
+              <select value={s.type} onChange={e=>updScript(i,"type",e.target.value)} style={{background:typeColors[s.type]?.bg||C.surface,border:"none",borderRadius:99,padding:"4px 10px",color:typeColors[s.type]?.color||C.text,fontSize:11,fontWeight:700,cursor:"pointer",outline:"none"}}>
+                <option value="voiceover">🎙️ Voiceover</option><option value="talking head">🎥 Talking Head</option><option value="hook">🎣 Hook</option>
+              </select>
+              <Input value={s.label} onChange={(e:any)=>updScript(i,"label",e.target.value)} placeholder="Label (optional)" style={{flex:1,minWidth:100}}/>
+              {scripts.length>1&&<button onClick={()=>setScripts(s=>s.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:18}}>×</button>}
+            </div>
+            <Input textarea value={s.words} onChange={(e:any)=>updScript(i,"words",e.target.value)} placeholder="Exact words to say…" rows={3}/>
+          </div>)}
+        </div>
+        <div style={{marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><Label>🎬 B-roll shots</Label><Btn onClick={()=>setBroll(b=>[...b,""])} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:11,padding:"4px 10px"}}>+ Add</Btn></div>
+          {broll.map((b,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:8}}>
+            <Input value={b} onChange={(e:any)=>updBroll(i,e.target.value)} placeholder={`Shot ${i+1} — describe what to film`} style={{flex:1}}/>
+            {broll.length>1&&<button onClick={()=>setBroll(b=>b.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:18,flexShrink:0}}>×</button>}
+          </div>)}
+        </div>
+        <div style={{border:"1px solid "+C.border,borderRadius:12,padding:14,marginBottom:16}}>
+          <Label>✂️ Editing style & references</Label>
+          <div style={{marginBottom:10}}><Input textarea value={editingStyle} onChange={(e:any)=>setEditingStyle(e.target.value)} placeholder="e.g. Fast cuts, bold captions, raw UGC feel…" rows={2}/></div>
+          <div style={{marginBottom:10}}><Input textarea value={editingRefs} onChange={(e:any)=>setEditingRefs(e.target.value)} placeholder={"Reference links (one per line)\nhttps://tiktok.com/..."} rows={3}/></div>
+          <Input textarea value={editingNotes} onChange={(e:any)=>setEditingNotes(e.target.value)} placeholder="Editing notes — captions on every word, product close-up at end…" rows={2}/>
+        </div>
+        <div style={{marginBottom:24}}><Label>💬 Additional notes</Label><Input textarea value={additionalNotes} onChange={(e:any)=>setAdditionalNotes(e.target.value)} placeholder="Deadlines, deliverables, file format…" rows={3}/></div>
+        <Btn onClick={generateBrief} disabled={saving} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:15,borderRadius:12,fontWeight:700}}>{saving?"Generating link…":"🔗 Generate Shareable Brief"}</Btn>
+      </>}
+    </div>
+  </div>
+}
+
+// ── Winning Ads Tab ───────────────────────────────────────────────────────
+function WinningAdsTab({brand,setBrand,products,items,onSaveForgedAd,onGoToForged}:any){
+  const supabase=createClient()
+  const [view,setView]=useState<"list"|"upload"|"processing"|"result">("list")
+  const [dragOver,setDragOver]=useState(false)
+  const [file,setFile]=useState<File|null>(null)
+  const [title,setTitle]=useState("")
+  const [context,setContext]=useState("")
+  const [productId,setProductId]=useState("")
+  const [progress,setProgress]=useState(0)
+  const [progressMsg,setProgressMsg]=useState("")
+  const [error,setError]=useState("")
+  const [analysis,setAnalysis]=useState<any>(null)
+  const [templateSections,setTemplateSections]=useState<any[]>([])
+  const [selectedPatternIdx,setSelectedPatternIdx]=useState<number|null>(null)
+  const [briefSections,setBriefSections]=useState<any[]|null>(null)
+  const fileRef=useRef<HTMLInputElement>(null)
+  const patterns:any[]=brand?.winning_patterns||[]
+
+  async function savePatterns(newPatterns:any[]){const updated={...brand,winning_patterns:newPatterns};setBrand(updated);if(brand.id){await supabase.from("brand_profile").update({winning_patterns:newPatterns}).eq("id",brand.id)}}
+
+  async function handleUpload(){
+    if(!file||!title.trim()){setError("Add a title and select a video first.");return}
+    setError("");setView("processing");setProgress(5);setProgressMsg("Uploading video…")
+    try{
+      const res=await fetch("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,contentType:file.type,metadata:{title:title.trim(),creator:"winning_ad",autoClip:false}})})
+      const{itemId,uploadUrl,error:uploadErr}=await res.json()
+      if(uploadErr)throw new Error(uploadErr)
+      await new Promise<void>((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.upload.onprogress=e=>{if(e.lengthComputable)setProgress(5+Math.round((e.loaded/e.total)*35))};xhr.onload=()=>resolve();xhr.onerror=()=>reject(new Error("Upload failed"));xhr.open("PUT",uploadUrl);xhr.setRequestHeader("Content-Type",file.type);xhr.send(file)})
+      setProgress(40);setProgressMsg("Processing video — waiting for transcript…")
+      let transcript="";let duration=0
+      for(let attempt=0;attempt<40;attempt++){
+        await new Promise(r=>setTimeout(r,4000))
+        const{data}=await supabase.from("items").select("mux_status,transcript,duration_seconds").eq("id",itemId).single()
+        if(data?.mux_status==="ready"&&data?.transcript){transcript=data.transcript;duration=data.duration_seconds||0;break}
+        setProgress(40+Math.min(attempt*1.5,20));setProgressMsg(`Processing… ${Math.round(attempt/40*100)}%`)
+      }
+      if(!transcript)transcript=`[No transcript — context: "${context||title}"]`
+      setProgress(62);setProgressMsg("Analysing creative blueprint…")
+      const prod=products.find((x:any)=>String(x.id)===String(productId))||null
+      const analysisRaw=await callClaude([{role:"user",content:`Analyse this winning ad transcript and extract the creative blueprint.\n\nTRANSCRIPT: "${transcript.substring(0,1500)}"\nDURATION: ${duration}s\nCONTEXT: "${context||"Not provided"}"\n\nReturn ONLY valid JSON:\n{"hook_type":"Pain Point","hook_words":"exact opening","hook_analysis":"why it works","section_structure":[{"beat":"HOOK","start_s":0,"duration_s":3,"description":"what happens"}],"language_patterns":["pattern"],"power_words":["word"],"energy_arc":"description","avg_cut_frequency":"every 2-3s","creator_brief":"plain English brief for creator","total_duration_s":${duration}}`}],1500)
+      const analysisData=JSON.parse(analysisRaw.replace(/```json|```/g,"").trim())
+      setAnalysis(analysisData)
+      setProgress(78);setProgressMsg("Generating brand-adapted script…")
+      const brandCtx=`BRAND: ${brand.name||"Unknown"}\nVoice: ${brand.voice||""}\nCustomer: ${brand.target_customer||""}`
+      const prodCtx=prod?`PRODUCT: ${prod.name}\nBenefits: ${prod.benefits||""}\nClaims: ${prod.claims||""}`
+      :""
+      const structureDesc=(analysisData.section_structure||[]).map((s:any)=>`${s.beat} (${s.duration_s}s): ${s.description}`).join("\n")
+      const templateRaw=await callClaude([{role:"user",content:`Rewrite this winning ad structure for a new brand, preserving the exact structural blueprint.\n\n${brandCtx}\n${prodCtx}\n\nBLUEPRINT:\nHook type: ${analysisData.hook_type}\nApproach: ${analysisData.hook_analysis}\nStructure:\n${structureDesc}\nLanguage patterns: ${(analysisData.language_patterns||[]).join(", ")}\nEnergy arc: ${analysisData.energy_arc}\n\nReturn ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is shown","durationEstimate":"3s"}],"suggested_music_mood":"Uplifting"}`}],2000)
+      const templateData=JSON.parse(templateRaw.replace(/```json|```/g,"").trim())
+      let secs=(templateData.sections||[]).map((s:any,i:number)=>({...s,id:Date.now()+i,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
+      setProgress(90);setProgressMsg("Matching clips from library…")
+      if(items.length>0){
+        try{
+          const readyClips=items.filter((i:Item)=>i.mux_playback_id&&i.mux_status==="ready")
+          if(readyClips.length>0){
+            const libSummary=readyClips.slice(0,50).map((i:Item)=>{const a=i.analysis||{};return "ID:"+i.id+"|role:"+(a.clip_role||i.clip_role||"")+"|tags:"+(a.scene_tags||[]).join(",")+"|transcript:"+(i.transcript||"").substring(0,60)}).join("\n")
+            const matchRaw=await callClaude([{role:"user",content:"Match clips to sections.\n\nSECTIONS:\n"+secs.map((s:any,i:number)=>`${i} [${s.type}]: "${(s.spokenWords||"").substring(0,80)}"`).join("\n")+"\n\nCLIPS:\n"+libSummary+"\n\nReturn ONLY JSON array: [{\"section\":0,\"best_id\":\"uuid\",\"alt_ids\":[\"uuid1\"],\"reason\":\"why\"},...]"}],1500)
+            const matches=JSON.parse(matchRaw.replace(/```json|```/g,"").trim())
+            const validIds=new Set(items.map((i:Item)=>i.id));const usedIds=new Set<string>()
+            secs=secs.map((s:any,i:number)=>{const m=matches.find((x:any)=>x.section===i);if(!m)return s;const candidates=[m.best_id,...(m.alt_ids||[])].filter((id:string)=>id&&validIds.has(id)&&!usedIds.has(id));const clipId=candidates[0]||null;if(clipId)usedIds.add(clipId);return{...s,selectedClipId:clipId,matchedClipIds:candidates,clipSegments:[{id:"seg-"+i+"-0",clipId}],autoSelected:!!clipId,matchReason:m.reason||""}})
+          }
+        }catch(e){console.error("clip matching failed",e)}
+      }
+      setTemplateSections(secs);setProgress(100);setProgressMsg("Done!")
+      const newPattern={id:Date.now().toString(),title:title.trim(),context,created_at:new Date().toISOString(),hook_type:analysisData.hook_type,hook_words:analysisData.hook_words,section_count:analysisData.section_structure?.length||secs.length,total_duration_s:duration,analysis:analysisData,template_sections:secs,product_id:productId,suggested_music_mood:templateData.suggested_music_mood||"Uplifting"}
+      await savePatterns([newPattern,...patterns])
+      setView("result")
+    }catch(e:any){setError(e.message||"Analysis failed — try again");setView("upload")}
+  }
+
+  async function createAdFromPattern(pattern:any){const saved=await onSaveForgedAd({title:pattern.title+" (pattern)",status:"draft",mode:"script",sections:pattern.template_sections||[],voiceover_url:null,voiceover_voice:null,music_url:null,music_name:null,metadata:{contentType:"Winning Pattern",patternId:pattern.id,patternTitle:pattern.title}});if(saved)onGoToForged()}
+
+  if(view==="list")return<div style={{maxWidth:900,margin:"0 auto",padding:28}}>
+    {briefSections!==null&&<CreatorBriefModal brand={brand} sections={briefSections} onClose={()=>setBriefSections(null)}/>}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+      <div><STitle size={22} mb={4}>Winning Ads</STitle><div style={{fontSize:14,color:C.muted}}>Upload ads that perform. AI extracts the blueprint and generates a ready-to-use template for your brand.</div></div>
+      <Btn onClick={()=>{setFile(null);setTitle("");setContext("");setProductId("");setError("");setView("upload")}} style={{background:C.accent,color:"#fff",flexShrink:0}}>+ Add Winning Ad</Btn>
+    </div>
+    {patterns.length===0
+      ?<Card style={{textAlign:"center",padding:60,marginTop:24}}>
+        <div style={{fontSize:48,marginBottom:16}}>🏆</div>
+        <STitle mb={8}>No winning ad patterns yet</STitle>
+        <div style={{fontSize:14,color:C.muted,marginBottom:24}}>Upload an ad that has performed well — yours, a competitor's, or a reference.</div>
+        <Btn onClick={()=>setView("upload")} style={{background:C.accent,color:"#fff"}}>Upload First Winning Ad</Btn>
+      </Card>
+      :<div style={{marginTop:20,display:"grid",gap:14}}>
+        {patterns.map((p:any,idx:number)=><Card key={p.id||idx}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:200}}>
+              <div style={{fontWeight:700,fontSize:16,marginBottom:6}}>{p.title}</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+                {p.hook_type&&<Chip label={p.hook_type+" Hook"} color={{bg:C.accentSoft,color:C.accent}}/>}
+                {p.section_count&&<Chip label={p.section_count+" sections"} color={{bg:"#F0FDF4",color:"#15803D"}}/>}
+                {p.total_duration_s>0&&<Chip label={p.total_duration_s+"s"} color={{bg:"#FFFBEB",color:"#92400E"}}/>}
+              </div>
+              {p.analysis?.hook_words&&<div style={{fontSize:13,color:C.muted,fontStyle:"italic",marginBottom:4}}>"{p.analysis.hook_words}"</div>}
+              {p.analysis?.creator_brief&&<div style={{fontSize:12,color:C.muted,lineHeight:1.5}}><strong style={{color:C.text}}>Brief:</strong> {p.analysis.creator_brief.substring(0,140)}{p.analysis.creator_brief.length>140?"…":""}</div>}
+            </div>
+            <div style={{display:"flex",gap:8,flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
+              <Btn onClick={()=>createAdFromPattern(p)} style={{background:C.accent,color:"#fff",whiteSpace:"nowrap" as const}}>⚡ Create Ad</Btn>
+              <Btn onClick={()=>setBriefSections(p.template_sections||[])} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontSize:12,padding:"6px 12px"}}>📋 Send Brief</Btn>
+              <Btn onClick={()=>setSelectedPatternIdx(selectedPatternIdx===idx?null:idx)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"5px 12px"}}>{selectedPatternIdx===idx?"Hide":"View analysis"}</Btn>
+            </div>
+          </div>
+          {selectedPatternIdx===idx&&p.analysis&&<div style={{marginTop:16,paddingTop:16,borderTop:"1px solid "+C.border}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:6}}>Section Structure</div>
+                {(p.analysis.section_structure||[]).map((s:any,i:number)=><div key={i} style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}>
+                  <span style={{background:secColor(s.beat).bg,color:secColor(s.beat).color,padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:700}}>{s.beat}</span>
+                  <span style={{fontSize:11,color:C.muted}}>{s.duration_s}s — {s.description}</span>
+                </div>)}
+              </div>
+              <div><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:6}}>Language Patterns</div>
+                {(p.analysis.language_patterns||[]).map((lp:string,i:number)=><div key={i} style={{fontSize:12,color:C.muted,marginBottom:3}}>• {lp}</div>)}
+              </div>
+            </div>
+            {p.analysis.creator_brief&&<div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#15803D",marginTop:12}}><strong>Creator brief:</strong> {p.analysis.creator_brief}</div>}
+          </div>}
+        </Card>)}
+      </div>}
+  </div>
+
+  if(view==="upload")return<div style={{maxWidth:700,margin:"0 auto",padding:28}}>
+    <button onClick={()=>setView("list")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back</button>
+    <STitle size={22}>Add Winning Ad</STitle>
+    <div style={{color:C.muted,fontSize:14,marginBottom:24}}>Upload a high-performing ad. AI extracts the creative blueprint and generates a template for your brand.</div>
+    <div onDrop={e=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f?.type.startsWith("video/"))setFile(f)}} onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onClick={()=>fileRef.current?.click()} style={{border:"2px dashed "+(dragOver?C.accent:file?C.green:C.border),borderRadius:14,padding:"32px 20px",textAlign:"center" as const,cursor:"pointer",background:dragOver?C.accentSoft:file?"#F0FDF4":C.surface,marginBottom:20,transition:"all 0.15s"}}>
+      <input ref={fileRef} type="file" accept="video/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(f)setFile(f)}}/>
+      {file?<div><div style={{fontSize:36,marginBottom:8}}>✅</div><div style={{fontWeight:700,fontSize:15}}>{file.name}</div><div style={{fontSize:12,color:C.muted}}>{(file.size/1024/1024).toFixed(1)} MB · click to change</div></div>
+      :<div><div style={{fontSize:36,marginBottom:8}}>🎬</div><div style={{fontWeight:700,fontSize:15,marginBottom:4}}>Drop video here or click to select</div><div style={{fontSize:12,color:C.muted}}>MP4, MOV, AVI — any format</div></div>}
+    </div>
+    <Card style={{marginBottom:14}}>
+      <div style={{marginBottom:12}}><Label>Ad title *</Label><Input value={title} onChange={(e:any)=>setTitle(e.target.value)} placeholder="e.g. Competitor UGC — 52% hook rate"/></div>
+      <div style={{marginBottom:12}}><Label>Why did this ad win? (optional)</Label><Input textarea value={context} onChange={(e:any)=>setContext(e.target.value)} placeholder="High hook rate, cheap CPA, strong emotional hook — any context helps" rows={3}/></div>
+      <Label>Product to adapt for</Label>
+      <select value={productId} onChange={e=>setProductId(e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",width:"100%",cursor:"pointer"}}>
+        <option value="">General brand</option>
+        {products.map((p:any)=><option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </Card>
+    {error&&<div style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"12px 16px",fontSize:13,color:C.red,marginBottom:16}}>⚠️ {error}</div>}
+    <Btn onClick={handleUpload} disabled={!file||!title.trim()} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:15,borderRadius:12}}>🏆 Analyse & Generate Template</Btn>
+  </div>
+
+  if(view==="processing")return<div style={{maxWidth:540,margin:"80px auto",padding:28,textAlign:"center" as const}}>
+    <div style={{fontSize:48,marginBottom:20}}>🔬</div>
+    <STitle size={20} mb={8}>Analysing winning ad…</STitle>
+    <div style={{fontSize:14,color:C.muted,marginBottom:28}}>{progressMsg}</div>
+    <div style={{height:8,background:C.border,borderRadius:99,overflow:"hidden",marginBottom:12}}>
+      <div style={{height:"100%",width:progress+"%",background:C.accent,borderRadius:99,transition:"width 0.6s ease"}}/>
+    </div>
+    <div style={{fontSize:12,color:C.muted}}>{progress}%</div>
+  </div>
+
+  if(view==="result"&&analysis)return<div style={{maxWidth:860,margin:"0 auto",padding:28}}>
+    {briefSections!==null&&<CreatorBriefModal brand={brand} sections={briefSections} onClose={()=>setBriefSections(null)}/>}
+    <button onClick={()=>setView("list")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back to patterns</button>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,gap:16,flexWrap:"wrap"}}>
+      <div><STitle size={22} mb={4}>✅ Pattern extracted</STitle><div style={{fontSize:14,color:C.muted}}>Blueprint extracted and adapted to {brand.name||"your brand"}</div></div>
+      <div style={{display:"flex",gap:10}}>
+        <Btn onClick={()=>setBriefSections(templateSections)} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC"}}>📋 Send Brief</Btn>
+        <Btn onClick={()=>createAdFromPattern(patterns[0])} style={{background:C.accent,color:"#fff"}}>⚡ Create Ad</Btn>
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
+      <Card>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:12}}>🎣 Hook analysis</div>
+        <Chip label={analysis.hook_type+" Hook"} color={{bg:C.accentSoft,color:C.accent}}/>
+        <div style={{marginTop:8,fontSize:13,fontStyle:"italic",color:C.muted,marginBottom:6}}>"{analysis.hook_words}"</div>
+        <div style={{fontSize:12,color:C.muted,lineHeight:1.6}}>{analysis.hook_analysis}</div>
+      </Card>
+      <Card>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:12}}>⚡ Pacing & energy</div>
+        <div style={{fontSize:13,marginBottom:6}}><strong>Cuts:</strong> <span style={{color:C.muted}}>{analysis.avg_cut_frequency}</span></div>
+        <div style={{fontSize:13,marginBottom:10}}><strong>Energy arc:</strong> <span style={{color:C.muted}}>{analysis.energy_arc}</span></div>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{(analysis.power_words||[]).map((w:string,i:number)=><span key={i} style={{background:C.accentSoft,color:C.accent,borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600}}>{w}</span>)}</div>
+      </Card>
+    </div>
+    {analysis.creator_brief&&<Card style={{marginBottom:20,background:"#F0FDF4",border:"1.5px solid #86EFAC"}}>
+      <div style={{fontWeight:700,fontSize:13,color:"#15803D",marginBottom:6}}>📋 Creator brief</div>
+      <div style={{fontSize:13,color:"#15803D",lineHeight:1.7}}>{analysis.creator_brief}</div>
+    </Card>}
+    <Card>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>📝 Generated template — adapted to {brand.name||"your brand"}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {templateSections.map((s:any,i:number)=>{const sc=secColor(s.type);return<div key={i} style={{background:sc.bg,border:"1px solid "+sc.bd,borderRadius:10,padding:"12px 14px"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6,flexWrap:"wrap"}}>
+            <span style={{background:sc.color,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:700}}>{s.type}</span>
+            {s.durationEstimate&&<span style={{fontSize:11,color:C.muted}}>{s.durationEstimate}</span>}
+            {s.selectedClipId?<span style={{fontSize:11,color:C.green,fontWeight:600}}>✓ clip matched</span>:<span style={{fontSize:11,color:C.yellow}}>⚠ no clip</span>}
+          </div>
+          <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>{s.spokenWords}</div>
+          {s.visualDirection&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>{s.visualDirection}</div>}
+        </div>})}
+      </div>
+    </Card>
+  </div>
+  return null
+}
+
 // ── Brand Tab ─────────────────────────────────────────────────────────────
 function BrandTab({brand,setBrand,products,setProducts}:any){
   const supabase=createClient()
@@ -2683,8 +3077,58 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
   function deleteAvatar(id:string){setBrand({...brand,customer_avatars:(brand.customer_avatars||[]).filter((a:CustomerAvatar)=>a.id!==id)})}
   const navBtn=(id:string,label:string)=><button style={{padding:"8px 18px",borderRadius:99,fontSize:13,fontWeight:600,cursor:"pointer",border:"none",background:section===id?C.accent:"transparent",color:section===id?"#fff":C.muted}} onClick={()=>setSection(id)}>{label}</button>
 
+  // Brand intelligence score calculation
+  function calcScore():{score:number,max:number,items:{label:string,pts:number,earned:boolean,tip:string}[]}{
+    const b=brand;const ps=products
+    const checks=[
+      {label:"Brand name",pts:2,earned:!!(b.name?.trim()),tip:"Add your brand name"},
+      {label:"Brand description (100+ chars)",pts:5,earned:(b.description||"").length>=100,tip:"Describe what your brand does in detail"},
+      {label:"Brand voice & tone (50+ chars)",pts:5,earned:(b.voice||"").length>=50,tip:"Describe your brand's personality and tone"},
+      {label:"Target customer (50+ chars)",pts:5,earned:(b.target_customer||"").length>=50,tip:"Describe your ideal customer"},
+      {label:"Social proof / reviews",pts:5,earned:(b.reviews||"").length>=30,tip:"Paste customer reviews or testimonials"},
+      {label:"Additional info",pts:3,earned:(b.additional_info||"").length>=30,tip:"Ingredients, certifications, brand backstory"},
+      {label:"At least 1 customer avatar",pts:5,earned:(b.customer_avatars||[]).length>=1,tip:"Create an avatar with pains, desires & objections"},
+      {label:"At least 1 product",pts:5,earned:ps.length>=1,tip:"Add your first product"},
+      {label:"Product benefits & claims",pts:5,earned:ps.some((p:Product)=>(p.benefits||"").length>20&&(p.claims||"").length>20),tip:"Fill in product benefits and specific claims"},
+      {label:"Product differentiators",pts:5,earned:ps.some((p:Product)=>(p.differentiators||"").length>20),tip:"What makes your product unique vs competitors?"},
+      {label:"Product reviews",pts:5,earned:ps.some((p:Product)=>(p.reviews||"").length>20),tip:"Paste specific product reviews — quoted in scripts"},
+      {label:"Product price",pts:5,earned:ps.some((p:Product)=>!!(p.price?.trim())),tip:"Add price — unlocks specific CTA copy"},
+    ]
+    const score=checks.reduce((acc,c)=>acc+(c.earned?c.pts:0),0)
+    const max=checks.reduce((acc,c)=>acc+c.pts,0)
+    return{score,max,items:checks}
+  }
+
+  const {score:intellScore,max:intellMax,items:intellItems}=calcScore()
+  const displayPct=Math.min(90,Math.round(intellScore/intellMax*90))
+
   return<div style={{maxWidth:820,margin:"0 auto",padding:28}}>
     <STitle size={22}>Brand & Products</STitle>
+
+    {/* Intelligence Score */}
+    <div style={{background:C.card,border:"1.5px solid "+C.border,borderRadius:16,padding:20,marginBottom:24,boxShadow:"0 2px 12px rgba(91,73,255,0.06)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:12}}>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:800,fontSize:15,marginBottom:2}}>🧠 Platform Intelligence Score</div>
+          <div style={{fontSize:12,color:C.muted}}>How well the platform knows your brand. Higher = better scripts, smarter clip matching.</div>
+        </div>
+        <div style={{fontSize:36,fontWeight:900,color:displayPct>=80?C.green:displayPct>=50?C.accent:C.yellow,minWidth:64,textAlign:"right" as const}}>{displayPct}%</div>
+      </div>
+      <div style={{height:8,background:C.border,borderRadius:4,overflow:"hidden",marginBottom:12}}>
+        <div style={{height:"100%",width:displayPct+"%",background:displayPct>=80?"linear-gradient(90deg,#16A34A,#22c55e)":"linear-gradient(90deg,"+C.accent+",#8B7FFF)",borderRadius:4,transition:"width 0.6s ease"}}/>
+      </div>
+      {intellItems.filter(i=>!i.earned).length>0&&<div>
+        <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>Fill these to improve:</div>
+        <div style={{display:"flex",flexDirection:"column" as const,gap:4}}>
+          {intellItems.filter(i=>!i.earned).map(i=><div key={i.label} style={{display:"flex",alignItems:"center",gap:8,fontSize:12}}>
+            <span style={{color:C.yellow,fontWeight:700,fontSize:11,minWidth:28}}>+{i.pts}</span>
+            <span style={{color:C.muted}}>{i.tip}</span>
+          </div>)}
+        </div>
+      </div>}
+      {displayPct>=70&&<div style={{fontSize:11,color:C.muted,marginTop:8}}>🎯 The final 10% is earned through usage — the platform learns from your ad performance data over time.</div>}
+    </div>
+
     <div style={{display:"flex",gap:8,marginBottom:24}}>{navBtn("brand","Brand Profile")}{navBtn("avatars",`Customer Avatars (${(brand.customer_avatars||[]).length})`)}{navBtn("products",`Products (${products.length})`)}</div>
 
     {section==="brand"&&<Card>
@@ -2761,6 +3205,8 @@ export default function AdForgeApp(){
   const [brand,setBrand]=useState<BrandProfile>({...DEFAULT_BRAND})
   const [products,setProducts]=useState<Product[]>([])
   const [scriptsStartMode,setScriptsStartMode]=useState(0)
+  const [editingAd,setEditingAd]=useState<ForgedAd|null>(null)
+  const [v2SourceAd,setV2SourceAd]=useState<ForgedAd|null>(null)
   const [loading,setLoading]=useState(true)
 
   const loadData=useCallback(async()=>{
@@ -2797,35 +3243,31 @@ export default function AdForgeApp(){
   const tabBtn=(id:string,label:string)=>{const active=tab===id;return<button style={{padding:"10px 20px",background:"none",border:"none",borderBottom:"2px solid "+(active?C.accent:"transparent"),color:active?C.text:C.muted,fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",whiteSpace:"nowrap"}} onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}}>{label}</button>}
   const draftCount=forgedAds.filter(a=>a.status==="draft").length
 
-  if(loading)return<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
+  if(loading)return<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
     <div style={{textAlign:"center"}}>
-      <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${C.accent},#818CF8)`,margin:"0 auto 16px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,boxShadow:`0 0 32px ${C.accentGlow}`}}>⚡</div>
-      <div style={{fontWeight:800,fontSize:18,color:C.text,letterSpacing:"-0.03em",marginBottom:6}}>Ad<span style={{color:C.accent}}>Forge</span></div>
-      <div style={{fontSize:12,color:C.muted,letterSpacing:"0.04em"}}>Loading workspace…</div>
+      <div style={{fontWeight:800,fontSize:24,color:C.accent,marginBottom:8,letterSpacing:"-0.02em"}}>AdForge</div>
+      <div style={{fontSize:13,color:C.muted}}>Loading your workspace…</div>
     </div>
   </div>
 
   const navItem=(id:string,label:string,icon:string)=>{
     const active=tab===id
-    return<button onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",margin:"0 8px",borderRadius:8,border:"none",background:active?"rgba(99,102,241,0.12)":"transparent",color:active?"#818CF8":C.muted,fontWeight:active?600:400,fontSize:12,cursor:"pointer",width:"calc(100% - 16px)",textAlign:"left",fontFamily:"inherit",letterSpacing:"0.01em",transition:"all 0.1s",outline:"none"}}>
-      <span style={{fontSize:13,flexShrink:0,opacity:active?1:0.6}}>{icon}</span>{label}
-      {id==="forged"&&draftCount>0&&<span style={{background:C.yellow,color:"#000",borderRadius:99,fontSize:8,padding:"1px 5px",fontWeight:800,marginLeft:"auto",letterSpacing:"0.05em"}}>{draftCount}</span>}
+    return<button onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",margin:"0 8px",borderRadius:10,border:"none",background:active?"rgba(91,73,255,0.12)":"transparent",color:active?C.accent:C.muted,fontWeight:active?700:500,fontSize:13,cursor:"pointer",width:"calc(100% - 16px)",textAlign:"left",fontFamily:"inherit",borderRight:active?"2px solid "+C.accent:"2px solid transparent"}}>
+      <span style={{fontSize:15,flexShrink:0}}>{icon}</span>{label}
+      {id==="forged"&&draftCount>0&&<span style={{background:C.yellow,color:"#fff",borderRadius:99,fontSize:9,padding:"1px 6px",fontWeight:800,marginLeft:"auto"}}>{draftCount}</span>}
     </button>
   }
 
   return<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",color:C.text,display:"flex"}}>
     {/* Sidebar */}
-    <div style={{width:210,background:C.surface,display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0,borderRight:`1px solid ${C.border}`}}>
-      {/* Wordmark */}
-      <div style={{padding:"18px 16px 14px",borderBottom:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:brand.name?4:0}}>
-          <div style={{width:24,height:24,borderRadius:6,background:`linear-gradient(135deg,${C.accent},#818CF8)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0,boxShadow:`0 0 12px ${C.accentGlow}`}}>⚡</div>
-          <span style={{fontWeight:800,fontSize:15,color:C.text,letterSpacing:"-0.03em"}}>Ad<span style={{color:"#818CF8"}}>Forge</span></span>
-        </div>
-        {brand.name&&<div style={{fontSize:10,color:C.muted,fontWeight:500,letterSpacing:"0.05em",paddingLeft:32,marginTop:2,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{brand.name}</div>}
+    <div style={{width:220,background:"#0F1133",display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0}}>
+      {/* Brand */}
+      <div style={{padding:"20px 16px 16px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
+        <div style={{fontWeight:800,fontSize:20,color:"#fff",letterSpacing:"-0.02em",marginBottom:2}}>Ad<span style={{color:"#7C6FFF"}}>Forge</span></div>
+        {brand.name&&<div style={{fontSize:10,color:"rgba(255,255,255,0.35)",fontWeight:600,letterSpacing:"0.04em",marginTop:2}}>{brand.name}</div>}
       </div>
       {/* Nav */}
-      <div style={{padding:"10px 0",flex:1}}>
+      <div style={{padding:"12px 0",flex:1}}>
         {navItem("library","Library","▦")}
         {navItem("forged","Forged Ads","⚡")}
         {navItem("scripts","Scripts","✦")}
@@ -2833,18 +3275,19 @@ export default function AdForgeApp(){
         {navItem("winning","Winning Ads","🏆")}
       </div>
       {/* Footer */}
-      <div style={{padding:"10px 14px 18px",borderTop:`1px solid ${C.border}`}}>
-        {tab==="library"&&libView!=="add"&&<button onClick={()=>setLibView("add")} style={{width:"100%",background:`rgba(99,102,241,0.07)`,color:"#818CF8",border:`1px solid rgba(99,102,241,0.2)`,borderRadius:8,padding:"8px",fontFamily:"inherit",fontSize:11,fontWeight:600,cursor:"pointer",marginBottom:8,letterSpacing:"0.01em"}}>+ Add Content</button>}
-        <button onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts")}} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},#818CF8)`,color:"#fff",border:"none",borderRadius:8,padding:"10px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"-0.01em",boxShadow:`0 4px 14px ${C.accentGlow}`}}>✦ Create Ad</button>
-        <button onClick={handleSignOut} style={{width:"100%",background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:10,marginTop:10,fontFamily:"inherit",letterSpacing:"0.03em",opacity:0.6}}>Sign out</button>
+      <div style={{padding:"12px 16px 20px",borderTop:"1px solid rgba(255,255,255,0.08)"}}>
+        {tab==="library"&&libView!=="add"&&<button onClick={()=>setLibView("add")} style={{width:"100%",background:"rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.7)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:50,padding:"9px",fontFamily:"inherit",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:8}}>+ Add Content</button>}
+        <button onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts")}} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:50,padding:"11px",fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer"}}>✦ Create Ad</button>
+        <button onClick={handleSignOut} style={{width:"100%",background:"none",border:"none",color:"rgba(255,255,255,0.25)",cursor:"pointer",fontSize:11,marginTop:10,fontFamily:"inherit"}}>Sign out</button>
       </div>
     </div>
     {/* Main content */}
-    <div style={{marginLeft:210,flex:1,minHeight:"100vh",background:C.bg}}>
+    <div style={{marginLeft:220,flex:1,minHeight:"100vh",background:C.bg}}>
       {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} onGoToBrand={()=>setTab("brand")}/>}
-      {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode}/>}
-      {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} onRefresh={loadData}/>}
+      {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode} editingAd={editingAd} onEditingAdConsumed={()=>setEditingAd(null)} v2SourceAd={v2SourceAd} onV2Consumed={()=>setV2SourceAd(null)} forgedAds={forgedAds}/>}
+      {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} brand={brand} setBrand={setBrand} onRefresh={loadData} onEditAd={(ad:ForgedAd)=>{setEditingAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}} onCreateV2={(ad:ForgedAd)=>{setV2SourceAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}}/>}
       {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
+      {tab==="winning"&&<WinningAdsTab brand={brand} setBrand={setBrand} products={products} items={items} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")}/>}
     </div>
   </div>
 }
