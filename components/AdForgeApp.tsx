@@ -1448,6 +1448,63 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
   const [uploadQueue,setUploadQueue]=useState<any[]>([])
   const [autoClipEnabled,setAutoClipEnabled]=useState(true)
 
+  // ── Google Drive integration state ──────────────────────────────────────
+  const [gdriveStatus,setGdriveStatus]=useState<any>(null)
+  const [gdriveSyncing,setGdriveSyncing]=useState(false)
+  const [gdriveSyncMsg,setGdriveSyncMsg]=useState("")
+  const [showFolderPicker,setShowFolderPicker]=useState(false)
+  const [folderPickerItems,setFolderPickerItems]=useState<any[]>([])
+  const [folderPickerLoading,setFolderPickerLoading]=useState(false)
+  const [folderPickerPath,setFolderPickerPath]=useState<{id:string,name:string}[]>([])
+
+  useEffect(()=>{
+    loadGdriveStatus()
+    // Check for OAuth callback result in URL
+    const params=new URLSearchParams(window.location.search)
+    const gdrive=params.get("gdrive")
+    if(gdrive==="connected"){setShowFolderPicker(true);window.history.replaceState({},"",window.location.pathname)}
+    if(gdrive==="error"){setGdriveSyncMsg("Connection failed — please try again");window.history.replaceState({},"",window.location.pathname)}
+  },[])
+
+  async function loadGdriveStatus(){
+    try{const res=await fetch("/api/integrations/gdrive/sync");if(res.ok){const d=await res.json();setGdriveStatus(d)}}catch(e){}
+  }
+
+  async function syncNow(){
+    setGdriveSyncing(true);setGdriveSyncMsg("Scanning folder…")
+    try{
+      const res=await fetch("/api/integrations/gdrive/sync",{method:"POST"})
+      const d=await res.json()
+      if(d.error){setGdriveSyncMsg("Sync failed: "+d.error)}
+      else if(d.imported===0){setGdriveSyncMsg("✓ Up to date — no new videos found")}
+      else{setGdriveSyncMsg(`✓ Imported ${d.imported} new video${d.imported!==1?"s":""}`);onRefresh()}
+      loadGdriveStatus()
+    }catch(e:any){setGdriveSyncMsg("Sync failed: "+e.message)}
+    setGdriveSyncing(false)
+  }
+
+  async function disconnectDrive(){
+    await fetch("/api/integrations/gdrive/manage",{method:"DELETE"})
+    setGdriveStatus(null);setGdriveSyncMsg("")
+  }
+
+  async function openFolderPicker(parentId="root"){
+    setFolderPickerLoading(true)
+    try{
+      const res=await fetch(`/api/integrations/gdrive/folders?parent=${parentId}`)
+      const d=await res.json()
+      setFolderPickerItems(d.folders||[])
+    }catch(e){setFolderPickerItems([])}
+    setFolderPickerLoading(false)
+  }
+
+  async function selectFolder(folder:{id:string,name:string}){
+    await fetch("/api/integrations/gdrive/manage",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({folder_id:folder.id,folder_name:folder.name})})
+    setShowFolderPicker(false);setFolderPickerPath([]);loadGdriveStatus()
+    // Kick off initial sync
+    setTimeout(()=>syncNow(),500)
+  }
+
   function addFiles(files:File[]){
     const newEntries=files.map(file=>({
       id:Date.now()+Math.random(),
@@ -1564,7 +1621,62 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
   if(view==="add")return<div style={{maxWidth:860,margin:"0 auto",padding:28}}>
     <button onClick={()=>setView("grid")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back to Library</button>
     <STitle size={22}>Add Content</STitle>
-    <div style={{color:C.muted,fontSize:14,marginBottom:24}}>Upload one or more videos. AI will automatically transcribe, analyse, and create clips from each one.</div>
+    <div style={{color:C.muted,fontSize:14,marginBottom:24}}>Upload videos manually or connect a Google Drive folder for automatic syncing.</div>
+
+    {/* ── Google Drive Connected Source ── */}
+    {showFolderPicker&&<div onClick={()=>setShowFolderPicker(false)} style={{position:"fixed",inset:0,background:"#000000cc",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:16,padding:24,maxWidth:560,width:"100%"}}>
+        <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>📁 Select a Google Drive folder</div>
+        <div style={{fontSize:13,color:C.muted,marginBottom:16}}>All videos in this folder (and subfolders) will be imported automatically.</div>
+        {folderPickerPath.length>0&&<div style={{display:"flex",gap:4,alignItems:"center",marginBottom:12,flexWrap:"wrap"}}>
+          <button onClick={()=>{setFolderPickerPath([]);openFolderPicker("root")}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,padding:0}}>My Drive</button>
+          {folderPickerPath.map((p,i)=><><span key={"sep"+i} style={{color:C.muted,fontSize:12}}>/</span><button key={p.id} onClick={()=>{const newPath=folderPickerPath.slice(0,i+1);setFolderPickerPath(newPath);openFolderPicker(p.id)}} style={{background:"none",border:"none",color:i===folderPickerPath.length-1?C.text:C.accent,cursor:"pointer",fontSize:12,padding:0}}>{p.name}</button></>)}
+        </div>}
+        <div style={{maxHeight:320,overflowY:"auto",border:"1px solid "+C.border,borderRadius:10,marginBottom:16}}>
+          {folderPickerLoading?<div style={{padding:24,textAlign:"center",color:C.muted,fontSize:13}}>Loading folders…</div>
+          :folderPickerItems.length===0?<div style={{padding:24,textAlign:"center",color:C.muted,fontSize:13}}>No subfolders found</div>
+          :folderPickerItems.map((folder:any)=><div key={folder.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:"1px solid "+C.border,cursor:"pointer"}} onMouseEnter={e=>(e.currentTarget.style.background=C.accentSoft)} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
+            <span style={{fontSize:18}}>📁</span>
+            <span style={{flex:1,fontSize:13,fontWeight:500}}>{folder.name}</span>
+            <button onClick={()=>{const newPath=[...folderPickerPath,{id:folder.id,name:folder.name}];setFolderPickerPath(newPath);openFolderPicker(folder.id)}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,padding:"2px 6px"}}>Open →</button>
+            <button onClick={()=>selectFolder(folder)} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>Select</button>
+          </div>)}
+        </div>
+        {folderPickerPath.length>0&&<Btn onClick={()=>selectFolder(folderPickerPath[folderPickerPath.length-1])} style={{background:C.green,color:"#000",fontWeight:700,width:"100%",marginBottom:8}}>✓ Use "{folderPickerPath[folderPickerPath.length-1]?.name}"</Btn>}
+        <Btn onClick={()=>setShowFolderPicker(false)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,width:"100%"}}>Cancel</Btn>
+      </div>
+    </div>}
+
+    <Card style={{marginBottom:24}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:gdriveStatus?.folder_id?12:0}}>
+        <div style={{width:36,height:36,borderRadius:8,background:"#4285F422",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🔗</div>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:1}}>Google Drive Sync</div>
+          <div style={{fontSize:12,color:C.muted}}>
+            {gdriveStatus?.folder_id?`Connected: ${gdriveStatus.folder_name||gdriveStatus.folder_id}`:"Connect a folder — new videos sync automatically"}
+          </div>
+        </div>
+        {!gdriveStatus?.folder_id
+          ?<a href="/api/integrations/gdrive/connect" style={{textDecoration:"none"}}><Btn style={{background:"#4285F4",color:"#fff",fontWeight:700,fontSize:12,padding:"7px 14px",whiteSpace:"nowrap" as const}}>Connect Drive</Btn></a>
+          :<div style={{display:"flex",gap:8}}>
+            <Btn onClick={()=>{openFolderPicker("root");setShowFolderPicker(true)}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px"}}>Change folder</Btn>
+            <Btn onClick={syncNow} disabled={gdriveSyncing} style={{background:gdriveSyncing?C.border:C.green,color:gdriveSyncing?C.muted:"#000",fontWeight:700,fontSize:12,padding:"6px 12px"}}>{gdriveSyncing?"⏳ Syncing…":"🔄 Sync now"}</Btn>
+            <Btn onClick={disconnectDrive} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"6px 10px"}}>Disconnect</Btn>
+          </div>}
+      </div>
+      {gdriveStatus?.folder_id&&<div style={{display:"flex",gap:16,fontSize:12,color:C.muted,paddingTop:8,borderTop:"1px solid "+C.border,flexWrap:"wrap"}}>
+        {gdriveStatus.last_synced&&<span>Last synced: {new Date(gdriveStatus.last_synced).toLocaleString()}</span>}
+        {gdriveStatus.imported_ids?.length>0&&<span>{gdriveStatus.imported_ids.length} videos imported</span>}
+        {gdriveStatus.sync_status==="error"&&<span style={{color:C.red}}>⚠️ {gdriveStatus.sync_error}</span>}
+      </div>}
+      {gdriveSyncMsg&&<div style={{marginTop:8,fontSize:12,color:gdriveSyncMsg.startsWith("✓")?C.green:C.red,fontWeight:600}}>{gdriveSyncMsg}</div>}
+    </Card>
+
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+      <div style={{flex:1,height:1,background:C.border}}/>
+      <span style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase" as const,letterSpacing:"0.06em"}}>or upload manually</span>
+      <div style={{flex:1,height:1,background:C.border}}/>
+    </div>
 
     {/* Drop zone */}
     <div onDrop={e=>{e.preventDefault();setDragOver(false);const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith("video/"));if(files.length>0)addFiles(files)}} onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onClick={()=>fileRef.current?.click()} style={{border:"2px dashed "+(dragOver?C.accent:C.border),borderRadius:10,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:dragOver?C.accentSoft:C.surface,marginBottom:20,transition:"all 0.15s"}}>
