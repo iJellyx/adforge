@@ -147,7 +147,7 @@ function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl,onSave}:any){
   }).filter(Boolean)
 
   async function doExport(){
-  if(!clips.length){alert("No clips assigned.");return}
+  if(!clips.length){setMsg("No clips assigned — assign clips to all sections before exporting.");return}
   setExporting(true);setDone(false);setProgress(10);setMsg("Submitting to Shotstack…")
   try{
     const itemIds=clips.map((c:any)=>c.item.id)
@@ -690,6 +690,7 @@ function AutoMashMode({libraryItems,brand,products,onSaveForgedAd,onGoToForged,o
   const [musicUrl,setMusicUrl]=useState<string|null>(null)
   const [musicName,setMusicName]=useState<string|null>(null)
   const [saving,setSaving]=useState(false)
+  const [error,setError]=useState("")
   const [form,setForm]=useState({awarenessStage:"problem_aware",adLength:"30 seconds",productId:"",style:"mashup"})
   function setF(k:string,v:string){setForm(x=>({...x,[k]:v}))}
 
@@ -701,7 +702,7 @@ function AutoMashMode({libraryItems,brand,products,onSaveForgedAd,onGoToForged,o
   )
 
   async function generateMash(){
-    if(usableClips.length<3){alert("Need at least 3 ready clips with transcripts in your library.");return}
+    if(usableClips.length<3){setError("Need at least 3 ready clips with transcripts. Upload more content first.");return}
     setGenerating(true)
     try{
       const clipSummary=usableClips.map((item:Item)=>{
@@ -770,7 +771,7 @@ Return ONLY valid JSON:
       })))
       if(data.suggested_title)setAdTitle(data.suggested_title)
       setStep("preview")
-    }catch(e){console.error(e);alert("Failed to generate mash — try again")}
+    }catch(e){console.error(e);setError("Failed to generate mash — try again")}
     setGenerating(false)
   }
 
@@ -919,7 +920,7 @@ function BRollMode({libraryItems,onSaveForgedAd,onBack}:any){
         attempts++
       }
       setStep("match")
-    }catch(e:any){alert("Upload failed: "+e.message)}
+    }catch(e:any){setUploadMsg("Upload failed: "+e.message)}
     setUploading(false)
   }
 
@@ -1491,8 +1492,8 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
         })
         if(possibleDupes.length>0){
           const dupeTitle=possibleDupes[0].title
-          const proceed=window.confirm(`"${entry.title}" appears to be a duplicate of "${dupeTitle}" (same duration: ${videoDuration.toFixed(1)}s). Upload anyway?`)
-          if(!proceed){updateQueue(idx,{status:"pending",progress:0,msg:""});return}
+          updateQueue(idx,{status:"duplicate_warning",progress:0,msg:`Possible duplicate of "${dupeTitle}" (${videoDuration.toFixed(1)}s). Upload anyway?`})
+          return
         }
       }
     }catch(e){/* continue with upload if check fails */}
@@ -1541,7 +1542,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
   const activeFilterCount=filterCtypes.length+filterCreators.length+filterAges.length+filterGenders.length+filterAdPotential.length+filterDuration.length
   function clearFilters(){setFilterCtypes([]);setFilterCreators([]);setFilterAges([]);setFilterGenders([]);setFilterAdPotential([]);setFilterDuration([])}
   async function handleDelete(id:string){const item=items.find(i=>i.id===id);await supabase.from("items").delete().in("id",[id,...(item?.clip_ids||[])]);onRefresh();setSelected(null);setView("grid")}
-  async function bulkDelete(){if(!window.confirm(`Delete ${selectedIds.length} item(s)?`))return;setDeleting(true);const gone=new Set(selectedIds);selectedIds.forEach(id=>{const item=items.find(i=>i.id===id);(item?.clip_ids||[]).forEach(cid=>gone.add(cid))});await supabase.from("items").delete().in("id",Array.from(gone));onRefresh();setSelectMode(false);setSelectedIds([]);setDeleting(false)}
+  async function bulkDelete(){setDeleting(true);const gone=new Set(selectedIds);selectedIds.forEach(id=>{const item=items.find(i=>i.id===id);(item?.clip_ids||[]).forEach((cid:string)=>gone.add(cid))});await supabase.from("items").delete().in("id",Array.from(gone));onRefresh();setSelectMode(false);setSelectedIds([]);setDeleting(false)}
   async function updateTags(id:string,tags:string[]){const item=items.find(i=>i.id===id);const newAnalysis={...(item?.analysis||{}),scene_tags:tags};await supabase.from("items").update({analysis:newAnalysis}).eq("id",id);onRefresh();if(selected?.id===id)setSelected({...selected,analysis:newAnalysis})}
 
   function sortItems(arr:Item[]){const c=[...arr];if(sortIdx===0)return c.sort((a,b)=>new Date(b.created_at||0).getTime()-new Date(a.created_at||0).getTime());if(sortIdx===1)return c.sort((a,b)=>new Date(a.created_at||0).getTime()-new Date(b.created_at||0).getTime());if(sortIdx===2)return c.sort((a,b)=>a.title.localeCompare(b.title));return c.sort((a,b)=>b.title.localeCompare(a.title))}
@@ -1614,7 +1615,17 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
             {uploadQueue.filter((e:any)=>e.status==="duplicate").length>0&&<div style={{marginTop:6,fontSize:12,color:C.yellow}}>⚠️ {uploadQueue.filter((e:any)=>e.status==="duplicate").length} duplicate{uploadQueue.filter((e:any)=>e.status==="duplicate").length!==1?"s":""} blocked</div>}
           </div>
           {/* Show individual errors only */}
-          {uploadQueue.filter((e:any)=>e.status==="error").map((entry:any,idx:number)=><div key={entry.id} style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:12,color:C.red}}>❌ {entry.title} — {entry.msg}</div>)}
+          {uploadQueue.filter((e:any)=>e.status==="error").map((entry:any)=><div key={entry.id} style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:12,color:C.red}}>❌ {entry.title} — {entry.msg}</div>)}
+          {uploadQueue.filter((e:any)=>e.status==="duplicate_warning").map((entry:any)=>{
+            const realIdx=uploadQueue.indexOf(entry)
+            return<div key={entry.id} style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:200}}><div style={{fontSize:12,fontWeight:700,color:"#92400E",marginBottom:2}}>⚠️ Possible duplicate</div><div style={{fontSize:11,color:"#92400E"}}>{entry.msg}</div></div>
+              <div style={{display:"flex",gap:8}}>
+                <Btn onClick={()=>updateQueue(realIdx,{status:"pending",progress:0,msg:""})} style={{background:C.accent,color:"#fff",fontSize:11,padding:"5px 12px"}}>Upload anyway</Btn>
+                <Btn onClick={()=>updateQueue(realIdx,{status:"duplicate",progress:0,msg:"Skipped"})} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:11,padding:"5px 12px"}}>Skip</Btn>
+              </div>
+            </div>
+          })}
           {/* Pending uploads that still need a title */}
           {uploadQueue.filter((e:any)=>e.status==="pending").map((entry:any,idx:number)=>{
             const realIdx=uploadQueue.indexOf(entry)
@@ -1659,7 +1670,6 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:16}}>
         <div><Chip label={selected.type==="clip"?"CLIP":(a.content_type||"Untagged")} color={selected.type==="clip"?typeColor("Clip"):undefined}/><div style={{fontWeight:800,fontSize:22,marginTop:8,marginBottom:4}}>{selected.title}</div><div style={{color:C.muted,fontSize:13,display:"flex",gap:12,flexWrap:"wrap"}}>{selected.duration_seconds&&<span>⏱ {fmt(selected.duration_seconds)}</span>}{selected.creator&&<span>👤 {selected.creator}{selected.creator_age?` · ${selected.creator_age}`:""}</span>}{selected.created_at&&<span>Added {new Date(selected.created_at).toLocaleDateString()}</span>}</div></div>
         <Btn onClick={async()=>{
-          if(!window.confirm("Delete this "+(selected.type==="clip"?"clip":"video and all its clips")+"?"))return
           if(selected.type==="clip"&&selected.parent_id){
             // Remove from parent's clip_ids
             const parent=items.find(i=>i.id===selected.parent_id)
@@ -1815,6 +1825,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [sections,setSections]=useState<any[]>([])
   const [genMeta,setGenMeta]=useState<any>(null)
   const [generating,setGenerating]=useState(false)
+  const [error,setError]=useState("")
   const [matching,setMatching]=useState(false)
   const [step,setStep]=useState<"script"|"audio"|"clips"|"forge">("script")
   const [voiceoverUrl,setVoiceoverUrl]=useState<string|null>(null)
@@ -1825,6 +1836,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [adTitle,setAdTitle]=useState("")
   const [captionSettings,setCaptionSettings]=useState<CaptionSettings>({...DEFAULT_CAPTIONS})
   const [hookVariations,setHookVariations]=useState<any[][]>([])
+  const [hookError,setHookError]=useState("")
   const [selectedHooks,setSelectedHooks]=useState<number[]>([0])
   const [activeHookIdx,setActiveHookIdx]=useState(0)
   const [hookSections,setHookSections]=useState<Record<number,any[]>>({})
@@ -1834,20 +1846,50 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const savedAvatars=(brand?.customer_avatars||[])
 
   async function handleGen(){
-    setGenerating(true)
+    setGenerating(true);setError("")
     try{
       const prod=products.find((x:Product)=>String((x as any).id)===String(form.productId))||null
       const stage=STAGES.find(s=>s.value===form.awarenessStage)||STAGES[0]
-      let ctx=`BRAND:\nName: ${brand.name||"Unknown"}\nDesc: ${brand.description||""}\nVoice: ${brand.voice||""}\nCustomer: ${brand.target_customer||""}\nReviews: ${brand.reviews||""}\n\n`
-      if(prod)ctx+=`PRODUCT:\nName: ${prod.name}\nDesc: ${prod.description||""}\nBenefits: ${prod.benefits||""}\nClaims: ${prod.claims||""}\n\n`
-      const prompt=ctx+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
+      let ctx=`BRAND:\nName: ${brand.name||"Unknown"}\nDescription: ${brand.description||""}\nVoice & Tone: ${brand.voice||""}\nTarget Customer: ${brand.target_customer||""}\nSocial Proof / Reviews: ${brand.reviews||""}\nAdditional Info: ${brand.additional_info||""}\n\n`
+      if(prod)ctx+=`PRODUCT:\nName: ${prod.name}\nDescription: ${prod.description||""}\nKey Benefits: ${prod.benefits||""}\nClaims & Results: ${prod.claims||""}\nDifferentiators (what makes it unique): ${prod.differentiators||""}\nKey Ingredients: ${prod.ingredients||""}\nCustomer Reviews: ${prod.reviews||""}\nPrice: ${prod.price||""}\nScript Notes: ${prod.notes||""}\n\n`
+
+      // Inject brand intelligence learnings if available
+      const intel=brand.brand_intelligence
+      let intelBlock=""
+      if(intel&&(intel.best_hook_types?.length||intel.best_hook_patterns?.length)){
+        intelBlock=`\nBRAND PERFORMANCE LEARNINGS (apply these — based on real ad data):\n`
+        if(intel.best_hook_types?.length)intelBlock+=`• Best hook types for this brand: ${intel.best_hook_types.join(", ")}\n`
+        if(intel.worst_hook_types?.length)intelBlock+=`• Avoid these hook types: ${intel.worst_hook_types.join(", ")}\n`
+        if(intel.best_hook_patterns?.length)intelBlock+=`• Winning hook patterns: ${intel.best_hook_patterns.join("; ")}\n`
+        if(intel.best_content_type)intelBlock+=`• Best performing content type: ${intel.best_content_type}\n`
+        if(intel.avg_winning_hook_length)intelBlock+=`• Winning hooks average ${intel.avg_winning_hook_length} words\n`
+        intelBlock+="\n"
+      }
+
+      // Performance feedback from logged forged ads
+      const adsWithData=(forgedAds||[]).filter((a:ForgedAd)=>a.metadata?.hook_rate||a.metadata?.cpa||a.metadata?.roas||a.star_rating)
+      let perfBlock=""
+      if(adsWithData.length>=2){
+        const avg=(arr:number[])=>arr.length?Math.round(arr.reduce((a:number,b:number)=>a+b,0)/arr.length*10)/10:0
+        const hookPerf:Record<string,number[]>={}
+        adsWithData.forEach((a:ForgedAd)=>{const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK");const ht=hook?.hookType||"";const rate=parseFloat(a.metadata?.hook_rate||"0");if(ht&&rate>0){if(!hookPerf[ht])hookPerf[ht]=[];hookPerf[ht].push(rate)}})
+        const hookEntries=Object.entries(hookPerf).sort((a,b)=>avg(b[1] as number[])-avg(a[1] as number[]))
+        if(hookEntries.length){
+          perfBlock=`\nPERFORMANCE DATA (from ${adsWithData.length} logged ads):\n`
+          hookEntries.slice(0,3).forEach(([type,rates])=>{perfBlock+=`• ${type} hooks: avg ${avg(rates as number[])}% hook rate\n`})
+          const topRated=adsWithData.filter((a:ForgedAd)=>(a.star_rating||0)>=4)
+          if(topRated.length){const topCreator=[...new Set(topRated.flatMap((a:ForgedAd)=>(a.sections||[]).map((s:any)=>{const item=items.find((i:Item)=>i.id===s.selectedClipId);return item?.creator}).filter(Boolean)))][0];if(topCreator)perfBlock+=`• Top performing creator: ${topCreator}\n`}
+          perfBlock+="\n"
+        }
+      }
+      const prompt=ctx+intelBlock+perfBlock+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Use specific brand/product details — names, claims, real numbers, differentiators. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
       const raw=await callClaude([{role:"user",content:prompt}],2000)
       const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
       let secs=(data.sections||[]).map((s:any,i:number)=>({...s,id:Date.now()+i,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
       if(items.length>0)secs=await matchClips(secs,items)
       setSuggestedMood(data.suggested_music_mood||"Uplifting")
       setSections(secs);setGenMeta({form,productName:prod?.name||"General"});setView("review");setStep("script")
-    }catch(e){alert("Error generating script.");console.error(e)}
+    }catch(e:any){setError("Error generating script: "+(e?.message||"Unknown error. Try again."));setGenerating(false);return}
     setGenerating(false)
   }
 
@@ -1858,7 +1900,8 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
 
     const libSummary=matchPool.map(item=>{
       const a=item.analysis||{}
-      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|label:"+(a.label||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(", ")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,80)+"|quality:"+(a.quality_score||"Medium")+"|type:"+item.type
+      const quotes=(a.key_quotes||[]).slice(0,2).join(" | ")
+      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(",")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,200)+(quotes?"|quotes:"+quotes:"")+"|ad_potential:"+(a.ad_potential||"")+"|type:"+item.type
     }).join("\n")
 
     const sectionDesc=secs.map((s:any,i:number)=>{
@@ -1975,7 +2018,7 @@ Return ONLY valid JSON:
       ...bodyBections
     ])
     setHookVariations([originalVariation,...aiVariations])
-  }catch(e){console.error(e);alert("Failed to generate hook variations")}
+  }catch(e){console.error(e);setHookError("Failed to generate hook variations — try again")}
   setGeneratingHooks(false)
 }
 
@@ -2060,6 +2103,9 @@ Return ONLY valid JSON:
       </div>
       <Label>Objections</Label><Input textarea value={form.objections} onChange={(e:any)=>setF("objections",e.target.value)} rows={2}/>
     </Card>
+    {error&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.red,marginBottom:12}}>{error}</div>}
+    {(forgedAds||[]).filter((a:ForgedAd)=>a.metadata?.hook_rate||a.metadata?.cpa||a.metadata?.roas||a.star_rating).length>=2&&<div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:10,padding:"8px 14px",fontSize:12,color:"#15803D",marginBottom:12}}>📈 Using performance data from {(forgedAds||[]).filter((a:ForgedAd)=>a.metadata?.hook_rate||a.metadata?.cpa||a.star_rating).length} ads to improve this script</div>}
+    {brand.brand_intelligence?.best_hook_types?.length>0&&<div style={{background:C.accentSoft,border:"1px solid "+C.accent+"33",borderRadius:10,padding:"8px 14px",fontSize:12,color:C.accent,marginBottom:12}}>🧠 Applying brand learnings: best hooks are {brand.brand_intelligence.best_hook_types.slice(0,2).join(", ")}</div>}
     <Btn onClick={handleGen} disabled={generating} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:16,borderRadius:12}}>{generating?"⏳ Writing script & matching clips…":"✨ Generate Script"}</Btn>
   </div>
 
@@ -2076,6 +2122,7 @@ Return ONLY valid JSON:
           <button onClick={()=>setView("generate")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Edit Parameters</button>
           <div style={{display:"flex",gap:10}}>
             <Btn onClick={generateHookVariations} disabled={generatingHooks||sections.length===0} style={{background:generatingHooks?C.border:C.accentSoft,color:generatingHooks?C.muted:C.accent,border:"1px solid "+C.accent+"44"}}>{generatingHooks?"⏳ Generating…":"⚡ Generate 3 Hook Variations"}</Btn>
+            {hookError&&<div style={{fontSize:11,color:C.red,marginTop:6}}>{hookError}</div>}
             <Btn onClick={()=>{
               if(hookVariations.length>0&&selectedHooks.length>0){
                 setSections(hookVariations[selectedHooks[0]])
@@ -2563,7 +2610,7 @@ function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{
   async function saveNotes(id:string){await supabase.from("forged_ads").update({notes:notesVal}).eq("id",id);setEditingNotes(null);onRefresh()}
 
   async function bulkDelete(){
-    if(!window.confirm(`Delete ${selectedIds.length} ad(s)?`))return
+    if(!selectedIds.length)return
     setDeleting(true)
     for(const id of selectedIds){await supabase.from("forged_ads").delete().eq("id",id)}
     setSelectedIds([]);setSelectMode(false);setDeleting(false);onRefresh()
@@ -2755,6 +2802,7 @@ function CreatorBriefModal({brand,sections,onClose}:{brand:BrandProfile,sections
   const supabase=createClient()
   const [saving,setSaving]=useState(false)
   const [shareUrl,setShareUrl]=useState("")
+  const [briefError,setBriefError]=useState("")
   const [copied,setCopied]=useState(false)
   const [productName,setProductName]=useState("")
   const defaultHooks=(sections||[]).filter((s:any)=>s.type==="HOOK"&&s.spokenWords).map((s:any)=>s.spokenWords)
@@ -2775,7 +2823,7 @@ function CreatorBriefModal({brand,sections,onClose}:{brand:BrandProfile,sections
       const{data,error}=await supabase.from("creator_briefs").insert({brand_name:brand.name||"",product_name:productName,hooks:hooks.filter(h=>h.trim()),scripts:scripts.filter(s=>s.words.trim()),broll_shots:broll.filter(b=>b.trim()),editing_style:editingStyle.trim()||null,editing_references:editingRefs.trim()||null,editing_notes:editingNotes.trim()||null,additional_notes:additionalNotes.trim()||null}).select("share_token").single()
       if(error)throw new Error(error.message)
       setShareUrl(`${window.location.origin}/brief/${data.share_token}`)
-    }catch(e:any){alert("Failed to create brief: "+e.message)}
+    }catch(e:any){setBriefError("Failed to create brief: "+e.message)}
     setSaving(false)
   }
   async function copyUrl(){await navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),2000)}
@@ -2838,6 +2886,7 @@ function CreatorBriefModal({brand,sections,onClose}:{brand:BrandProfile,sections
           <Input textarea value={editingNotes} onChange={(e:any)=>setEditingNotes(e.target.value)} placeholder="Editing notes — captions on every word, product close-up at end…" rows={2}/>
         </div>
         <div style={{marginBottom:24}}><Label>💬 Additional notes</Label><Input textarea value={additionalNotes} onChange={(e:any)=>setAdditionalNotes(e.target.value)} placeholder="Deadlines, deliverables, file format…" rows={3}/></div>
+        {briefError&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,padding:"8px 12px",fontSize:12,color:C.red,marginBottom:12}}>{briefError}</div>}
         <Btn onClick={generateBrief} disabled={saving} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:15,borderRadius:12,fontWeight:700}}>{saving?"Generating link…":"🔗 Generate Shareable Brief"}</Btn>
       </>}
     </div>
@@ -3243,6 +3292,16 @@ export default function AdForgeApp(){
   const tabBtn=(id:string,label:string)=>{const active=tab===id;return<button style={{padding:"10px 20px",background:"none",border:"none",borderBottom:"2px solid "+(active?C.accent:"transparent"),color:active?C.text:C.muted,fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",whiteSpace:"nowrap"}} onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}}>{label}</button>}
   const draftCount=forgedAds.filter(a=>a.status==="draft").length
 
+  // Onboarding checklist — show when brand is new (no content + incomplete profile)
+  const onboardingSteps=[
+    {id:"brand",label:"Fill in your brand profile",done:!!(brand.name&&brand.description&&brand.voice),action:()=>setTab("brand"),cta:"Set up Brand →"},
+    {id:"product",label:"Add your first product",done:products.length>0,action:()=>setTab("brand"),cta:"Add Product →"},
+    {id:"library",label:"Upload 5+ videos",done:items.filter(i=>i.type==="original").length>=5,action:()=>{setTab("library");setLibView("add")},cta:"Upload Videos →"},
+    {id:"script",label:"Generate your first ad script",done:scripts.length>0||forgedAds.length>0,action:()=>{setScriptsStartMode(c=>c+1);setTab("scripts")},cta:"Create First Ad →"},
+  ]
+  const onboardingDone=onboardingSteps.filter(s=>s.done).length
+  const showOnboarding=onboardingDone<4&&items.length<10&&forgedAds.length===0
+
   if(loading)return<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
     <div style={{textAlign:"center"}}>
       <div style={{fontWeight:800,fontSize:24,color:C.accent,marginBottom:8,letterSpacing:"-0.02em"}}>AdForge</div>
@@ -3283,6 +3342,19 @@ export default function AdForgeApp(){
     </div>
     {/* Main content */}
     <div style={{marginLeft:220,flex:1,minHeight:"100vh",background:C.bg}}>
+      {/* Onboarding checklist */}
+      {showOnboarding&&tab==="library"&&<div style={{background:"#fff",borderBottom:"1px solid "+C.border,padding:"16px 28px",display:"flex",alignItems:"center",gap:20,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:200}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:2}}>🚀 Get started — {onboardingDone}/4 complete</div>
+          <div style={{fontSize:12,color:C.muted}}>Complete these steps to generate your first winning ad</div>
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {onboardingSteps.map(step=><button key={step.id} onClick={step.done?undefined:step.action} style={{display:"flex",alignItems:"center",gap:6,background:step.done?"#F0FDF4":C.surface,border:"1px solid "+(step.done?"#86EFAC":C.border),borderRadius:8,padding:"6px 12px",cursor:step.done?"default":"pointer",fontSize:12,color:step.done?"#15803D":C.text,fontWeight:step.done?600:500,whiteSpace:"nowrap" as const}}>
+            <span style={{fontSize:13}}>{step.done?"✅":"○"}</span>
+            {step.done?step.label:step.cta}
+          </button>)}
+        </div>
+      </div>}
       {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} onGoToBrand={()=>setTab("brand")}/>}
       {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode} editingAd={editingAd} onEditingAdConsumed={()=>setEditingAd(null)} v2SourceAd={v2SourceAd} onV2Consumed={()=>setV2SourceAd(null)} forgedAds={forgedAds}/>}
       {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} brand={brand} setBrand={setBrand} onRefresh={loadData} onEditAd={(ad:ForgedAd)=>{setEditingAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}} onCreateV2={(ad:ForgedAd)=>{setV2SourceAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}}/>}
