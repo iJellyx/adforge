@@ -209,11 +209,10 @@ export async function POST(req: NextRequest) {
 
         // Create Mux upload from URL
         const asset = await mux.video.assets.create({
-          input: [{ url: downloadUrl }],
+          inputs: [{ url: downloadUrl }],
           playback_policy: ['public'],
-          meta: { item_id: item.id },
+          passthrough: item.id,
         })
-
         // Update item with Mux asset info
         await supabase.from('items').update({
           mux_asset_id: asset.id,
@@ -246,11 +245,13 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('GDrive sync error:', err)
 
-    await supabase.from('integrations').update({
-      sync_status: 'error',
-      sync_error: err.message,
-      updated_at: new Date().toISOString(),
-    }).eq('type', 'gdrive').catch(() => {})
+    try {
+      await supabase.from('integrations').update({
+        sync_status: 'error',
+        sync_error: err.message,
+        updated_at: new Date().toISOString(),
+      }).eq('type', 'gdrive')
+    } catch (_) {}
 
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
