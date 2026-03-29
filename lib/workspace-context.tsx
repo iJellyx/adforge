@@ -44,15 +44,33 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const { data: memberships } = await supabase
+    // Step 1: Get user's workspace memberships
+    const { data: memberships, error: memErr } = await supabase
       .from('workspace_members')
-      .select('workspace_id, role, workspaces(id, name, slug, logo_url, created_at)')
+      .select('workspace_id, role')
       .eq('user_id', user.id)
       .order('joined_at', { ascending: true })
 
-    const ws: Workspace[] = (memberships || []).map((m: any) => ({
-      ...m.workspaces,
-      role: m.role,
+    if (memErr) console.error('workspace_members query error:', memErr)
+
+    if (!memberships || memberships.length === 0) {
+      console.log('No workspace memberships found for user', user.id)
+      setLoading(false)
+      return
+    }
+
+    // Step 2: Get the actual workspace details
+    const wsIds = memberships.map(m => m.workspace_id)
+    const { data: workspaceRows, error: wsErr } = await supabase
+      .from('workspaces')
+      .select('id, name, slug, logo_url, created_at')
+      .in('id', wsIds)
+
+    if (wsErr) console.error('workspaces query error:', wsErr)
+
+    const ws: Workspace[] = (workspaceRows || []).map((w: any) => ({
+      ...w,
+      role: memberships.find(m => m.workspace_id === w.id)?.role || 'member',
     }))
     setWorkspaces(ws)
 
