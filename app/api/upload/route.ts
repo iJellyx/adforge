@@ -16,8 +16,8 @@ export async function POST(req: NextRequest) {
     })
 
     const supabase = createServiceClient()
-    const { filename, contentType, metadata } = await req.json()
-    console.log('Request parsed, filename:', filename)
+    const { filename, contentType, metadata, workspaceId } = await req.json()
+    console.log('Request parsed, filename:', filename, 'workspaceId:', workspaceId)
 
     const { data: item, error } = await supabase
       .from('items')
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
         transcript: metadata.transcript || '',
         mux_status: 'pending',
         auto_clip: metadata.autoClip !== false,
+        ...(workspaceId ? { workspace_id: workspaceId } : {}),
       })
       .select()
       .single()

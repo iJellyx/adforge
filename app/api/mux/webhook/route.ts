@@ -76,10 +76,14 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Step 2: Duplicate detection ───────────────────────────────────────────
+  // Get the item's workspace_id for scoping duplicate check
+  const { data: currentItem } = await supabase.from('items').select('workspace_id').eq('id', itemId).single()
+  const itemWorkspaceId = currentItem?.workspace_id
+
   if (playbackId) {
     try {
-      // Find existing items with similar duration (±1.5 seconds)
-      const { data: candidates } = await supabase
+      // Find existing items with similar duration (±1.5 seconds) in the same workspace
+      let dupQuery = supabase
         .from('items')
         .select('id, title, mux_playback_id, duration_seconds, transcript')
         .eq('type', 'original')
@@ -88,6 +92,8 @@ export async function POST(req: NextRequest) {
         .neq('mux_status', 'duplicate')
         .gte('duration_seconds', duration - 1.5)
         .lte('duration_seconds', duration + 1.5)
+      if (itemWorkspaceId) dupQuery = dupQuery.eq('workspace_id', itemWorkspaceId)
+      const { data: candidates } = await dupQuery
 
       if (candidates && candidates.length > 0) {
         console.log(`Found ${candidates.length} duration-match candidates for duplicate check`)
@@ -397,6 +403,7 @@ CRITICAL RULES:
       duration_seconds: seg.end_seconds - seg.start_seconds,
       description: seg.description,
       clip_role: seg.clip_role || null,
+      ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
       analysis: {
         content_type: analysis.content_type,
         summary: seg.description,
@@ -453,6 +460,7 @@ CRITICAL RULES:
             start_seconds: seg.start, end_seconds: seg.end,
             thumbnail_time: seg.start + (seg.end - seg.start) / 2,
             duration_seconds: seg.end - seg.start,
+            ...(item?.workspace_id ? { workspace_id: item.workspace_id } : {}),
             analysis: { label: seg.label, quality_score: 'Medium', scene_tags: [], summary: 'Auto-generated clip (basic)' },
           }))
           const { data: fallbackClips } = await supabase.from('items').insert(clipInserts).select()

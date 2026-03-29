@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import MuxPlayer from "@mux/mux-player-react"
 import { createClient } from '@/lib/supabase/client'
+import { useWorkspace } from '@/lib/workspace-context'
+import WorkspaceSwitcher from '@/components/WorkspaceSwitcher'
 
 type Item = {
   id: string; type: string; parent_id?: string; title: string
@@ -876,7 +878,7 @@ Return ONLY valid JSON:
 
 
 // ── B-Roll Mode ───────────────────────────────────────────────────────────
-function BRollMode({libraryItems,onSaveForgedAd,onBack}:any){
+function BRollMode({libraryItems,onSaveForgedAd,onBack,workspaceId}:any){
   const [step,setStep]=useState<"upload"|"match"|"preview">("upload")
   const [baseItem,setBaseItem]=useState<Item|null>(null)
   const [matching,setMatching]=useState(false)
@@ -904,7 +906,7 @@ function BRollMode({libraryItems,onSaveForgedAd,onBack}:any){
     if(!uploadFile||!uploadTitle.trim())return
     setUploading(true);setUploadProgress(5);setUploadMsg("Creating record…")
     try{
-      const res=await fetch("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:uploadFile.name,contentType:uploadFile.type,metadata:{title:uploadTitle}})})
+      const res=await fetch("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:uploadFile.name,contentType:uploadFile.type,metadata:{title:uploadTitle},workspaceId})})
       const{itemId,uploadUrl,error}=await res.json()
       if(error)throw new Error(error)
       setUploadProgress(10);setUploadMsg("Uploading video…")
@@ -1427,7 +1429,7 @@ function ClipPickerModal({currentId,matchedIds,libraryItems,sectionLabel,onSelec
 }
 
 // ── Library Tab ───────────────────────────────────────────────────────────
-function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{items:Item[],onRefresh:()=>void,view:string,setView:(v:string)=>void,brand:BrandProfile,products:Product[],onGoToBrand:()=>void}){
+function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand,workspaceId}:{items:Item[],onRefresh:()=>void,view:string,setView:(v:string)=>void,brand:BrandProfile,products:Product[],onGoToBrand:()=>void,workspaceId:string}){
   const supabase=createClient()
   const [selected,setSelected]=useState<Item|null>(null)
   const [search,setSearch]=useState("")
@@ -1558,7 +1560,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
     updateQueue(idx,{status:"uploading",progress:5,msg:"Creating record…"})
 
     try{
-      const res=await fetch("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:entry.file.name,contentType:entry.file.type,metadata:{title:entry.title,creator:entry.creator,creatorAge:entry.creatorAge,creatorGender:entry.creatorGender,autoClip:entry.autoClip!==false}})})
+      const res=await fetch("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:entry.file.name,contentType:entry.file.type,metadata:{title:entry.title,creator:entry.creator,creatorAge:entry.creatorAge,creatorGender:entry.creatorGender,autoClip:entry.autoClip!==false},workspaceId})})
       const{itemId,uploadUrl,error}=await res.json()
       if(error)throw new Error(error)
       updateQueue(idx,{progress:10,msg:"Uploading video…"})
@@ -1905,7 +1907,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand}:{i
 }
 
 // ── Scripts Tab ───────────────────────────────────────────────────────────
-function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode,editingAd,onEditingAdConsumed,v2SourceAd,onV2Consumed,forgedAds}:any){
+function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode,editingAd,onEditingAdConsumed,v2SourceAd,onV2Consumed,forgedAds,workspaceId}:any){
   const [view,setView]=useState("list")
   useEffect(()=>{if(startAtChooseMode>0)setView("chooseMode")},[startAtChooseMode])
 
@@ -2163,7 +2165,7 @@ Return ONLY valid JSON:
   </div>
 
   if(view==="automash")return<AutoMashMode libraryItems={items} brand={brand} products={products} onSaveForgedAd={onSaveForgedAd} onGoToForged={onGoToForged} onBack={()=>setView("chooseMode")}/>
-  if(view==="broll")return<BRollMode libraryItems={items} onSaveForgedAd={onSaveForgedAd} onBack={()=>setView("list")}/>
+  if(view==="broll")return<BRollMode libraryItems={items} onSaveForgedAd={onSaveForgedAd} onBack={()=>setView("list")} workspaceId={workspaceId}/>
 
   if(view==="list")return<div style={{maxWidth:820,margin:"0 auto",padding:28}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
@@ -3006,7 +3008,7 @@ function CreatorBriefModal({brand,sections,onClose}:{brand:BrandProfile,sections
 }
 
 // ── Winning Ads Tab ───────────────────────────────────────────────────────
-function WinningAdsTab({brand,setBrand,products,items,onSaveForgedAd,onGoToForged}:any){
+function WinningAdsTab({brand,setBrand,products,items,onSaveForgedAd,onGoToForged,workspaceId}:any){
   const supabase=createClient()
   const [view,setView]=useState<"list"|"upload"|"processing"|"result">("list")
   const [dragOver,setDragOver]=useState(false)
@@ -3030,7 +3032,7 @@ function WinningAdsTab({brand,setBrand,products,items,onSaveForgedAd,onGoToForge
     if(!file||!title.trim()){setError("Add a title and select a video first.");return}
     setError("");setView("processing");setProgress(5);setProgressMsg("Uploading video…")
     try{
-      const res=await fetch("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,contentType:file.type,metadata:{title:title.trim(),creator:"winning_ad",autoClip:false}})})
+      const res=await fetch("/api/upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,contentType:file.type,metadata:{title:title.trim(),creator:"winning_ad",autoClip:false},workspaceId})})
       const{itemId,uploadUrl,error:uploadErr}=await res.json()
       if(uploadErr)throw new Error(uploadErr)
       await new Promise<void>((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.upload.onprogress=e=>{if(e.lengthComputable)setProgress(5+Math.round((e.loaded/e.total)*35))};xhr.onload=()=>resolve();xhr.onerror=()=>reject(new Error("Upload failed"));xhr.open("PUT",uploadUrl);xhr.setRequestHeader("Content-Type",file.type);xhr.send(file)})
@@ -3207,7 +3209,7 @@ function WinningAdsTab({brand,setBrand,products,items,onSaveForgedAd,onGoToForge
 }
 
 // ── Brand Tab ─────────────────────────────────────────────────────────────
-function BrandTab({brand,setBrand,products,setProducts}:any){
+function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
   const supabase=createClient()
   const [section,setSection]=useState("brand")
   const [saving,setSaving]=useState(false)
@@ -3221,18 +3223,18 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
     if(brand.id){
       await supabase.from("brand_profile").update(brand).eq("id",brand.id)
     } else {
-      const{data:existing}=await supabase.from("brand_profile").select("id").limit(1).single()
+      const{data:existing}=await supabase.from("brand_profile").select("id").eq("workspace_id",workspaceId).limit(1).single()
       if(existing?.id){
         await supabase.from("brand_profile").update(brand).eq("id",existing.id)
         setBrand({...brand,id:existing.id})
       } else {
-        const{data}=await supabase.from("brand_profile").insert(brand).select().single()
+        const{data}=await supabase.from("brand_profile").insert({...brand,workspace_id:workspaceId}).select().single()
         if(data)setBrand(data)
       }
     }
     setSaving(false)
   }  async function crawlWebsite(){if(!brand.website?.trim()){setCrawlError("Enter a website URL first.");return};setCrawling(true);setCrawlError("");try{const res=await fetch("/api/brand/crawl",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:brand.website})});const d=await res.json();if(d.error)throw new Error(d.error);setBrand({...brand,...d.profile,id:brand.id,customer_avatars:brand.customer_avatars||[]})}catch(e:any){setCrawlError(e.message||"Could not fetch website.")};setCrawling(false)}
-  async function saveProd(prod:Product){if((prod as any).id){await supabase.from("products").update(prod).eq("id",(prod as any).id);setProducts(products.map((p:any)=>p.id===(prod as any).id?prod:p))}else{const{data}=await supabase.from("products").insert(prod).select().single();setProducts([...products,data])};setEditingProd(null)}
+  async function saveProd(prod:Product){if((prod as any).id){await supabase.from("products").update(prod).eq("id",(prod as any).id);setProducts(products.map((p:any)=>p.id===(prod as any).id?prod:p))}else{const{data}=await supabase.from("products").insert({...prod,workspace_id:workspaceId}).select().single();setProducts([...products,data])};setEditingProd(null)}
   async function deleteProd(id:string){await supabase.from("products").delete().eq("id",id);setProducts(products.filter((p:any)=>p.id!==id))}
   function saveAvatar(av:CustomerAvatar){const avatars=brand.customer_avatars||[];const exists=avatars.find((a:CustomerAvatar)=>a.id===av.id);const next=exists?avatars.map((a:CustomerAvatar)=>a.id===av.id?av:a):[...avatars,av];setBrand({...brand,customer_avatars:next});setEditingAvatar(null)}
   function deleteAvatar(id:string){setBrand({...brand,customer_avatars:(brand.customer_avatars||[]).filter((a:CustomerAvatar)=>a.id!==id)})}
@@ -3358,6 +3360,7 @@ function BrandTab({brand,setBrand,products,setProducts}:any){
 // ── Root App ──────────────────────────────────────────────────────────────
 export default function AdForgeApp(){
   const supabase=createClient()
+  const { activeWorkspace, loading: wsLoading } = useWorkspace()
   const [tab,setTab]=useState("library")
   const [libView,setLibView]=useState("grid")
   const [items,setItems]=useState<Item[]>([])
@@ -3371,29 +3374,34 @@ export default function AdForgeApp(){
   const [loading,setLoading]=useState(true)
 
   const loadData=useCallback(async()=>{
+    if(!activeWorkspace)return
+    const wsId=activeWorkspace.id
     const [itemsRes,scriptsRes,brandRes,productsRes,forgedRes]=await Promise.all([
-      supabase.from("items").select("*").order("created_at",{ascending:false}),
-      supabase.from("scripts").select("*").order("created_at",{ascending:false}),
-      supabase.from("brand_profile").select("*").limit(1).single(),
-      supabase.from("products").select("*").order("created_at",{ascending:false}),
-      supabase.from("forged_ads").select("*").order("created_at",{ascending:false}),
+      supabase.from("items").select("*").eq("workspace_id",wsId).order("created_at",{ascending:false}),
+      supabase.from("scripts").select("*").eq("workspace_id",wsId).order("created_at",{ascending:false}),
+      supabase.from("brand_profile").select("*").eq("workspace_id",wsId).limit(1).single(),
+      supabase.from("products").select("*").eq("workspace_id",wsId).order("created_at",{ascending:false}),
+      supabase.from("forged_ads").select("*").eq("workspace_id",wsId).order("created_at",{ascending:false}),
     ])
     if(itemsRes.data)setItems(itemsRes.data)
     if(scriptsRes.data)setScripts(scriptsRes.data)
     if(brandRes.data)setBrand(brandRes.data)
+    else setBrand({...DEFAULT_BRAND})
     if(productsRes.data)setProducts(productsRes.data)
     if(forgedRes.data)setForgedAds(forgedRes.data)
     setLoading(false)
-  },[])
+  },[activeWorkspace])
 
-  useEffect(()=>{loadData()},[loadData])
+  useEffect(()=>{if(activeWorkspace)loadData()},[loadData,activeWorkspace])
   useEffect(()=>{
-    const channel=supabase.channel("items-changes").on("postgres_changes",{event:"*",schema:"public",table:"items"},()=>loadData()).subscribe()
+    if(!activeWorkspace)return
+    const channel=supabase.channel("items-changes-"+activeWorkspace.id).on("postgres_changes",{event:"*",schema:"public",table:"items",filter:`workspace_id=eq.${activeWorkspace.id}`},()=>loadData()).subscribe()
     return()=>{supabase.removeChannel(channel)}
-  },[loadData])
+  },[loadData,activeWorkspace])
 
   async function handleSaveForgedAd(ad:Omit<ForgedAd,"id">){
-  const{data,error}=await supabase.from("forged_ads").insert({...ad,updated_at:new Date().toISOString()}).select().single()
+  if(!activeWorkspace)return null
+  const{data,error}=await supabase.from("forged_ads").insert({...ad,workspace_id:activeWorkspace.id,updated_at:new Date().toISOString()}).select().single()
   if(error){console.error("Save forged ad error:",error);return null}
   if(data)setForgedAds(prev=>[data,...prev])
   return data
@@ -3414,7 +3422,7 @@ export default function AdForgeApp(){
   const onboardingDone=onboardingSteps.filter(s=>s.done).length
   const showOnboarding=onboardingDone<4&&items.length<10&&forgedAds.length===0
 
-  if(loading)return<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
+  if(loading||wsLoading||!activeWorkspace)return<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
     <div style={{textAlign:"center"}}>
       <div style={{fontWeight:800,fontSize:24,color:C.accent,marginBottom:8,letterSpacing:"-0.02em"}}>AdForge</div>
       <div style={{fontSize:13,color:C.muted}}>Loading your workspace…</div>
@@ -3434,8 +3442,8 @@ export default function AdForgeApp(){
     <div style={{width:220,background:"#0F1133",display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0}}>
       {/* Brand */}
       <div style={{padding:"20px 16px 16px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
-        <div style={{fontWeight:800,fontSize:20,color:"#fff",letterSpacing:"-0.02em",marginBottom:2}}>Ad<span style={{color:"#7C6FFF"}}>Forge</span></div>
-        {brand.name&&<div style={{fontSize:10,color:"rgba(255,255,255,0.35)",fontWeight:600,letterSpacing:"0.04em",marginTop:2}}>{brand.name}</div>}
+        <div style={{fontWeight:800,fontSize:20,color:"#fff",letterSpacing:"-0.02em",marginBottom:8}}>Ad<span style={{color:"#7C6FFF"}}>Forge</span></div>
+        <WorkspaceSwitcher/>
       </div>
       {/* Nav */}
       <div style={{padding:"12px 0",flex:1}}>
@@ -3467,11 +3475,11 @@ export default function AdForgeApp(){
           </button>)}
         </div>
       </div>}
-      {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} onGoToBrand={()=>setTab("brand")}/>}
-      {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode} editingAd={editingAd} onEditingAdConsumed={()=>setEditingAd(null)} v2SourceAd={v2SourceAd} onV2Consumed={()=>setV2SourceAd(null)} forgedAds={forgedAds}/>}
+      {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} onGoToBrand={()=>setTab("brand")} workspaceId={activeWorkspace.id}/>}
+      {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode} editingAd={editingAd} onEditingAdConsumed={()=>setEditingAd(null)} v2SourceAd={v2SourceAd} onV2Consumed={()=>setV2SourceAd(null)} forgedAds={forgedAds} workspaceId={activeWorkspace.id}/>}
       {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} brand={brand} setBrand={setBrand} onRefresh={loadData} onEditAd={(ad:ForgedAd)=>{setEditingAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}} onCreateV2={(ad:ForgedAd)=>{setV2SourceAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}}/>}
-      {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts}/>}
-      {tab==="winning"&&<WinningAdsTab brand={brand} setBrand={setBrand} products={products} items={items} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")}/>}
+      {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts} workspaceId={activeWorkspace.id}/>}
+      {tab==="winning"&&<WinningAdsTab brand={brand} setBrand={setBrand} products={products} items={items} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} workspaceId={activeWorkspace.id}/>}
     </div>
   </div>
 }
