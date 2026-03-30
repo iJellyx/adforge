@@ -192,6 +192,7 @@ export async function POST(req: NextRequest) {
       mux_status: 'analysing',
       duration_seconds: duration,
       ...(autoTranscript ? { transcript: autoTranscript } : {}),
+      ...(wordTimestamps.length > 0 ? { word_timestamps: wordTimestamps } : {}),
     })
     .eq('id', itemId)
     .select()
@@ -252,7 +253,7 @@ Analyse the video and return a JSON object with these fields:
       "end_seconds": 5,
       "visual_description": "exactly what is shown on screen",
       "visual_tags": ["specific searchable visual tags"],
-      "scene_type": "talking_head|product_shot|before_after|reaction|demonstration|lifestyle|text_overlay",
+      "scene_type": "talking_head|product_shot|before_after|reaction|demonstration|lifestyle|text_overlay|unboxing|ingredient_shot|result_shot|testimonial|founder|tutorial|behind_the_scenes",
       "ad_value": "High|Medium|Low",
       "cut_reason": "why this is a natural cut point"
     }
@@ -305,25 +306,34 @@ ${JSON.stringify(geminiData, null, 2) || geminiAnalysis || 'not available'}
 
 Return ONLY valid JSON:
 {
-  "content_type": "UGC|Founder Clip|Tutorial|Behind the Scenes|High Production|Testimonial|Product Demo|Talking Head|Other",
+  "content_type": "UGC|Founder Clip|Tutorial|Behind the Scenes|High Production|Testimonial|Product Demo|Talking Head|Unboxing|Before & After|Lifestyle|Reaction|Other",
+  "creative_tags": ["talking_head", "founder", "demonstration", "product_closeup", "before_after", "testimonial", "unboxing", "lifestyle", "reaction", "tutorial", "ingredient_shot", "result_shot", "ugc", "studio", "outdoor", "kitchen", "bathroom", "gym"],
+  "visual_style": "professional|casual|raw_ugc|polished_ugc|studio|outdoor|indoor",
+  "has_face": true,
+  "is_talking_head": true,
+  "is_broll": false,
+  "product_visible": false,
   "confidence": "High|Medium|Low",
-  "summary": "2-3 sentences combining what was said AND shown",
-  "tone": "emotional tone description",
-  "topics": ["specific topics from transcript AND visuals"],
-  "scene_tags": ["specific visual tags from Gemini analysis"],
+  "summary": "2-3 sentences combining what was said AND shown — be specific about products, claims, visuals",
+  "tone": "emotional tone description (e.g. excited, calm, urgent, empathetic, authoritative)",
+  "topics": ["specific topics from transcript AND visuals — product names, ingredients, problems, solutions"],
+  "scene_tags": ["extremely specific visual tags from Gemini analysis — e.g. 'woman applying serum', 'yellow teeth close-up'"],
   "hook": "most attention-grabbing moment or line",
   "key_quotes": ["powerful direct quotes from transcript"],
   "ad_potential": "High|Medium|Low",
   "ad_notes": "specific advice on ad usage based on both transcript and visuals",
   "clip_segments": [
     {
-      "label": "HOOK|PROBLEM|AGITATE|SOLUTION|SOCIAL PROOF|CTA|BODY|PRODUCT|REACTION|BEFORE|AFTER|TESTIMONIAL",
-      "clip_role": "hook|problem|solution|social_proof|cta|b_roll|product_demo|reaction|before_after|testimonial",
+      "label": "HOOK|PROBLEM|AGITATE|SOLUTION|SOCIAL PROOF|CTA|BODY|PRODUCT|REACTION|BEFORE|AFTER|TESTIMONIAL|DEMONSTRATION",
+      "clip_role": "hook|problem|solution|social_proof|cta|b_roll|product_demo|reaction|before_after|testimonial|demonstration|lifestyle|unboxing",
       "start_seconds": 0,
       "end_seconds": 4,
-      "description": "combine exact transcript words with visual description",
-      "scene_tags": ["specific visual tags for THIS segment from Gemini"],
-      "use_case": "specific ad use case",
+      "description": "combine exact transcript words with visual description — be specific",
+      "scene_tags": ["specific visual tags for THIS segment from Gemini — be extremely detailed"],
+      "creative_tags": ["talking_head|broll|product_shot|demonstration|reaction|lifestyle|closeup|wide_shot|text_overlay"],
+      "is_talking_head": true,
+      "is_broll": false,
+      "use_case": "specific ad use case — e.g. 'perfect opening hook for problem-aware audience'",
       "quality_score": "High|Medium|Low",
       "avoid_reason": null
     }
@@ -406,6 +416,10 @@ CRITICAL RULES:
       ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
       analysis: {
         content_type: analysis.content_type,
+        creative_tags: seg.creative_tags || analysis.creative_tags || [],
+        is_talking_head: seg.is_talking_head ?? analysis.is_talking_head ?? false,
+        is_broll: seg.is_broll ?? analysis.is_broll ?? false,
+        visual_style: analysis.visual_style || null,
         summary: seg.description,
         scene_tags: seg.scene_tags || [],
         use_case: seg.use_case,
