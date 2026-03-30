@@ -26,12 +26,16 @@ export default function WorkspaceSwitcher() {
   async function handleCreate() {
     if (!newName.trim() || saving) return
     setSaving(true)
-    await createWorkspace(newName.trim())
-    setNewName('')
-    setCreating(false)
+    const result = await createWorkspace(newName.trim())
     setSaving(false)
-    setOpen(false)
-    window.location.reload()
+    if (result) {
+      setNewName('')
+      setCreating(false)
+      setOpen(false)
+      window.location.reload()
+    } else {
+      alert('Failed to create workspace. Check the browser console for details.')
+    }
   }
 
   async function handleSwitch(ws: Workspace) {
