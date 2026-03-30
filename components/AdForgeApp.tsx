@@ -3217,6 +3217,10 @@ function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
   const [crawlError,setCrawlError]=useState("")
   const [editingProd,setEditingProd]=useState<Product|null>(null)
   const [editingAvatar,setEditingAvatar]=useState<CustomerAvatar|null>(null)
+  const [generatingAvatars,setGeneratingAvatars]=useState(false)
+  const [avatarError,setAvatarError]=useState("")
+  const [findingProducts,setFindingProducts]=useState(false)
+  const [productError,setProductError]=useState("")
 
   async function saveBrand(){
     setSaving(true)
@@ -3238,6 +3242,44 @@ function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
   async function deleteProd(id:string){await supabase.from("products").delete().eq("id",id);setProducts(products.filter((p:any)=>p.id!==id))}
   function saveAvatar(av:CustomerAvatar){const avatars=brand.customer_avatars||[];const exists=avatars.find((a:CustomerAvatar)=>a.id===av.id);const next=exists?avatars.map((a:CustomerAvatar)=>a.id===av.id?av:a):[...avatars,av];setBrand({...brand,customer_avatars:next});setEditingAvatar(null)}
   function deleteAvatar(id:string){setBrand({...brand,customer_avatars:(brand.customer_avatars||[]).filter((a:CustomerAvatar)=>a.id!==id)})}
+
+  async function generateAvatars(){
+    setGeneratingAvatars(true);setAvatarError("")
+    try{
+      const res=await fetch("/api/brand/avatars",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({brand})})
+      const d=await res.json()
+      if(d.error)throw new Error(d.error)
+      if(d.avatars&&d.avatars.length>0){
+        setBrand({...brand,customer_avatars:d.avatars})
+      }
+    }catch(e:any){setAvatarError(e.message||"Failed to generate avatars.")}
+    setGeneratingAvatars(false)
+  }
+
+  async function findProducts(){
+    if(!brand.website?.trim()){setProductError("Add a website URL in your Brand Profile first.");return}
+    setFindingProducts(true);setProductError("")
+    try{
+      const res=await fetch("/api/brand/products",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:brand.website})})
+      const d=await res.json()
+      if(d.error)throw new Error(d.error)
+      if(d.products&&d.products.length>0){
+        // Save each product to Supabase (respect 3 product cap)
+        const remaining=3-products.length
+        const toAdd=d.products.slice(0,Math.max(0,remaining))
+        const saved:Product[]=[]
+        for(const prod of toAdd){
+          const{data}=await supabase.from("products").insert({...prod,workspace_id:workspaceId}).select().single()
+          if(data)saved.push(data)
+        }
+        setProducts([...products,...saved])
+      }else{
+        setProductError("No products found on the website. Try adding them manually.")
+      }
+    }catch(e:any){setProductError(e.message||"Failed to find products.")}
+    setFindingProducts(false)
+  }
+
   const navBtn=(id:string,label:string)=><button style={{padding:"8px 18px",borderRadius:99,fontSize:13,fontWeight:600,cursor:"pointer",border:"none",background:section===id?C.accent:"transparent",color:section===id?"#fff":C.muted}} onClick={()=>setSection(id)}>{label}</button>
 
   // Brand intelligence score calculation
@@ -3311,8 +3353,13 @@ function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
     {section==="avatars"&&<div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <div style={{color:C.muted,fontSize:14}}>Select avatars when generating scripts for targeted messaging</div>
-        <Btn onClick={()=>setEditingAvatar({id:Date.now().toString(),name:"",age:"",gender:"",description:"",pains:"",desires:"",objections:""})} style={{background:C.accent,color:"#fff"}}>+ New Avatar</Btn>
+        <div style={{display:"flex",gap:8}}>
+          <Btn onClick={generateAvatars} disabled={generatingAvatars} style={{background:generatingAvatars?C.border:C.accentSoft,color:generatingAvatars?C.muted:C.accent,border:"1px solid "+C.accent+"44",whiteSpace:"nowrap"}}>{generatingAvatars?"⏳ Generating…":"✨ Auto-Generate 3"}</Btn>
+          <Btn onClick={()=>setEditingAvatar({id:Date.now().toString(),name:"",age:"",gender:"",description:"",pains:"",desires:"",objections:""})} style={{background:C.accent,color:"#fff"}}>+ New Avatar</Btn>
+        </div>
       </div>
+      {avatarError&&<div style={{background:"#ef444422",border:"1px solid #ef444433",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#ef4444",marginBottom:12}}>{avatarError}</div>}
+      {generatingAvatars&&<Card style={{textAlign:"center",padding:40,marginBottom:12}}><div style={{fontSize:32,marginBottom:8}}>🧠</div><div style={{fontWeight:600,fontSize:14,marginBottom:4}}>Analyzing your brand…</div><div style={{fontSize:12,color:C.muted}}>Generating 3 customer avatars based on your brand profile. This takes 10-15 seconds.</div></Card>}
       {editingAvatar&&<Card style={{marginBottom:20,border:"1px solid "+C.accent+"44"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><STitle size={15} mb={0}>{editingAvatar.name||"New Avatar"}</STitle><Btn onClick={()=>setEditingAvatar(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"5px 10px"}}>Cancel</Btn></div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginBottom:12}}>
@@ -3334,7 +3381,9 @@ function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
     </div>}
 
     {section==="products"&&!editingProd&&<div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><div style={{color:C.muted,fontSize:14}}>Products power script targeting</div><Btn onClick={()=>setEditingProd({...DEFAULT_PRODUCT})} style={{background:C.accent,color:"#fff"}}>+ New Product</Btn></div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><div style={{color:C.muted,fontSize:14}}>Products power script targeting</div><div style={{display:"flex",gap:8}}><Btn onClick={findProducts} disabled={findingProducts||products.length>=3} style={{background:findingProducts?C.border:C.accentSoft,color:findingProducts?C.muted:C.accent,border:"1px solid "+C.accent+"44",whiteSpace:"nowrap"}}>{findingProducts?"⏳ Searching…":products.length>=3?"3 Product Limit":"✨ Find Best Sellers"}</Btn><Btn onClick={()=>setEditingProd({...DEFAULT_PRODUCT})} style={{background:C.accent,color:"#fff"}}>+ New Product</Btn></div></div>
+      {productError&&<div style={{background:"#ef444422",border:"1px solid #ef444433",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#ef4444",marginBottom:12}}>{productError}</div>}
+      {findingProducts&&<Card style={{textAlign:"center",padding:40,marginBottom:12}}><div style={{fontSize:32,marginBottom:8}}>🔍</div><div style={{fontWeight:600,fontSize:14,marginBottom:4}}>Crawling your website…</div><div style={{fontSize:12,color:C.muted}}>Finding up to 3 best-selling products. This may take 15-20 seconds.</div></Card>}
       {products.length===0?<Card style={{textAlign:"center",padding:60}}><div style={{fontSize:40,marginBottom:12}}>📦</div><STitle mb={6}>No products yet</STitle><Btn onClick={()=>setEditingProd({...DEFAULT_PRODUCT})} style={{background:C.accent,color:"#fff",marginTop:8}}>Add First Product</Btn></Card>
       :<div style={{display:"grid",gap:12}}>{products.map((prod:any)=><Card key={prod.id}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div><div style={{fontWeight:700,fontSize:16,marginBottom:4}}>{prod.name}</div><div style={{fontSize:13,color:C.muted}}>{(prod.description||"").substring(0,130)}</div></div><div style={{display:"flex",gap:8,marginLeft:16}}><Btn onClick={()=>setEditingProd(prod)} style={{background:C.surface,color:C.text,border:"1px solid "+C.border,fontSize:12,padding:"6px 12px"}}>Edit</Btn><Btn onClick={()=>deleteProd(prod.id)} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",fontSize:12,padding:"6px 12px"}}>Delete</Btn></div></div></Card>)}</div>}
     </div>}
