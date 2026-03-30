@@ -82,7 +82,10 @@ async function fetchPixabayMusic(query: string): Promise<Track[] | null> {
     url.searchParams.set('per_page', '20')
     url.searchParams.set('safesearch', 'true')
 
-    const response = await fetch(url.toString(), { timeout: 5000 })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    const response = await fetch(url.toString(), { signal: controller.signal })
+    clearTimeout(timeoutId)
     if (!response.ok) {
       console.error('Pixabay API error:', response.status)
       return null

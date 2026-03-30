@@ -319,7 +319,7 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
           const stitchRes=await fetch("/api/voiceover/stitch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sectionUrls})})
           const stitchData=await stitchRes.json()
           if(stitchData.url){
-            ;(window as any).__voStitchData={url:stitchData.url,sectionOffsets:stitchData.sectionOffsets,sectionDurations:stitchData.sectionDurations}
+            ;(window as any).__voStitchData={url:stitchData.url,sectionOffsets:stitchData.sectionOffsets,sectionDurations:stitchData.sectionDurations,wordTimestamps:stitchData.wordTimestamps||[]}
           }
         }
       }catch(e){console.warn("Stitch failed, using individual section URL:",e)}
@@ -384,7 +384,7 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
           const stitchRes=await fetch("/api/voiceover/stitch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sectionUrls})})
           const stitchData=await stitchRes.json()
           if(stitchData.url){
-            ;(window as any).__voStitchData={url:stitchData.url,sectionOffsets:stitchData.sectionOffsets,sectionDurations:stitchData.sectionDurations}
+            ;(window as any).__voStitchData={url:stitchData.url,sectionOffsets:stitchData.sectionOffsets,sectionDurations:stitchData.sectionDurations,wordTimestamps:stitchData.wordTimestamps||[]}
           }
         }
       }catch(e){console.warn("Stitch failed, using first section URL:",e)}
@@ -470,10 +470,16 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
             onSave(allHookResults[0],selectedVoiceObj?.name||selectedVoice,combinedUrl,allHookResults)
           } else {
             const stitchData=(window as any).__voStitchData
+            const allWordTimestamps=stitchData?.wordTimestamps||[]
             const updatedSections=sectionsWithWords.map((s:any,i:number)=>{
               const base=sectionAudios[i]?{...s,voiceover_url:sectionAudios[i]}:s
               if(stitchData?.sectionOffsets){
-                return{...base,vo_offset:stitchData.sectionOffsets[i]||0,vo_duration:stitchData.sectionDurations[i]||0}
+                const voOffset=stitchData.sectionOffsets[i]||0
+                const voDuration=stitchData.sectionDurations[i]||0
+                // Extract word timestamps for this section
+                const sectionEnd=i<stitchData.sectionOffsets.length-1?stitchData.sectionOffsets[i+1]:Infinity
+                const sectionWordTimestamps=allWordTimestamps.filter((w:any)=>w.start>=voOffset-0.05&&w.start<sectionEnd-0.05).map((w:any)=>({word:w.word,start:w.start-voOffset,end:w.end-voOffset}))
+                return{...base,vo_offset:voOffset,vo_duration:voDuration,word_timestamps:sectionWordTimestamps}
               }
               return base
             })
@@ -555,11 +561,35 @@ function isKeyWord(word:string,idx:number,all:string[]):boolean{
   return false
 }
 
-function buildCaptionChunks(text:string,style:CaptionStyle,totalDur:number):{words:string[],start:number,end:number}[]{
+type WordTimestamp={word:string,start:number,end:number}
+
+function buildCaptionChunks(text:string,style:CaptionStyle,totalDur:number,wordTimestamps?:WordTimestamp[]):{words:string[],start:number,end:number,wordStarts?:number[],wordEnds?:number[]}[]{
   const words=text.trim().split(/\s+/).filter(Boolean)
   if(!words.length)return[]
-  if(style==="line")return[{words,start:0,end:totalDur}]
-  if(style==="karaoke")return[{words,start:0,end:totalDur}]
+
+  // If we have real word timestamps from Deepgram, use them for precise timing
+  const hasTimestamps=wordTimestamps&&wordTimestamps.length>0
+
+  if(style==="line"){
+    const start=hasTimestamps?wordTimestamps![0].start:0
+    const end=hasTimestamps?wordTimestamps![wordTimestamps!.length-1].end:totalDur
+    return[{words:hasTimestamps?wordTimestamps!.map(w=>w.word):words,start,end,wordStarts:hasTimestamps?wordTimestamps!.map(w=>w.start):undefined,wordEnds:hasTimestamps?wordTimestamps!.map(w=>w.end):undefined}]
+  }
+  if(style==="karaoke"){
+    return[{words:hasTimestamps?wordTimestamps!.map(w=>w.word):words,start:0,end:totalDur,wordStarts:hasTimestamps?wordTimestamps!.map(w=>w.start):undefined,wordEnds:hasTimestamps?wordTimestamps!.map(w=>w.end):undefined}]
+  }
+
+  // Word-by-word: groups of 2
+  if(hasTimestamps){
+    const chunks:{words:string[],start:number,end:number,wordStarts:number[],wordEnds:number[]}[]=[]
+    for(let i=0;i<wordTimestamps!.length;i+=2){
+      const group=wordTimestamps!.slice(i,i+2)
+      chunks.push({words:group.map(w=>w.word),start:group[0].start,end:group[group.length-1].end,wordStarts:group.map(w=>w.start),wordEnds:group.map(w=>w.end)})
+    }
+    return chunks
+  }
+
+  // Fallback: evenly distributed timing
   const chunks:{words:string[],start:number,end:number}[]=[]
   for(let i=0;i<words.length;i+=2){
     const group=words.slice(i,i+2)
@@ -569,13 +599,24 @@ function buildCaptionChunks(text:string,style:CaptionStyle,totalDur:number):{wor
   return chunks.map((c,i)=>({...c,start:i*durEach,end:(i+1)*durEach}))
 }
 
-function CaptionOverlay({spoken,elapsed,clipDur,settings}:{spoken:string,elapsed:number,clipDur:number,settings:CaptionSettings}){
+function CaptionOverlay({spoken,elapsed,clipDur,settings,wordTimestamps}:{spoken:string,elapsed:number,clipDur:number,settings:CaptionSettings,wordTimestamps?:WordTimestamp[]}){
   if(!settings.enabled||!spoken.trim())return null
-  const chunks=buildCaptionChunks(spoken,settings.style,clipDur)
+  const chunks=buildCaptionChunks(spoken,settings.style,clipDur,wordTimestamps)
   if(!chunks.length)return null
-  const allWords=spoken.trim().split(/\s+/).filter(Boolean)
-  const progress=Math.min(1,elapsed/clipDur)
-  const activeWordIdx=Math.floor(progress*allWords.length)
+  const allWords=chunks.flatMap(c=>c.words)
+  const hasTimestamps=wordTimestamps&&wordTimestamps.length>0
+
+  // With real timestamps, find the active word by checking elapsed against word start/end
+  let activeWordIdx=0
+  if(hasTimestamps){
+    for(let i=0;i<wordTimestamps!.length;i++){
+      if(elapsed>=wordTimestamps![i].start)activeWordIdx=i
+    }
+  }else{
+    const progress=Math.min(1,elapsed/clipDur)
+    activeWordIdx=Math.floor(progress*allWords.length)
+  }
+
   let displayWords:string[]=[];let chunkStart=0
   if(settings.style==="karaoke"){displayWords=allWords;chunkStart=0}
   else{
@@ -625,7 +666,7 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSet
       const trimStart=seg.trimStart??item.start_seconds??0
       const trimEnd=seg.trimEnd??item.end_seconds??(trimStart+(item.duration_seconds||5))
       const naturalDur=naturalDurs[segIdx]
-      return{item,start:trimStart,end:trimEnd,naturalDur,naturalFraction:naturalDur/totalNatural,sectionIdx,label:s.type,spoken:segIdx===0?s.spokenWords||"":"",muted:s.muted||false,voiceover_url:s.voiceover_url||null,sectionVoUrl:s.voiceover_url||null,isFirstInSection:segIdx===0,isLastInSection:segIdx===segCount-1,segCount,segIdx}
+      return{item,start:trimStart,end:trimEnd,naturalDur,naturalFraction:naturalDur/totalNatural,sectionIdx,label:s.type,spoken:segIdx===0?s.spokenWords||"":"",muted:s.muted||false,voiceover_url:s.voiceover_url||null,sectionVoUrl:s.voiceover_url||null,isFirstInSection:segIdx===0,isLastInSection:segIdx===segCount-1,segCount,segIdx,word_timestamps:segIdx===0?(s.word_timestamps||null):null}
     }).filter(Boolean)
   }).filter(Boolean)
 
@@ -741,7 +782,7 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSet
     <div style={{display:"grid",gridTemplateColumns:"1fr 260px"}}>
       <div style={{position:"relative",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:320}}>
         <video ref={vidRef} playsInline preload="metadata" muted={cur?.muted||false} style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
-        {captions.enabled&&<CaptionOverlay spoken={cur?.spoken||""} elapsed={clipElapsedTime} clipDur={clipDur} settings={captions}/>}
+        {captions.enabled&&<CaptionOverlay spoken={cur?.spoken||""} elapsed={clipElapsedTime} clipDur={clipDur} settings={captions} wordTimestamps={cur?.word_timestamps||undefined}/>}
         {!playing&&<div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:5}}>
           <div style={{width:52,height:52,borderRadius:"50%",background:"#000a",border:"2px solid #fff4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>▶</div>
           {(voiceoverUrl||musicUrl)&&<div style={{position:"absolute",bottom:16,fontSize:11,color:"#fff",background:"#000a",padding:"3px 10px",borderRadius:99}}>{[voiceoverUrl?"🎙️ Voiceover":"",musicUrl?"🎵 Music":""].filter(Boolean).join(" + ")} will play</div>}

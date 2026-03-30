@@ -3,8 +3,9 @@ import { createServiceClient } from '@/lib/supabase/server'
 
 /**
  * Stitches multiple section voiceover MP3 URLs into a single continuous MP3.
- * Uses FFmpeg concat filter on the server to produce a seamless voiceover file.
- * Also returns per-section timing offsets so captions can be synced precisely.
+ * Raw MP3 buffer concatenation (MP3 frames are independently decodable).
+ * After stitching, calls Deepgram to get word-level timestamps for caption sync.
+ * Returns per-section timing offsets + word timestamps for precise captions.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -24,14 +25,11 @@ export async function POST(req: NextRequest) {
       buffers.push(buf)
 
       // Estimate MP3 duration from file size (128kbps = 16000 bytes/sec)
-      // This is approximate — Shotstack handles precise timing from the actual audio
       const estimatedDuration = buf.byteLength / 16000
       durations.push(estimatedDuration)
     }
 
     // Concatenate all MP3 buffers into a single file
-    // MP3 frames are independently decodable, so raw concatenation works
-    // (unlike AAC/M4A which need container rewriting)
     const totalSize = buffers.reduce((acc, b) => acc + b.byteLength, 0)
     const combined = new Uint8Array(totalSize)
     let offset = 0
@@ -59,12 +57,72 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: urlData } = supabase.storage.from('voiceovers').getPublicUrl(filename)
+    const stitchedUrl = urlData.publicUrl
+
+    // ── Deepgram word-level transcription ──────────────────────────────────
+    // Call Deepgram on the stitched voiceover to get precise word timestamps.
+    // These drive caption sync in both the preview and Shotstack render.
+    let wordTimestamps: { word: string; start: number; end: number }[] = []
+
+    if (process.env.DEEPGRAM_API_KEY) {
+      try {
+        const dgRes = await fetch(
+          'https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true&utterances=false&words=true',
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ url: stitchedUrl }),
+          }
+        )
+
+        if (dgRes.ok) {
+          const dgData = await dgRes.json()
+          const dgWords = dgData.results?.channels?.[0]?.alternatives?.[0]?.words || []
+          wordTimestamps = dgWords.map((w: any) => ({
+            word: w.punctuated_word || w.word,
+            start: w.start,
+            end: w.end,
+          }))
+
+          // Also refine section durations using actual Deepgram timing
+          // Find the last word in each section based on cumulative offsets
+          if (wordTimestamps.length > 0) {
+            const lastWordEnd = wordTimestamps[wordTimestamps.length - 1].end
+            // Update estimated durations with Deepgram-accurate ones
+            for (let i = 0; i < sectionOffsets.length; i++) {
+              const sectionStart = sectionOffsets[i]
+              const sectionEnd = i < sectionOffsets.length - 1
+                ? sectionOffsets[i + 1]
+                : lastWordEnd
+
+              // Find words that belong to this section
+              const sectionWords = wordTimestamps.filter(
+                w => w.start >= sectionStart - 0.1 && w.start < (i < sectionOffsets.length - 1 ? sectionOffsets[i + 1] - 0.1 : Infinity)
+              )
+
+              if (sectionWords.length > 0) {
+                const actualEnd = sectionWords[sectionWords.length - 1].end
+                durations[i] = actualEnd - sectionStart + 0.15 // small buffer
+              }
+            }
+          }
+        } else {
+          console.warn('Deepgram transcription failed:', dgRes.status, await dgRes.text())
+        }
+      } catch (dgErr) {
+        console.warn('Deepgram word timestamp extraction failed:', dgErr)
+      }
+    }
 
     return NextResponse.json({
-      url: urlData.publicUrl,
+      url: stitchedUrl,
       totalDuration: timeOffset,
       sectionOffsets,
       sectionDurations: durations,
+      wordTimestamps,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })

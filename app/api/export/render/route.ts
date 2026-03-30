@@ -18,8 +18,12 @@ interface CaptionSettings {
 }
 
 /**
- * Build caption timeline using voiceover timing data when available,
+ * Build caption timeline using Deepgram word-level timestamps when available,
  * falling back to estimated timing from clip durations.
+ *
+ * Each section may have `word_timestamps: { word, start, end }[]` from Deepgram.
+ * These are section-relative (start=0 is the beginning of that section's voiceover).
+ * We add the section's timeline offset to get absolute positions on the Shotstack timeline.
  */
 function buildCaptionTimeline(
   sections: any[],
@@ -30,7 +34,12 @@ function buildCaptionTimeline(
 
   for (let si = 0; si < sections.length; si++) {
     const section = sections[si]
-    const words = (section.spokenWords || '').trim().split(/\s+/).filter(Boolean)
+    const wordTimestamps: { word: string; start: number; end: number }[] = section.word_timestamps || []
+    const hasTimestamps = wordTimestamps.length > 0
+
+    const words = hasTimestamps
+      ? wordTimestamps.map(w => w.word)
+      : (section.spokenWords || '').trim().split(/\s+/).filter(Boolean)
     if (!words.length) continue
 
     const timing = sectionTimings[si]
@@ -41,8 +50,21 @@ function buildCaptionTimeline(
 
     if (style === 'line') {
       result.push({ text: words.join(' '), start: sectionStart, duration: sectionDur })
+    } else if (hasTimestamps) {
+      // Real word timestamps — groups of 2 words with precise timing
+      for (let i = 0; i < wordTimestamps.length; i += 2) {
+        const group = wordTimestamps.slice(i, i + 2)
+        const text = group.map(w => w.word).join(' ')
+        const chunkStart = sectionStart + group[0].start
+        const chunkEnd = sectionStart + group[group.length - 1].end
+        result.push({
+          text,
+          start: chunkStart,
+          duration: Math.max(0.15, chunkEnd - chunkStart),
+        })
+      }
     } else {
-      // word-by-word or karaoke: groups of 2 words
+      // Fallback: evenly distributed timing
       const groups: string[][] = []
       for (let i = 0; i < words.length; i += 2) {
         groups.push(words.slice(i, i + 2))
@@ -85,20 +107,50 @@ function captionHtml(text: string, accentColor: string): string {
 /**
  * Build video clips on the Shotstack timeline.
  *
- * When voiceover timing data is available, section durations are driven by
- * the voiceover audio length (not clip natural duration). Clips are stretched
- * or trimmed to match the voiceover section duration.
+ * Smart clip chaining: when a section's assigned clips are shorter than the
+ * target duration (voiceover length), instead of scaling/slow-mo, we chain
+ * additional b-roll clips from the library to fill the gap naturally.
  *
- * When no voiceover, clips play at natural duration.
+ * Priority: manual targetDuration > voiceover timing > natural clip length.
  */
 function buildVideoClips(
   sections: any[],
   items: any[],
-  hasVoiceover: boolean
+  hasVoiceover: boolean,
+  allLibraryItems?: any[]
 ) {
   const clips: any[] = []
   let timelinePos = 0
   const sectionTimings: { start: number; duration: number }[] = []
+  const usedClipIds = new Set<string>()
+
+  // Track which clip IDs are already assigned to sections
+  for (const section of sections) {
+    const segs = section.clipSegments?.length
+      ? section.clipSegments
+      : section.selectedClipId
+      ? [{ clipId: section.selectedClipId }]
+      : []
+    for (const seg of segs) {
+      if (seg.clipId) usedClipIds.add(seg.clipId)
+    }
+  }
+
+  // Build pool of available b-roll clips for gap filling
+  const brollPool = (allLibraryItems || items).filter((item: any) => {
+    if (!item.mux_playback_id) return false
+    if (usedClipIds.has(item.id)) return false
+    // Prefer items flagged as b-roll, or clips (sub-items)
+    const analysis = item.analysis || {}
+    return analysis.is_broll === true || item.type === 'Clip' || item.parent_id
+  })
+
+  // Fallback: any unused item with a playback ID
+  const anyUnusedPool = (allLibraryItems || items).filter((item: any) =>
+    item.mux_playback_id && !usedClipIds.has(item.id)
+  )
+
+  let brollIdx = 0 // Round-robin through b-roll pool
 
   for (const section of sections) {
     const sectionStart = timelinePos
@@ -131,40 +183,104 @@ function buildVideoClips(
       totalNaturalDur += dur
     }
 
-    // If voiceover drives timing and clips are shorter, scale clips proportionally
     const targetDuration = voSectionDuration || totalNaturalDur || 3
-    const scaleFactor = totalNaturalDur > 0 ? targetDuration / totalNaturalDur : 1
+    const shouldMute = section.muted || hasVoiceover
 
-    for (let si = 0; si < segs.length; si++) {
-      const seg = segs[si]
-      const item = items.find((i: any) => i.id === seg.clipId)
-      if (!item?.mux_playback_id) continue
+    // ── Smart clip chaining ─────────────────────────────────────────────
+    // If clips are shorter than target, play them at natural speed then
+    // chain additional b-roll to fill the remaining time.
+    const gap = targetDuration - totalNaturalDur
+    const shouldChain = gap > 0.5 && voSectionDuration && totalNaturalDur > 0
 
-      const trimIn = seg.trimStart ?? item.start_seconds ?? 0
-      const naturalEnd = item.end_seconds ?? (item.start_seconds ?? 0) + (item.duration_seconds ?? 3)
-      const trimOut = seg.trimEnd ?? naturalEnd
-      const naturalDur = Math.max(0.5, trimOut - trimIn)
+    if (shouldChain) {
+      // Play existing clips at their natural duration (no scaling)
+      for (let si = 0; si < segs.length; si++) {
+        const seg = segs[si]
+        const item = items.find((i: any) => i.id === seg.clipId)
+        if (!item?.mux_playback_id) continue
 
-      // Scale clip duration to match voiceover timing
-      const duration = voSectionDuration ? naturalDur * scaleFactor : naturalDur
+        const trimIn = seg.trimStart ?? item.start_seconds ?? 0
+        const naturalEnd = item.end_seconds ?? (item.start_seconds ?? 0) + (item.duration_seconds ?? 3)
+        const trimOut = seg.trimEnd ?? naturalEnd
+        const naturalDur = Math.max(0.5, trimOut - trimIn)
 
-      // Mute clip audio if: section is explicitly muted OR a voiceover track exists
-      const shouldMute = section.muted || hasVoiceover
+        clips.push({
+          asset: {
+            type: 'video',
+            src: `https://stream.mux.com/${item.mux_playback_id}/capped-1080p.mp4`,
+            trim: trimIn,
+            volume: shouldMute ? 0 : 1,
+          },
+          start: timelinePos,
+          length: naturalDur,
+          fit: 'crop',
+          scale: 1,
+        })
+        timelinePos += naturalDur
+      }
 
-      clips.push({
-        asset: {
-          type: 'video',
-          src: `https://stream.mux.com/${item.mux_playback_id}/capped-1080p.mp4`,
-          trim: trimIn,
-          volume: shouldMute ? 0 : 1,
-        },
-        start: timelinePos,
-        length: Math.max(0.5, duration),
-        fit: 'crop',
-        scale: 1,
-      })
+      // Fill the remaining gap with b-roll clips
+      let remainingGap = targetDuration - (timelinePos - sectionStart)
+      const pool = brollPool.length > 0 ? brollPool : anyUnusedPool
+      let attempts = 0
+      const maxAttempts = 10
 
-      timelinePos += Math.max(0.5, duration)
+      while (remainingGap > 0.3 && pool.length > 0 && attempts < maxAttempts) {
+        const fillItem = pool[brollIdx % pool.length]
+        brollIdx++
+        attempts++
+
+        const fillStart = fillItem.start_seconds ?? 0
+        const fillEnd = fillItem.end_seconds ?? (fillStart + (fillItem.duration_seconds ?? 3))
+        const fillNatural = Math.max(0.5, fillEnd - fillStart)
+        const fillDur = Math.min(fillNatural, remainingGap)
+
+        clips.push({
+          asset: {
+            type: 'video',
+            src: `https://stream.mux.com/${fillItem.mux_playback_id}/capped-1080p.mp4`,
+            trim: fillStart,
+            volume: 0, // always mute fill clips
+          },
+          start: timelinePos,
+          length: Math.max(0.5, fillDur),
+          fit: 'crop',
+          scale: 1,
+        })
+
+        timelinePos += Math.max(0.5, fillDur)
+        remainingGap = targetDuration - (timelinePos - sectionStart)
+      }
+    } else {
+      // No gap or no voiceover: use original scaling behaviour
+      const scaleFactor = totalNaturalDur > 0 ? targetDuration / totalNaturalDur : 1
+
+      for (let si = 0; si < segs.length; si++) {
+        const seg = segs[si]
+        const item = items.find((i: any) => i.id === seg.clipId)
+        if (!item?.mux_playback_id) continue
+
+        const trimIn = seg.trimStart ?? item.start_seconds ?? 0
+        const naturalEnd = item.end_seconds ?? (item.start_seconds ?? 0) + (item.duration_seconds ?? 3)
+        const trimOut = seg.trimEnd ?? naturalEnd
+        const naturalDur = Math.max(0.5, trimOut - trimIn)
+        const duration = voSectionDuration ? naturalDur * scaleFactor : naturalDur
+
+        clips.push({
+          asset: {
+            type: 'video',
+            src: `https://stream.mux.com/${item.mux_playback_id}/capped-1080p.mp4`,
+            trim: trimIn,
+            volume: shouldMute ? 0 : 1,
+          },
+          start: timelinePos,
+          length: Math.max(0.5, duration),
+          fit: 'crop',
+          scale: 1,
+        })
+
+        timelinePos += Math.max(0.5, duration)
+      }
     }
 
     // If no clips were added for this section, still advance timeline
@@ -297,16 +413,24 @@ export async function POST(req: NextRequest) {
 
     const { data: items } = await supabase
       .from('items')
-      .select('id,mux_playback_id,start_seconds,end_seconds,duration_seconds,analysis')
+      .select('id,mux_playback_id,start_seconds,end_seconds,duration_seconds,analysis,parent_id,type')
       .in('id', allClipIds)
 
     if (!items?.length) {
       return NextResponse.json({ error: 'No valid clips found' }, { status: 400 })
     }
 
+    // Fetch all library items in this workspace for b-roll chaining pool
+    const { data: allLibraryItems } = await supabase
+      .from('items')
+      .select('id,mux_playback_id,start_seconds,end_seconds,duration_seconds,analysis,parent_id,type')
+      .eq('workspace_id', ad.workspace_id)
+      .not('mux_playback_id', 'is', null)
+      .limit(200)
+
     // 3. Build tracks — video clips now return section timings for caption sync
     const { clips: videoClips, totalDuration, sectionTimings } = buildVideoClips(
-      sections, items, !!ad.voiceover_url
+      sections, items, !!ad.voiceover_url, allLibraryItems || items
     )
 
     if (!videoClips.length) {
