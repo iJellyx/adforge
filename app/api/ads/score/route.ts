@@ -82,7 +82,7 @@ Also provide:
 - For sections without a matched clip, score 0 and suggest what type of clip to find
 
 AD SECTIONS:
-${sectionDetails.map(s => `
+${sectionDetails.map((s: any) => `
 --- Section ${s.index}: ${s.type} ---
 Script: "${s.spokenWords}"
 Visual Direction: "${s.visualDirection}"
