@@ -49,10 +49,17 @@ ${brandContext}`
     const raw = msg.content[0].type === 'text' ? msg.content[0].text : '[]'
     const avatars = JSON.parse(raw.replace(/```json|```/g, '').trim())
 
-    // Add unique IDs
+    // Add unique IDs and ensure all fields are strings (AI may return arrays)
+    const toStr = (v: any) => Array.isArray(v) ? v.join('\n') : (v || '').toString()
     const withIds = avatars.map((a: any) => ({
-      ...a,
       id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 7),
+      name: toStr(a.name),
+      age: toStr(a.age),
+      gender: toStr(a.gender),
+      description: toStr(a.description),
+      pains: toStr(a.pains),
+      desires: toStr(a.desires),
+      objections: toStr(a.objections),
     }))
 
     return NextResponse.json({ avatars: withIds })

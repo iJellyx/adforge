@@ -3250,7 +3250,9 @@ function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
       const d=await res.json()
       if(d.error)throw new Error(d.error)
       if(d.avatars&&d.avatars.length>0){
-        setBrand({...brand,customer_avatars:d.avatars})
+        const toStr=(v:any)=>Array.isArray(v)?v.join('\n'):(v||'').toString()
+        const safe=d.avatars.map((a:any)=>({id:a.id||Date.now().toString(),name:toStr(a.name),age:toStr(a.age),gender:toStr(a.gender),description:toStr(a.description),pains:toStr(a.pains),desires:toStr(a.desires),objections:toStr(a.objections)}))
+        setBrand({...brand,customer_avatars:safe})
       }
     }catch(e:any){setAvatarError(e.message||"Failed to generate avatars.")}
     setGeneratingAvatars(false)
