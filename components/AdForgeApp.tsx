@@ -1344,7 +1344,7 @@ function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productN
     {/* ── Top bar ── */}
     <div style={{padding:"10px 16px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10,background:C.surface}}>
       <div style={{fontWeight:700,fontSize:14}}>🎬 Ad Editor</div>
-      <span style={{fontSize:11,color:C.muted}}>{sections.length} sections · {allClips.filter(c=>c.clip).length} clips</span>
+      <span style={{fontSize:11,color:C.muted}}>{sections.length} sections · {allClips.filter((c:any)=>c.clip).length} clips</span>
       {voiceoverUrl&&<span style={{fontSize:10,color:C.green,background:"#22c55e11",padding:"2px 7px",borderRadius:99,border:"1px solid #22c55e33"}}>🎙️ Voiceover</span>}
       <div style={{flex:1}}/>
       <button onClick={toggleMuteAll} style={{background:allMuted?"#ef444422":C.accentSoft,border:"1px solid "+(allMuted?"#ef444466":C.accent+"44"),color:allMuted?"#ef4444":C.accent,borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>{allMuted?"🔇 Muted":"🔊 Audio"}</button>
@@ -1469,7 +1469,7 @@ function ClipPickerModal({currentId,matchedIds,libraryItems,sectionLabel,onSelec
   const fl=(arr:Item[])=>{
     let r=arr
     if(search.trim())r=r.filter((i:Item)=>[i.title,i.creator,...(i.analysis?.scene_tags||[])].some((f:any)=>f&&String(f).toLowerCase().includes(search.toLowerCase())))
-    if(filterType!=="all")r=r.filter(i=>classifyItem(i)===filterType)
+    if(filterType!=="all")r=r.filter((i:Item)=>classifyItem(i)===filterType)
     return r
   }
   // Sort b-roll first in matched clips
