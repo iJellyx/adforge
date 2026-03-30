@@ -125,11 +125,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const createWorkspace = useCallback(async (name: string): Promise<Workspace | null> => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return null
+    if (!user) { console.error('[workspace] No user for create'); return null }
 
-    // Generate a URL-safe slug
     const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
       + '-' + Math.random().toString(36).slice(2, 6)
+
+    console.log('[workspace] Creating workspace:', name, slug)
 
     // Create the workspace
     const { data: workspace, error: wsError } = await supabase
@@ -138,26 +139,37 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       .select()
       .single()
 
-    if (wsError || !workspace) return null
+    if (wsError) { console.error('[workspace] Create workspace error:', wsError.message, wsError.code); return null }
+    if (!workspace) { console.error('[workspace] No workspace returned'); return null }
+
+    console.log('[workspace] Workspace created:', workspace.id)
 
     // Add creator as owner
-    await supabase
+    const { error: memErr } = await supabase
       .from('workspace_members')
       .insert({ workspace_id: workspace.id, user_id: user.id, role: 'owner' })
 
+    if (memErr) console.error('[workspace] Add member error:', memErr.message, memErr.code)
+    else console.log('[workspace] Member added as owner')
+
     // Create a default brand profile for the workspace
-    await supabase
+    const { error: brandErr } = await supabase
       .from('brand_profile')
       .insert({ name: name.trim(), workspace_id: workspace.id })
 
+    if (brandErr) console.error('[workspace] Brand profile error:', brandErr.message, brandErr.code)
+
     // Save as last workspace
-    await supabase
+    const { error: prefErr } = await supabase
       .from('user_preferences')
       .upsert({ user_id: user.id, last_workspace_id: workspace.id, updated_at: new Date().toISOString() })
+
+    if (prefErr) console.error('[workspace] Preferences error:', prefErr.message, prefErr.code)
 
     const newWs: Workspace = { ...workspace, role: 'owner' as const }
     setWorkspaces(prev => [...prev, newWs])
     setActiveWorkspace(newWs)
+    console.log('[workspace] New workspace ready:', newWs.name)
     return newWs
   }, [])
 
