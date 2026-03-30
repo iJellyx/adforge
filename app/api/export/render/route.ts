@@ -17,49 +17,30 @@ interface CaptionSettings {
   fontSize: number
 }
 
-interface CaptionChunk {
-  text: string
-  start: number    // seconds from beginning of section
-  duration: number // seconds
-}
-
 /**
- * Split spoken words into timed caption chunks matching the preview logic.
- * Each section's captions are offset by sectionStart within the overall timeline.
+ * Build caption timeline using voiceover timing data when available,
+ * falling back to estimated timing from clip durations.
  */
 function buildCaptionTimeline(
   sections: any[],
-  style: CaptionStyle
+  style: CaptionStyle,
+  sectionTimings: { start: number; duration: number }[]
 ): { text: string; start: number; duration: number }[] {
   const result: { text: string; start: number; duration: number }[] = []
 
-  let cursor = 0
-
-  for (const section of sections) {
+  for (let si = 0; si < sections.length; si++) {
+    const section = sections[si]
     const words = (section.spokenWords || '').trim().split(/\s+/).filter(Boolean)
-    if (!words.length) {
-      // advance cursor by estimated duration even if no words
-      const segs = section.clipSegments?.length ? section.clipSegments : [{ clipId: section.selectedClipId }]
-      const dur = segs.reduce((acc: number, seg: any) => {
-        const d = (seg.trimEnd ?? 0) - (seg.trimStart ?? 0)
-        return acc + (d > 0 ? d : 3)
-      }, 0)
-      cursor += dur || 3
-      continue
-    }
+    if (!words.length) continue
 
-    // Estimate section duration from clip segments
-    const segs = section.clipSegments?.length
-      ? section.clipSegments
-      : [{ clipId: section.selectedClipId, trimStart: 0, trimEnd: null }]
+    const timing = sectionTimings[si]
+    if (!timing) continue
 
-    const sectionDur = segs.reduce((acc: number, seg: any) => {
-      const d = (seg.trimEnd ?? 0) - (seg.trimStart ?? 0)
-      return acc + (d > 0 ? d : 3)
-    }, 0) || 3
+    const sectionStart = timing.start
+    const sectionDur = timing.duration
 
     if (style === 'line') {
-      result.push({ text: words.join(' '), start: cursor, duration: sectionDur })
+      result.push({ text: words.join(' '), start: sectionStart, duration: sectionDur })
     } else {
       // word-by-word or karaoke: groups of 2 words
       const groups: string[][] = []
@@ -70,13 +51,11 @@ function buildCaptionTimeline(
       groups.forEach((g, i) => {
         result.push({
           text: g.join(' '),
-          start: cursor + i * chunkDur,
+          start: sectionStart + i * chunkDur,
           duration: chunkDur,
         })
       })
     }
-
-    cursor += sectionDur
   }
 
   return result
@@ -84,7 +63,6 @@ function buildCaptionTimeline(
 
 /**
  * Wrap a hex colour in Shotstack's HTML font colour tag.
- * Also bolds the text to match the preview style.
  */
 function captionHtml(text: string, accentColor: string): string {
   const words = text.split(' ')
@@ -104,25 +82,68 @@ function captionHtml(text: string, accentColor: string): string {
 
 // ── Shotstack timeline builders ────────────────────────────────────────────
 
-function buildVideoClips(sections: any[], items: any[], hasVoiceover: boolean) {
+/**
+ * Build video clips on the Shotstack timeline.
+ *
+ * When voiceover timing data is available, section durations are driven by
+ * the voiceover audio length (not clip natural duration). Clips are stretched
+ * or trimmed to match the voiceover section duration.
+ *
+ * When no voiceover, clips play at natural duration.
+ */
+function buildVideoClips(
+  sections: any[],
+  items: any[],
+  hasVoiceover: boolean
+) {
   const clips: any[] = []
   let timelinePos = 0
+  const sectionTimings: { start: number; duration: number }[] = []
 
   for (const section of sections) {
+    const sectionStart = timelinePos
     const segs = section.clipSegments?.length
       ? section.clipSegments
       : section.selectedClipId
       ? [{ clipId: section.selectedClipId, trimStart: null, trimEnd: null }]
       : []
 
+    // Calculate voiceover-driven duration for this section if available
+    const voSectionDuration = section.vo_duration && section.vo_duration > 0
+      ? section.vo_duration
+      : null
+
+    // Calculate total natural clip duration for this section
+    let totalNaturalDur = 0
+    const segDurations: number[] = []
+
     for (const seg of segs) {
+      const item = items.find((i: any) => i.id === seg.clipId)
+      if (!item?.mux_playback_id) { segDurations.push(0); continue }
+      const trimIn = seg.trimStart ?? item.start_seconds ?? 0
+      const naturalEnd = item.end_seconds ?? (item.start_seconds ?? 0) + (item.duration_seconds ?? 3)
+      const trimOut = seg.trimEnd ?? naturalEnd
+      const dur = Math.max(0.5, trimOut - trimIn)
+      segDurations.push(dur)
+      totalNaturalDur += dur
+    }
+
+    // If voiceover drives timing and clips are shorter, scale clips proportionally
+    const targetDuration = voSectionDuration || totalNaturalDur || 3
+    const scaleFactor = totalNaturalDur > 0 ? targetDuration / totalNaturalDur : 1
+
+    for (let si = 0; si < segs.length; si++) {
+      const seg = segs[si]
       const item = items.find((i: any) => i.id === seg.clipId)
       if (!item?.mux_playback_id) continue
 
       const trimIn = seg.trimStart ?? item.start_seconds ?? 0
       const naturalEnd = item.end_seconds ?? (item.start_seconds ?? 0) + (item.duration_seconds ?? 3)
       const trimOut = seg.trimEnd ?? naturalEnd
-      const duration = Math.max(0.5, trimOut - trimIn)
+      const naturalDur = Math.max(0.5, trimOut - trimIn)
+
+      // Scale clip duration to match voiceover timing
+      const duration = voSectionDuration ? naturalDur * scaleFactor : naturalDur
 
       // Mute clip audio if: section is explicitly muted OR a voiceover track exists
       const shouldMute = section.muted || hasVoiceover
@@ -135,16 +156,40 @@ function buildVideoClips(sections: any[], items: any[], hasVoiceover: boolean) {
           volume: shouldMute ? 0 : 1,
         },
         start: timelinePos,
-        length: duration,
+        length: Math.max(0.5, duration),
         fit: 'crop',
         scale: 1,
       })
 
-      timelinePos += duration
+      timelinePos += Math.max(0.5, duration)
     }
+
+    // If no clips were added for this section, still advance timeline
+    const actualSectionDur = timelinePos - sectionStart
+    if (actualSectionDur < 0.1) {
+      // Empty section — add a black frame placeholder
+      const placeholderDur = voSectionDuration || 3
+      clips.push({
+        asset: {
+          type: 'title',
+          text: ' ',
+          style: 'minimal',
+          color: '#000000',
+          background: '#000000',
+        },
+        start: timelinePos,
+        length: placeholderDur,
+      })
+      timelinePos += placeholderDur
+    }
+
+    sectionTimings.push({
+      start: sectionStart,
+      duration: timelinePos - sectionStart,
+    })
   }
 
-  return { clips, totalDuration: timelinePos }
+  return { clips, totalDuration: timelinePos, sectionTimings }
 }
 
 function buildAudioClips(
@@ -163,10 +208,20 @@ function buildAudioClips(
   }
 
   if (musicUrl) {
+    // Music volume: lower when voiceover present, with fade in/out
+    const musicVol = voiceoverUrl ? 0.12 : 0.3
+    const fadeIn = Math.min(1.5, totalDuration * 0.1)
+    const fadeOut = Math.min(2.5, totalDuration * 0.15)
+
     clips.push({
-      asset: { type: 'audio', src: musicUrl, volume: 0.2 },
+      asset: { type: 'audio', src: musicUrl, volume: musicVol },
       start: 0,
       length: totalDuration,
+      transition: {
+        in: 'fade',
+        out: 'fade',
+      },
+      effect: 'fadeInFadeOut',
     })
   }
 
@@ -176,25 +231,24 @@ function buildAudioClips(
 function buildCaptionClips(
   sections: any[],
   captionSettings: CaptionSettings,
+  sectionTimings: { start: number; duration: number }[]
 ) {
   if (!captionSettings?.enabled) return []
 
   const { style, accentColor, fontSize } = captionSettings
-  const chunks = buildCaptionTimeline(sections, style)
+  const chunks = buildCaptionTimeline(sections, style, sectionTimings)
 
   // Map fontSize numbers to Shotstack size strings
   const sizeMap: Record<number, string> = { 18: 'small', 22: 'medium', 28: 'large', 34: 'x-large' }
   const ssSize = sizeMap[fontSize] || 'medium'
 
   return chunks.map((chunk) => {
-    // Split into words, first word gets accent colour if available
-    // Use plain text for the title asset — Shotstack handles styling natively
     return {
       asset: {
         type: 'title',
         text: chunk.text,
         style: 'minimal',
-        color: accentColor,    // accent on all caption text — closest to preview
+        color: accentColor,
         size: ssSize,
         background: 'transparent',
         position: 'bottom',
@@ -202,7 +256,7 @@ function buildCaptionClips(
       start: chunk.start,
       length: chunk.duration,
       position: 'bottom',
-      offset: { x: 0, y: 0.18 }, // 18% from bottom — above Meta CTA zone
+      offset: { x: 0, y: 0.18 },
     }
   })
 }
@@ -247,11 +301,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No valid clips found' }, { status: 400 })
     }
 
-    // 3. Build tracks
-    const { clips: videoClips, totalDuration } = buildVideoClips(sections, items, !!ad.voiceover_url)
+    // 3. Build tracks — video clips now return section timings for caption sync
+    const { clips: videoClips, totalDuration, sectionTimings } = buildVideoClips(
+      sections, items, !!ad.voiceover_url
+    )
 
     if (!videoClips.length) {
       return NextResponse.json({ error: 'No Mux-ready clips to render' }, { status: 400 })
+    }
+
+    // Validate: check for gaps between clips
+    const sortedClips = [...videoClips].sort((a, b) => a.start - b.start)
+    for (let i = 1; i < sortedClips.length; i++) {
+      const prevEnd = sortedClips[i - 1].start + sortedClips[i - 1].length
+      const gap = sortedClips[i].start - prevEnd
+      if (gap > 0.1) {
+        console.warn(`Gap detected at ${prevEnd.toFixed(2)}s — ${gap.toFixed(2)}s gap before next clip`)
+      }
     }
 
     const audioClips = buildAudioClips(
@@ -260,9 +326,10 @@ export async function POST(req: NextRequest) {
       totalDuration
     )
 
+    // Captions now use section timings derived from actual video/voiceover durations
     const captionSettings: CaptionSettings | null = ad.metadata?.captionSettings || null
     const captionClips = captionSettings?.enabled
-      ? buildCaptionClips(sections, captionSettings)
+      ? buildCaptionClips(sections, captionSettings, sectionTimings)
       : []
 
     // 4. Assemble Shotstack timeline
@@ -283,7 +350,7 @@ export async function POST(req: NextRequest) {
 
     const output = {
       format: 'mp4',
-      resolution: 'mobile',  // 720×1280 portrait — 'hd' is landscape only
+      resolution: 'mobile',
       fps: 30,
       quality: 'high',
       size: {
@@ -305,7 +372,6 @@ export async function POST(req: NextRequest) {
     const shotstackData = await shotstackRes.json()
 
     if (!shotstackRes.ok) {
-      // Log full response for debugging
       console.error('Shotstack rejected render:', JSON.stringify(shotstackData))
       const errMsg =
         shotstackData?.response?.error ||
