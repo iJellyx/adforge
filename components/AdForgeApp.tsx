@@ -112,10 +112,15 @@ function VideoCard({item,onClick,selectMode,isSelected,onToggleSelect,compact,hi
     <div style={{position:"relative",width:"100%",paddingTop:"177.78%",background:"#111",overflow:"hidden",flexShrink:0}}>
       {item.mux_playback_id?<img src={muxThumb(item.mux_playback_id,thumbTime)} alt={item.title} style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>:<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}><div style={{fontSize:compact?18:28}}>{item.mux_status==="pending"||item.mux_status==="analysing"?"⏳":"🎬"}</div>{!compact&&<div style={{fontSize:9,color:C.muted,textAlign:"center"}}>{item.mux_status==="analysing"?"Analysing…":item.mux_status==="pending"?"Processing…":"No preview"}</div>}</div>}
       {item.type==="clip"&&<div style={{position:"absolute",top:compact?4:8,left:compact?4:8,background:"#f59e0bee",color:"#000",fontSize:compact?7:9,fontWeight:800,padding:"1px 5px",borderRadius:4}}>✂️</div>}
+      {item.analysis?.is_broll&&<div style={{position:"absolute",top:compact?4:8,right:compact?4:8,background:"#2563EBdd",color:"#fff",fontSize:compact?6:8,fontWeight:800,padding:"1px 4px",borderRadius:3}}>B-ROLL</div>}
+      {item.analysis?.is_talking_head&&!item.analysis?.is_broll&&<div style={{position:"absolute",top:compact?4:8,right:compact?4:8,background:"#7C3AEDdd",color:"#fff",fontSize:compact?6:8,fontWeight:800,padding:"1px 4px",borderRadius:3}}>TALKING HEAD</div>}
       {item.duration_seconds&&<div style={{position:"absolute",bottom:compact?4:8,right:compact?4:8,background:"#000c",color:"#fff",fontSize:compact?8:10,fontWeight:700,padding:"1px 5px",borderRadius:4}}>{fmt(item.duration_seconds)}</div>}
     </div>
     <div style={{padding:compact?6:12,flex:1,display:"flex",flexDirection:"column",gap:3}}>
-      <Chip label={chipLabel} color={tc}/>
+      <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+        <Chip label={chipLabel} color={tc}/>
+        {item.analysis?.creative_tags?.slice(0,2).map((t:string,i:number)=><span key={i} style={{background:C.accentSoft,color:C.accent,padding:"1px 5px",borderRadius:99,fontSize:7,fontWeight:600,border:"1px solid "+C.accent+"22"}}>{t.replace(/_/g," ")}</span>)}
+      </div>
       <div style={{fontWeight:700,fontSize:compact?10:13,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{item.title}</div>
       {item.creator&&<div style={{fontSize:compact?8:10,color:C.muted}}>👤 {item.creator}{item.creator_age?` · ${item.creator_age}`:""}</div>}
       {!compact&&(item.analysis?.scene_tags||[]).slice(0,2).map((t:string,i:number)=><span key={i} style={{background:"#22c55e18",color:"#4ade80",padding:"1px 5px",borderRadius:99,fontSize:8,fontWeight:600}}>{t}</span>)}
@@ -1107,7 +1112,7 @@ function ClipSegmentPlayer({playbackId,start,end,muted}:{playbackId:string,start
   return(
     <div style={{position:"relative",width:"100%",height:"100%"}}>
       <video ref={vidRef} src={src} playsInline preload="metadata" muted={muted}
-        style={{width:"100%",height:"100%",objectFit:"cover"}}
+        style={{width:"100%",height:"100%",objectFit:"contain",maxHeight:"100%"}}
         onTimeUpdate={onTimeUpdate}
         onPlay={()=>setPlaying(true)}
         onPause={()=>setPlaying(false)}/>
@@ -1351,9 +1356,9 @@ function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productN
     </div>
 
     {/* ── Main area: Preview + Detail panel ── */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 320px",minHeight:340}}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 320px",height:360}}>
       {/* Left: Large clip preview */}
-      <div style={{position:"relative",background:"#0a0a0f",display:"flex",alignItems:"center",justifyContent:"center",minHeight:300}}>
+      <div style={{position:"relative",background:"#0a0a0f",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
         {activeClip?.mux_playback_id?<div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
           <ClipSegmentPlayer playbackId={activeClip.mux_playback_id} start={activeClip.start_seconds||0} end={activeClip.end_seconds} muted={mutedClips[activeIdx]||false}/>
         </div>:<div style={{textAlign:"center",color:C.muted,padding:40}}>
@@ -1401,9 +1406,13 @@ function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productN
           </div>}
         </div>
 
-        {/* Clip actions */}
+        {/* Clip actions + match score */}
         <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border}}>
-          <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>Clip</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1}}>Clip</span>
+            {(()=>{const activeSeg=(activeRow?.clipSegments||[])[0];const score=activeSeg?.match_score;if(score==null)return null;const sc=score>=80?{bg:"#22c55e22",color:C.green,label:"Great Match"}:score>=60?{bg:"#f59e0b22",color:C.yellow,label:"Fair Match"}:{bg:"#ef444422",color:"#ef4444",label:"Weak Match"};return<div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:10,color:sc.color,fontWeight:600}}>{sc.label}</span><span style={{background:sc.bg,color:sc.color,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:99,border:"1px solid "+sc.color+"33"}}>{score}%</span></div>})()}
+          </div>
+          {(()=>{const activeSeg=(activeRow?.clipSegments||[])[0];return activeSeg?.reason?<div style={{fontSize:11,color:C.muted,marginBottom:8,fontStyle:"italic",lineHeight:1.4}}>💡 {activeSeg.reason}</div>:null})()}
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {!readOnly&&<button onClick={()=>setPickerIdx(activeIdx*1000)} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700}}>⇄ Change Clip</button>}
             {activeClip&&!readOnly&&<button onClick={()=>{const seg=(activeRow?.clipSegments||[{id:"seg-"+activeIdx+"-0",clipId:activeRow?.selectedClipId}])[0];setTrimModalData({segClip:activeClip,idx:activeIdx,segIdx:0,seg})}} style={{background:C.surface,color:C.text,border:"1px solid "+C.border,borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:600}}>✂️ Trim</button>}
@@ -1438,6 +1447,7 @@ function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productN
                 <div style={{position:"relative",paddingTop:"56.25%",background:clip?"#111":"#E8E6FF",overflow:"hidden"}}>
                   {clip?.mux_playback_id?<img src={muxThumb(clip.mux_playback_id,clip.thumbnail_time||clip.start_seconds||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:C.muted}}>🎬</div>}
                   {row.autoSelected&&segIdx===0&&<div style={{position:"absolute",top:2,left:2,background:C.green,color:"#fff",fontSize:6,fontWeight:800,padding:"0px 3px",borderRadius:2}}>AI</div>}
+                  {seg.match_score!=null&&<div style={{position:"absolute",top:2,right:2,background:seg.match_score>=80?"#22c55ecc":seg.match_score>=60?"#f59e0bcc":"#ef4444cc",color:"#fff",fontSize:7,fontWeight:800,padding:"0px 3px",borderRadius:2}}>{seg.match_score}%</div>}
                 </div>
                 <div style={{padding:"3px 4px",background:sc.bg,borderTop:"2px solid "+sc.color}}>
                   <div style={{fontSize:7,fontWeight:800,color:sc.color,textTransform:"uppercase" as const,letterSpacing:0.5,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{row.type}{segs.length>1?` ${segIdx+1}/${segs.length}`:""}</div>
@@ -1871,6 +1881,17 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand,wor
       </div>
       <MuxClipPlayer item={selected}/>
       {a.summary&&<Card style={{marginBottom:12}}><Label>Summary</Label><p style={{margin:0,lineHeight:1.7,fontSize:14}}>{a.summary}</p></Card>}
+      {(a.creative_tags?.length>0||a.is_talking_head!=null||a.is_broll!=null||a.visual_style)&&<Card style={{marginBottom:12}}>
+        <div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>🏷️ Creative Tags</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+          {a.is_talking_head&&<span style={{background:"#7C3AED22",color:"#7C3AED",padding:"3px 8px",borderRadius:99,fontSize:10,fontWeight:700,border:"1px solid #7C3AED33"}}>Talking Head</span>}
+          {a.is_broll&&<span style={{background:"#2563EB22",color:"#2563EB",padding:"3px 8px",borderRadius:99,fontSize:10,fontWeight:700,border:"1px solid #2563EB33"}}>B-Roll</span>}
+          {a.visual_style&&<span style={{background:C.accentSoft,color:C.accent,padding:"3px 8px",borderRadius:99,fontSize:10,fontWeight:700,border:"1px solid "+C.accent+"33"}}>{a.visual_style.replace(/_/g," ")}</span>}
+          {a.has_face&&<span style={{background:"#f59e0b22",color:"#f59e0b",padding:"3px 8px",borderRadius:99,fontSize:10,fontWeight:700,border:"1px solid #f59e0b33"}}>Has Face</span>}
+          {a.product_visible&&<span style={{background:"#22c55e22",color:C.green,padding:"3px 8px",borderRadius:99,fontSize:10,fontWeight:700,border:"1px solid #22c55e33"}}>Product Visible</span>}
+        </div>
+        {a.creative_tags?.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{a.creative_tags.map((t:string,i:number)=><span key={i} style={{background:C.surface,color:C.muted,padding:"2px 7px",borderRadius:99,fontSize:9,fontWeight:600,border:"1px solid "+C.border}}>{t.replace(/_/g," ")}</span>)}</div>}
+      </Card>}
         {selected.type==="clip"&&<Card style={{marginBottom:12}}>
         <div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>🎯 Clip Role</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -1906,17 +1927,28 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand,wor
       {selected.transcript&&<Card style={{marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📝 Auto-Transcript</div><div style={{fontSize:13,lineHeight:1.7,color:C.muted,maxHeight:120,overflowY:"auto"}}>{selected.transcript}</div></Card>}
       {a.key_quotes?.length>0&&<Card style={{marginBottom:12}}><Label>Key Quotes</Label>{a.key_quotes.map((q:string,i:number)=><div key={i} style={{borderLeft:"3px solid "+C.accent,paddingLeft:12,marginBottom:8,fontSize:14,fontStyle:"italic"}}>"{q}"</div>)}</Card>}
       {a.ad_notes&&<Card style={{background:adPotColor+"18",border:"1px solid "+adPotColor+"44",marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:adPotColor,marginBottom:6}}>📢 AD USAGE</div><div style={{fontSize:14,lineHeight:1.6}}>{a.ad_notes}</div></Card>}
-     {selected.type==="original"&&clips.length===0&&selected.mux_status==="ready"&&<Card style={{marginBottom:12,background:"#FFFBEB",border:"1.5px solid #FCD34D"}}>
+     {selected.type==="original"&&selected.mux_status==="ready"&&<Card style={{marginBottom:12,background:clips.length===0?"#FFFBEB":"#F0F4FF",border:"1.5px solid "+(clips.length===0?"#FCD34D":C.accent+"44")}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <div style={{fontWeight:700,fontSize:13,color:C.yellow,marginBottom:2}}>⚠️ No clips generated</div>
-            <div style={{fontSize:11,color:C.muted}}>This may have happened due to low AI credits. Re-analyse to generate clips.</div>
+            {clips.length===0?<>
+              <div style={{fontWeight:700,fontSize:13,color:C.yellow,marginBottom:2}}>⚠️ No clips generated</div>
+              <div style={{fontSize:11,color:C.muted}}>This may have happened due to low AI credits. Re-analyse to generate clips.</div>
+            </>:<>
+              <div style={{fontWeight:700,fontSize:13,color:C.accent,marginBottom:2}}>🔄 Re-analyse Video</div>
+              <div style={{fontSize:11,color:C.muted}}>Re-run AI analysis to benefit from improved tagging & clip detection. Existing clips will be replaced.</div>
+            </>}
           </div>
           <Btn onClick={async()=>{
             await supabase.from("items").update({mux_status:"analysing"}).eq("id",selected.id)
-            await fetch("/api/items/reanalyse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({itemId:selected.id})})
-            onRefresh()
-          }} style={{background:C.yellow,color:"#fff",fontSize:12,padding:"7px 16px"}}>Re-analyse</Btn>
+            setSelected({...selected,mux_status:"analysing"})
+            fetch("/api/items/reanalyse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({itemId:selected.id})}).then(()=>onRefresh())
+          }} style={{background:clips.length===0?C.yellow:C.accent,color:"#fff",fontSize:12,padding:"7px 16px",whiteSpace:"nowrap"}}>Re-analyse</Btn>
+        </div>
+      </Card>}
+      {selected.type==="original"&&selected.mux_status==="analysing"&&<Card style={{marginBottom:12,background:"#F0F4FF",border:"1.5px solid "+C.accent+"44"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:18,height:18,border:"2px solid "+C.accent,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+          <div style={{fontSize:13,color:C.accent,fontWeight:600}}>Re-analysing… This may take a minute.</div>
         </div>
       </Card>}
       {clips.length>0&&<div style={{marginTop:24}}><STitle>✂️ Auto-Generated Clips ({clips.length})</STitle><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>{clips.map(c=><VideoCard key={c.id} item={c} onClick={()=>setSelected(c)} selectMode={false} isSelected={false} onToggleSelect={()=>{}}/>)}</div></div>}
@@ -1938,6 +1970,7 @@ function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand,wor
       {selectMode&&<div style={{display:"flex",gap:8,alignItems:"center"}}>
         <Btn onClick={()=>setSelectedIds(filtered.map(i=>i.id))} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44",padding:"9px 14px"}}>Select All ({filtered.length})</Btn>
         <Btn onClick={bulkDelete} disabled={selectedIds.length===0||deleting} style={{background:selectedIds.length>0?"#ef444433":C.border,color:selectedIds.length>0?"#ef4444":C.muted,border:"1px solid "+(selectedIds.length>0?"#ef444466":C.border)}}>Delete ({selectedIds.length})</Btn>
+        <Btn onClick={async()=>{const origIds=selectedIds.filter(id=>{const it=items.find((i:Item)=>i.id===id);return it?.type==="original"&&it?.mux_status==="ready"});if(origIds.length===0)return;for(const id of origIds){await supabase.from("items").update({mux_status:"analysing"}).eq("id",id);fetch("/api/items/reanalyse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({itemId:id})}).then(()=>onRefresh())};setSelectMode(false);setSelectedIds([]);onRefresh()}} disabled={selectedIds.length===0} style={{background:selectedIds.filter(id=>{const it=items.find((i:Item)=>i.id===id);return it?.type==="original"}).length>0?"#5B49FF22":C.border,color:selectedIds.filter(id=>{const it=items.find((i:Item)=>i.id===id);return it?.type==="original"}).length>0?C.accent:C.muted,border:"1px solid "+(C.accent+"44")}}>🔄 Re-analyse ({selectedIds.filter(id=>{const it=items.find((i:Item)=>i.id===id);return it?.type==="original"}).length})</Btn>
         <Btn onClick={()=>{setSelectMode(false);setSelectedIds([])}} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn>
       </div>}
     </div>
@@ -2099,7 +2132,11 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
       const a=item.analysis||{}
       const quotes=(a.key_quotes||[]).slice(0,2).join(" | ")
       const clipClass=classifyClip(item)
-      return "ID:"+item.id+"|class:"+clipClass+"|role:"+(a.clip_role||item.clip_role||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(",")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,200)+(quotes?"|quotes:"+quotes:"")+"|ad_potential:"+(a.ad_potential||"")+"|type:"+item.type
+      const creativeTags=(a.creative_tags||[]).join(",")
+      const isTH=a.is_talking_head?"yes":"no"
+      const isBR=a.is_broll?"yes":"no"
+      const vs=a.visual_style||""
+      return "ID:"+item.id+"|class:"+clipClass+"|creative_tags:"+creativeTags+"|is_talking_head:"+isTH+"|is_broll:"+isBR+"|visual_style:"+vs+"|role:"+(a.clip_role||item.clip_role||"")+"|content_type:"+(a.content_type||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(",")+"|summary:"+(a.summary||item.description||"").substring(0,120)+"|transcript:"+(item.transcript||"").substring(0,200)+(quotes?"|quotes:"+quotes:"")+"|ad_potential:"+(a.ad_potential||"")+"|tone:"+(a.tone||"")+"|type:"+item.type
     }).join("\n")
 
     const sectionDesc=secs.map((s:any,i:number)=>{
@@ -2115,7 +2152,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
    - Only use TALKING_HEAD clips if absolutely no BROLL alternative exists for a section
    - Even for SOCIAL PROOF sections, prefer product-in-use or results clips over talking head testimonials`:""
 
-    const prompt="You are an expert direct response video editor for DTC brands.\n\nAnalyse each script section and determine HOW MANY clips it needs to best tell the story visually.\n\nSCRIPT SECTIONS:\n"+sectionDesc+"\n\nCLIP LIBRARY ("+matchPool.length+" clips):\n"+libSummary+"\n\nRULES:\n1. Each section can use 1-4 clips depending on how many distinct visual moments exist in the spoken words\n2. A 30s ad should have roughly 8-15 total clips across all sections\n3. Match clips by VISUAL CONTENT — if script says yellow teeth, find a clip of yellow teeth\n4. Use clip tags, transcript, use_case to find best visual match\n5. NEVER use the same clip twice across the whole ad\n6. For each clip slot, provide 2 alternatives"+voiceoverRules+"\n\nReturn ONLY valid JSON array — one entry per CLIP SLOT:\n[{\"section\":0,\"slot\":0,\"best_id\":\"clip_uuid\",\"alt_ids\":[\"alt1\",\"alt2\"],\"phrase\":\"specific phrase this clip covers\",\"reason\":\"why this clip matches\"},...]"
+    const prompt="You are an expert direct response video editor for DTC brands.\n\nAnalyse each script section and determine HOW MANY clips it needs to best tell the story visually.\n\nSCRIPT SECTIONS:\n"+sectionDesc+"\n\nCLIP LIBRARY ("+matchPool.length+" clips):\n"+libSummary+"\n\nRULES:\n1. Each section can use 1-4 clips depending on how many distinct visual moments exist in the spoken words\n2. A 30s ad should have roughly 8-15 total clips across all sections\n3. Match clips by VISUAL CONTENT — if script says yellow teeth, find a clip of yellow teeth\n4. Use clip creative_tags, scene_tags, is_talking_head, is_broll, visual_style, transcript, and use_case to find the best visual match\n5. NEVER use the same clip twice across the whole ad\n6. For each clip slot, provide 2 alternatives\n7. Score each match 0-100 based on how well the clip visually matches the script phrase and section type"+voiceoverRules+"\n\nReturn ONLY valid JSON array — one entry per CLIP SLOT:\n[{\"section\":0,\"slot\":0,\"best_id\":\"clip_uuid\",\"alt_ids\":[\"alt1\",\"alt2\"],\"phrase\":\"specific phrase this clip covers\",\"reason\":\"why this clip matches\",\"match_score\":85},...]"
 
     try{
       const raw=await callClaude([{role:"user",content:prompt}],2000)
@@ -2132,7 +2169,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
           const candidates=[m.best_id,...(m.alt_ids||[])].filter((id:string)=>id&&validIds.has(id)&&!usedIds.has(id))
           const clipId=candidates[0]||null
           if(clipId)usedIds.add(clipId)
-          return{id:"seg-"+i+"-"+si,clipId,phrase:m.phrase||"",reason:m.reason||""}
+          return{id:"seg-"+i+"-"+si,clipId,phrase:m.phrase||"",reason:m.reason||"",match_score:m.match_score||null}
         }).filter((seg:any)=>seg.clipId)
 
         const allMatchedIds=sectionMatches.flatMap((m:any)=>[m.best_id,...(m.alt_ids||[])]).filter((id:string)=>id&&validIds.has(id))
