@@ -108,10 +108,13 @@ function buildVideoClips(
       ? [{ clipId: section.selectedClipId, trimStart: null, trimEnd: null }]
       : []
 
-    // Calculate voiceover-driven duration for this section if available
-    const voSectionDuration = section.vo_duration && section.vo_duration > 0
-      ? section.vo_duration
+    // Calculate target duration: manual override > voiceover timing > natural clip length
+    const manualDuration = section.targetDuration && section.targetDuration > 0
+      ? section.targetDuration
       : null
+    const voSectionDuration = manualDuration || (section.vo_duration && section.vo_duration > 0
+      ? section.vo_duration
+      : null)
 
     // Calculate total natural clip duration for this section
     let totalNaturalDur = 0
@@ -348,15 +351,32 @@ export async function POST(req: NextRequest) {
       tracks,
     }
 
+    // Determine output size and resolution based on aspectRatio metadata
+    const aspectRatio = ad.metadata?.aspectRatio || '9:16'
+    let outputSize: { width: number; height: number } = { width: 720, height: 1280 }
+    let resolution: string = 'mobile'
+
+    if (aspectRatio === '1:1') {
+      outputSize = { width: 1080, height: 1080 }
+      resolution = 'hd'
+    } else if (aspectRatio === '4:5') {
+      outputSize = { width: 864, height: 1080 }
+      resolution = 'mobile'
+    } else if (aspectRatio === '16:9') {
+      outputSize = { width: 1920, height: 1080 }
+      resolution = 'hd'
+    } else {
+      // Default 9:16 portrait
+      outputSize = { width: 720, height: 1280 }
+      resolution = 'mobile'
+    }
+
     const output = {
       format: 'mp4',
-      resolution: 'mobile',
+      resolution,
       fps: 30,
       quality: 'high',
-      size: {
-        width: 720,
-        height: 1280,
-      },
+      size: outputSize,
     }
 
     // 5. Submit to Shotstack
