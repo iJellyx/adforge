@@ -1468,10 +1468,15 @@ function ClipPickerModal({currentId,matchedIds,libraryItems,sectionLabel,onSelec
   const [filterType,setFilterType]=useState<"all"|"broll"|"talking_head">("all")
 
   function classifyItem(item:Item):"broll"|"talking_head"|"mixed"{
-    const tags=((item.analysis?.scene_tags||[]).join(" ")+" "+(item.analysis?.summary||"")+" "+(item.analysis?.content_type||"")).toLowerCase()
-    if(tags.includes("product")||tags.includes("close-up")||tags.includes("demo")||tags.includes("lifestyle")||tags.includes("b-roll")||tags.includes("ingredient")||tags.includes("result"))return"broll"
-    if(tags.includes("talking head")||tags.includes("person speaking")||tags.includes("ugc")||tags.includes("testimonial"))return"talking_head"
-    return(item.transcript||"").length>50?"talking_head":"broll"
+    const a=item.analysis||{}
+    // Prefer explicit flags from AI analysis
+    if(a.is_broll===true)return"broll"
+    if(a.is_talking_head===true)return"talking_head"
+    // Fallback heuristic
+    const tags=((a.scene_tags||[]).join(" ")+" "+(a.content_type||"")).toLowerCase()
+    if(tags.includes("product")||tags.includes("close-up")||tags.includes("demo")||tags.includes("lifestyle")||tags.includes("b-roll")||tags.includes("ingredient"))return"broll"
+    if(tags.includes("talking head")||tags.includes("person speaking"))return"talking_head"
+    return"mixed"
   }
 
   const matched=libraryItems.filter((i:Item)=>matchedIds.includes(i.id))
@@ -2119,12 +2124,15 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
 
     // Classify clips as b-roll vs talking head to help Claude
     const classifyClip=(item:Item)=>{
-      const tags=(item.analysis?.scene_tags||[]).join(" ").toLowerCase()
-      const summary=(item.analysis?.summary||"").toLowerCase()
-      const transcript=(item.transcript||"").trim()
-      const contentType=(item.analysis?.content_type||"").toLowerCase()
-      const isTalkingHead=tags.includes("talking head")||tags.includes("person speaking")||contentType.includes("ugc")||contentType.includes("testimonial")||(transcript.length>50&&(tags.includes("face")||tags.includes("person")))
-      const isBroll=tags.includes("product")||tags.includes("close-up")||tags.includes("demo")||tags.includes("lifestyle")||tags.includes("b-roll")||contentType.includes("product")||contentType.includes("demo")||summary.includes("product")||summary.includes("close")||summary.includes("ingredient")
+      const a=item.analysis||{}
+      // Prefer explicit flags from AI analysis if available
+      if(a.is_broll===true)return"BROLL"
+      if(a.is_talking_head===true)return"TALKING_HEAD"
+      // Fallback to heuristic classification
+      const tags=(a.scene_tags||[]).join(" ").toLowerCase()
+      const contentType=(a.content_type||"").toLowerCase()
+      const isTalkingHead=tags.includes("talking head")||tags.includes("person speaking")||contentType==="talking head"
+      const isBroll=tags.includes("product")||tags.includes("close-up")||tags.includes("demo")||tags.includes("lifestyle")||tags.includes("b-roll")||contentType.includes("product demo")||contentType.includes("demo")
       return isBroll?"BROLL":isTalkingHead?"TALKING_HEAD":"MIXED"
     }
 
