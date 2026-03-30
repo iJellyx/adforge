@@ -266,6 +266,16 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
   const [voiceSearch,setVoiceSearch]=useState("")
   const [sectionAudios,setSectionAudios]=useState<Record<number,string>>({})
   const [allHookResults,setAllHookResults]=useState<any[][]|null>(null)
+  const [regeneratingSection,setRegeneratingSection]=useState<number|null>(null)
+
+  // Expose regenerateSection globally so ScriptTable can call it
+  useEffect(()=>{
+    (window as any).__voiceoverRegenerateSection=async(sectionIdx:number,callback:(success:boolean)=>void)=>{
+      await regenerateSection(sectionIdx)
+      callback(true)
+    }
+    return ()=>{delete(window as any).__voiceoverRegenerateSection}
+  },[regenerateSection,sectionAudios,selectedVoice,sectionsWithWords])
 
   useEffect(()=>{
     setLoading(true)
@@ -279,21 +289,47 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
   const selectedVoiceObj=voices.find(v=>v.id===selectedVoice)
   const allGenerated=sectionsWithWords.length>0&&sectionsWithWords.every((_:any,i:number)=>sectionAudios[i])
 
+  // Generate and upload audio for a single text
+  async function generateAndUpload(text:string,idx:number,total:number):Promise<string>{
+    setProgress(Math.round((idx/total)*90))
+    const res=await fetch("/api/elevenlabs/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,voiceId:selectedVoice})})
+    if(!res.ok)throw new Error(`ElevenLabs error: ${res.status}`)
+    const blob=await res.blob()
+    const file=new File([blob],`vo_${idx}_${Date.now()}.mp3`,{type:"audio/mpeg"})
+    const fd=new FormData();fd.append("file",file)
+    const upRes=await fetch("/api/voiceover/upload",{method:"POST",body:fd})
+    const upData=await upRes.json()
+    return upData.url||URL.createObjectURL(blob)
+  }
+
+  // Regenerate audio for a single section
+  async function regenerateSection(sectionIdx:number){
+    if(!selectedVoice||!sectionsWithWords[sectionIdx])return
+    setRegeneratingSection(sectionIdx);setError("")
+    try{
+      const sec=sectionsWithWords[sectionIdx]
+      const newAudioUrl=await generateAndUpload(sec.spokenWords,sectionIdx,sectionsWithWords.length)
+      const newAudios={...sectionAudios,[sectionIdx]:newAudioUrl}
+      setSectionAudios(newAudios)
+
+      // Re-stitch all section audios
+      try{
+        const sectionUrls=sectionsWithWords.map((_:any,i:number)=>newAudios[i]).filter(Boolean)
+        if(sectionUrls.length>1){
+          const stitchRes=await fetch("/api/voiceover/stitch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sectionUrls})})
+          const stitchData=await stitchRes.json()
+          if(stitchData.url){
+            ;(window as any).__voStitchData={url:stitchData.url,sectionOffsets:stitchData.sectionOffsets,sectionDurations:stitchData.sectionDurations}
+          }
+        }
+      }catch(e){console.warn("Stitch failed, using individual section URL:",e)}
+    }catch(e:any){setError(e.message)}
+    setRegeneratingSection(null)
+  }
+
   async function generateAll(){
     if(!selectedVoice||!sectionsWithWords.length)return
     setGenerating(true);setError("");setProgress(0)
-
-    async function generateAndUpload(text:string,idx:number,total:number):Promise<string>{
-      setProgress(Math.round((idx/total)*90))
-      const res=await fetch("/api/elevenlabs/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,voiceId:selectedVoice})})
-      if(!res.ok)throw new Error(`ElevenLabs error: ${res.status}`)
-      const blob=await res.blob()
-      const file=new File([blob],`vo_${idx}_${Date.now()}.mp3`,{type:"audio/mpeg"})
-      const fd=new FormData();fd.append("file",file)
-      const upRes=await fetch("/api/voiceover/upload",{method:"POST",body:fd})
-      const upData=await upRes.json()
-      return upData.url||URL.createObjectURL(blob)
-    }
 
     try{
       if(allHookSections&&allHookSections.length>1){
@@ -407,11 +443,13 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
               {sectionsWithWords.map((s:any,i:number)=>{
                 const sc=secColor(s.type)
                 const hasAudio=!!sectionAudios[i]
+                const isRegenerating=regeneratingSection===i
                 return<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.surface,borderRadius:8,border:"1px solid "+(hasAudio?C.green:C.border)}}>
                   <span style={{background:sc.bg,color:sc.color,fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:4,flexShrink:0}}>{s.type}</span>
                   <div style={{flex:1,fontSize:11,color:C.muted,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{s.spokenWords}</div>
                   {hasAudio?<audio src={sectionAudios[i]} controls style={{height:24,width:120}}/>:<span style={{fontSize:10,color:C.muted}}>Not generated</span>}
-                  {hasAudio&&<span style={{color:C.green,fontSize:12}}>✓</span>}
+                  {hasAudio&&<button onClick={()=>regenerateSection(i)} disabled={isRegenerating||!selectedVoice} title="Regenerate this section" style={{background:"none",border:"none",color:isRegenerating?C.muted:C.accent,cursor:isRegenerating?"default":"pointer",fontSize:13,padding:"2px 6px",display:"flex",alignItems:"center",justifyContent:"center",opacity:isRegenerating?0.6:1}}>{isRegenerating?"⏳":"🔄"}</button>}
+                  {hasAudio&&!isRegenerating&&<span style={{color:C.green,fontSize:12}}>✓</span>}
                 </div>
               })}
             </div>
@@ -562,15 +600,15 @@ function CaptionOverlay({spoken,elapsed,clipDur,settings}:{spoken:string,elapsed
 }
 
 function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSettings,onCaptionChange}:any){
-  const [clipIdx,setClipIdx]=useState(0)
+  const [globalTime,setGlobalTime]=useState(0)
   const [playing,setPlaying]=useState(false)
-  const [elapsed,setElapsed]=useState(0)
   const [captions,setCaptions]=useState<CaptionSettings>(captionSettings||DEFAULT_CAPTIONS)
   const [showCaptionPanel,setShowCaptionPanel]=useState(false)
   const vidRef=useRef<HTMLVideoElement>(null)
   const voiceRef=useRef<HTMLAudioElement>(null)
   const musicRef=useRef<HTMLAudioElement>(null)
-  const clipStartTimesRef=useRef<number[]>([])
+  const globalStartTimesRef=useRef<number[]>([])
+  const totalDurationRef=useRef(0)
 
   useEffect(()=>{if(captionSettings)setCaptions(captionSettings)},[captionSettings])
   function updateCaptions(patch:Partial<CaptionSettings>){const next={...captions,...patch};setCaptions(next);onCaptionChange?.(next)}
@@ -591,50 +629,74 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSet
     }).filter(Boolean)
   }).filter(Boolean)
 
-  const cur=clips[clipIdx]
-
   useEffect(()=>{
     let acc=0
-    clipStartTimesRef.current=clips.map((c:any)=>{const t=acc;acc+=(c.end!=null&&c.start!=null&&c.end>c.start)?(c.end-c.start):3;return t})
+    globalStartTimesRef.current=clips.map((c:any)=>{const t=acc;const dur=(c.end!=null&&c.start!=null&&c.end>c.start)?(c.end-c.start):3;acc+=dur;return t})
+    totalDurationRef.current=acc
   },[clips.length])
+
+  const getCurrentClipIdx=()=>{
+    for(let i=clips.length-1;i>=0;i--){
+      if(globalTime>=globalStartTimesRef.current[i])return i
+    }
+    return 0
+  }
+
+  const cur=clips[getCurrentClipIdx()]
+  const clipIdx=getCurrentClipIdx()
 
   useEffect(()=>{
     const v=vidRef.current;if(!v||!cur)return
     v.src=`https://stream.mux.com/${cur.item.mux_playback_id}/capped-1080p.mp4`
-    function seek(){if(v)v.currentTime=cur!.start}
+    const clipGlobalStart=globalStartTimesRef.current[clipIdx]||0
+    const sectionRelativeTime=globalTime-clipGlobalStart
+    function seek(){if(v)v.currentTime=cur!.start+sectionRelativeTime}
     if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true})
     if(playing)v.play().catch(()=>{})
-    setElapsed(0)
-  },[clipIdx])
-
-  function getClipPlayDuration(idx:number):number{const clip=clips[idx];if(!clip)return 3;const voiceDur=voiceRef.current?.duration||0;if(voiceDur>0&&clip.sectionVoUrl)return Math.max(1,voiceDur*clip.naturalFraction);return Math.max(1,clip.naturalDur||3)}
-  function getVoiceTime(idx:number){const f=clipStartTimesRef.current[idx]||0;const d=voiceRef.current?.duration||0;return f*d}
+  },[clipIdx,cur?.item.mux_playback_id])
 
   function onTimeUpdate(){
     const v=vidRef.current;if(!v||!cur)return
-    const e=v.currentTime-cur.start;setElapsed(e)
-    if(e>=getClipPlayDuration(clipIdx)){
-      if(clipIdx<clips.length-1){const next=clips[clipIdx+1];if(next?.sectionIdx!==cur.sectionIdx)voiceRef.current?.pause();setClipIdx(i=>i+1)}
-      else{v.pause();setPlaying(false);setClipIdx(0);voiceRef.current?.pause();musicRef.current?.pause()}
+    const clipGlobalStart=globalStartTimesRef.current[clipIdx]||0
+    const sectionRelativeTime=v.currentTime-cur.start
+    const newGlobalTime=clipGlobalStart+sectionRelativeTime
+    setGlobalTime(newGlobalTime)
+    if(voiceRef.current&&voiceoverUrl){voiceRef.current.currentTime=newGlobalTime}
+    if(musicRef.current&&musicUrl){musicRef.current.currentTime=newGlobalTime}
+    if(newGlobalTime>=totalDurationRef.current){
+      v.pause();setPlaying(false);setGlobalTime(0);voiceRef.current?.pause();musicRef.current?.pause()
     }
   }
 
   function toggle(){
     const v=vidRef.current;if(!v)return
     if(playing){v.pause();voiceRef.current?.pause();musicRef.current?.pause();setPlaying(false)}
-    else{v.play().catch(()=>{});if(voiceRef.current){voiceRef.current.currentTime=0;voiceRef.current.play().catch(()=>{})}if(musicRef.current){musicRef.current.currentTime=0;musicRef.current.volume=0.2;musicRef.current.play().catch(()=>{})}setPlaying(true)}
+    else{
+      v.play().catch(()=>{})
+      if(voiceRef.current&&voiceoverUrl){voiceRef.current.currentTime=globalTime;voiceRef.current.play().catch(()=>{})}
+      if(musicRef.current&&musicUrl){musicRef.current.currentTime=globalTime;musicRef.current.volume=0.2;musicRef.current.play().catch(()=>{})}
+      setPlaying(true)
+    }
   }
 
-  useEffect(()=>{if(playing&&cur?.isFirstInSection&&voiceRef.current){voiceRef.current.currentTime=0;voiceRef.current.play().catch(()=>{})}},[clipIdx])
+  function seekToClip(targetClipIdx:number){
+    const targetGlobalStart=globalStartTimesRef.current[targetClipIdx]||0
+    setGlobalTime(targetGlobalStart)
+    if(voiceRef.current){voiceRef.current.currentTime=targetGlobalStart;voiceRef.current.pause()}
+    if(musicRef.current){musicRef.current.currentTime=targetGlobalStart;musicRef.current.pause()}
+    setPlaying(false)
+  }
 
   if(clips.length===0)return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:32,textAlign:"center",color:C.muted}}><div style={{fontSize:28,marginBottom:8}}>🎬</div><div style={{fontSize:13}}>Assign clips to sections to preview the full ad</div></div>
 
   const sc=secColor(cur?.label)
-  const clipDur=getClipPlayDuration(clipIdx)
+  const clipGlobalStart=globalStartTimesRef.current[clipIdx]||0
+  const nextClipStart=clipIdx<clips.length-1?(globalStartTimesRef.current[clipIdx+1]||totalDurationRef.current):totalDurationRef.current
+  const clipElapsedTime=globalTime-clipGlobalStart
+  const clipDur=Math.max(1,nextClipStart-clipGlobalStart)
 
   return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
-    {cur?.sectionVoUrl&&<audio ref={voiceRef} key={cur.sectionVoUrl} src={cur.sectionVoUrl} style={{display:"none"}}/>}
-    {voiceoverUrl&&!cur?.sectionVoUrl&&<audio ref={voiceRef} key={voiceoverUrl} src={voiceoverUrl} style={{display:"none"}}/>}
+    {voiceoverUrl&&<audio ref={voiceRef} key={voiceoverUrl} src={voiceoverUrl} style={{display:"none"}}/>}
     {musicUrl&&<audio ref={musicRef} src={musicUrl} style={{display:"none"}} loop/>}
 
     <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
@@ -679,7 +741,7 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSet
     <div style={{display:"grid",gridTemplateColumns:"1fr 260px"}}>
       <div style={{position:"relative",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:320}}>
         <video ref={vidRef} playsInline preload="metadata" muted={cur?.muted||false} style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
-        {captions.enabled&&<CaptionOverlay spoken={cur?.spoken||""} elapsed={elapsed} clipDur={clipDur} settings={captions}/>}
+        {captions.enabled&&<CaptionOverlay spoken={cur?.spoken||""} elapsed={clipElapsedTime} clipDur={clipDur} settings={captions}/>}
         {!playing&&<div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:5}}>
           <div style={{width:52,height:52,borderRadius:"50%",background:"#000a",border:"2px solid #fff4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>▶</div>
           {(voiceoverUrl||musicUrl)&&<div style={{position:"absolute",bottom:16,fontSize:11,color:"#fff",background:"#000a",padding:"3px 10px",borderRadius:99}}>{[voiceoverUrl?"🎙️ Voiceover":"",musicUrl?"🎵 Music":""].filter(Boolean).join(" + ")} will play</div>}
@@ -687,7 +749,7 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSet
       </div>
       <div style={{borderLeft:"1px solid "+C.border,overflowY:"auto",maxHeight:480}}>
         <div style={{padding:"8px 10px",borderBottom:"1px solid "+C.border,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1}}>Timeline</div>
-        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false);setElapsed(0);if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}if(musicRef.current)musicRef.current.pause()}} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
+        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>seekToClip(i)} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
           <div style={{width:34,position:"relative",paddingTop:"60px",flexShrink:0,borderRadius:5,overflow:"hidden",background:"#111",border:"1px solid "+(active?C.accent:C.border)}}>{clip.item.mux_playback_id&&<img src={muxThumb(clip.item.mux_playback_id,clip.item.thumbnail_time||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>}</div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{background:sc2.bg,color:sc2.color,fontSize:8,fontWeight:800,padding:"1px 5px",borderRadius:3,display:"inline-block",marginBottom:3}}>{clip.label}</div>
@@ -699,12 +761,12 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSet
 
     <div style={{padding:"10px 16px",borderTop:"1px solid "+C.border}}>
       <div style={{display:"flex",gap:2,marginBottom:8}}>
-        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>{setClipIdx(i);setPlaying(false);setElapsed(0);if(voiceRef.current){voiceRef.current.pause();voiceRef.current.currentTime=getVoiceTime(i)}if(musicRef.current)musicRef.current.pause()}} title={clip.label} style={{flex:1,height:5,borderRadius:3,background:active?sc2.color:sc2.bg,cursor:"pointer",transition:"all 0.15s"}}/>})}
+        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>seekToClip(i)} title={clip.label} style={{flex:1,height:5,borderRadius:3,background:active?sc2.color:sc2.bg,cursor:"pointer",transition:"all 0.15s"}}/>})}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <button onClick={()=>{setClipIdx(i=>Math.max(0,i-1));setPlaying(false);setElapsed(0)}} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
+        <button onClick={()=>seekToClip(Math.max(0,clipIdx-1))} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
         <button onClick={toggle} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>{playing?"⏸ Pause":"▶ Play Full Ad"}</button>
-        <button onClick={()=>{setClipIdx(i=>Math.min(clips.length-1,i+1));setPlaying(false);setElapsed(0)}} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
+        <button onClick={()=>seekToClip(Math.min(clips.length-1,clipIdx+1))} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
         <span style={{fontSize:11,color:C.muted}}>{clipIdx+1}/{clips.length}</span>
         {musicUrl&&<div style={{display:"flex",alignItems:"center",gap:5,marginLeft:"auto"}}>
           <span style={{fontSize:10,color:C.muted}}>🎵</span>
@@ -714,6 +776,7 @@ function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSet
     </div>
   </div>
 }
+
 
 
 // ── Auto-Mash Mode ────────────────────────────────────────────────────────
@@ -1321,6 +1384,7 @@ function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productN
   })
   const [allMuted,setAllMuted]=useState(!!voiceoverUrl)
   const [editingScript,setEditingScript]=useState(false)
+  const [regeneratingSection,setRegeneratingSection]=useState<number|null>(null)
   const timelineRef=useRef<HTMLDivElement>(null)
 
   useEffect(()=>{
@@ -1413,13 +1477,19 @@ function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productN
         <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border,flex:editingScript?1:0,minHeight:editingScript?120:0,maxHeight:editingScript?300:80,overflow:"auto",transition:"all 0.2s"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
             <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1}}>Script</span>
-            {!readOnly&&<button onClick={()=>setEditingScript(!editingScript)} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:10,fontWeight:600}}>{editingScript?"Collapse":"Edit"}</button>}
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {!readOnly&&activeRow?.voiceover_url&&<button onClick={()=>{setRegeneratingSection(activeIdx);const fn=(window as any).__voiceoverRegenerateSection;if(fn)fn(activeIdx,(success:boolean)=>{setRegeneratingSection(null)})}} disabled={regeneratingSection===activeIdx} title="Regenerate voiceover for this section" style={{background:"none",border:"1px solid "+C.green,color:regeneratingSection===activeIdx?C.muted:C.green,cursor:regeneratingSection===activeIdx?"default":"pointer",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:600}}>🔄 {regeneratingSection===activeIdx?"Re-voicing…":"Re-voice"}</button>}
+              {!readOnly&&<button onClick={()=>setEditingScript(!editingScript)} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:10,fontWeight:600}}>{editingScript?"Collapse":"Edit"}</button>}
+            </div>
           </div>
           {fillingIdx===activeIdx?<div style={{color:C.muted,fontSize:12,fontStyle:"italic"}}>AI writing…</div>
           :editingScript&&!readOnly?<>
             <textarea value={activeRow?.spokenWords||""} onChange={e=>upd(activeIdx,"spokenWords",e.target.value)} placeholder="Spoken words…" style={{width:"100%",background:C.bg,border:"1px solid "+C.border,borderRadius:6,resize:"none",color:C.text,fontSize:12,lineHeight:1.6,outline:"none",fontFamily:"inherit",minHeight:60,boxSizing:"border-box",padding:"6px 8px",marginBottom:6}}/>
             <textarea value={activeRow?.visualDirection||""} onChange={e=>upd(activeIdx,"visualDirection",e.target.value)} placeholder="Visual direction…" style={{width:"100%",background:C.bg,border:"1px solid "+C.border,borderRadius:6,resize:"none",color:C.muted,fontSize:11,lineHeight:1.5,outline:"none",fontFamily:"inherit",minHeight:40,boxSizing:"border-box",padding:"6px 8px"}}/>
-            {!readOnly&&<button onClick={()=>autofillRow(activeIdx)} disabled={!!fillingIdx} style={{background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:10,fontWeight:600,marginTop:4}}>✨ AI Rewrite</button>}
+            <div style={{display:"flex",gap:6,marginTop:6}}>
+              {!readOnly&&activeRow?.voiceover_url&&<button onClick={()=>{setRegeneratingSection(activeIdx);const fn=(window as any).__voiceoverRegenerateSection;if(fn)fn(activeIdx,(success:boolean)=>{setRegeneratingSection(null)})}} disabled={regeneratingSection===activeIdx} style={{background:regeneratingSection===activeIdx?C.border:"#22c55e22",border:"1px solid "+C.green,color:regeneratingSection===activeIdx?C.muted:C.green,borderRadius:6,padding:"4px 10px",cursor:regeneratingSection===activeIdx?"default":"pointer",fontSize:10,fontWeight:600}}>🔄 {regeneratingSection===activeIdx?"Re-voicing…":"Re-voice"}</button>}
+              {!readOnly&&<button onClick={()=>autofillRow(activeIdx)} disabled={!!fillingIdx} style={{background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:10,fontWeight:600}}>✨ AI Rewrite</button>}
+            </div>
           </>
           :<div>
             <div style={{fontSize:12,lineHeight:1.6,color:C.text,marginBottom:2}}>{(activeRow?.spokenWords||"No script").substring(0,120)}{(activeRow?.spokenWords||"").length>120?"…":""}</div>
@@ -1440,6 +1510,19 @@ function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productN
             {activeClip&&<button onClick={()=>toggleMuteClip(activeIdx)} style={{background:mutedClips[activeIdx]?"#ef444422":C.surface,color:mutedClips[activeIdx]?"#ef4444":C.text,border:"1px solid "+(mutedClips[activeIdx]?"#ef444433":C.border),borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:600}}>{mutedClips[activeIdx]?"🔇 Muted":"🔊 Audio"}</button>}
           </div>
         </div>
+
+        {/* Section duration control */}
+        {!readOnly&&<div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1}}>Section Duration</span>
+            <span style={{fontSize:11,fontWeight:700,color:C.text}}>{activeRow?.targetDuration?activeRow.targetDuration.toFixed(1)+"s":"Auto"}</span>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <input type="range" min="1" max="15" step="0.5" value={activeRow?.targetDuration||0} onChange={e=>{const v=parseFloat(e.target.value);upd(activeIdx,"targetDuration",v>0?v:null)}} style={{flex:1,accentColor:C.accent,cursor:"pointer"}}/>
+            {activeRow?.targetDuration&&<button onClick={()=>upd(activeIdx,"targetDuration",null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:9}}>Auto</button>}
+          </div>
+          <div style={{fontSize:9,color:C.muted,marginTop:4}}>{activeRow?.targetDuration?"Clips and voiceover will conform to this duration":"Duration driven by clip length or voiceover"}</div>
+        </div>}
 
         {/* Quick-swap alternatives */}
         {alternatives.length>0&&<div style={{padding:"10px 14px",flex:1,overflow:"auto"}}>
@@ -2079,6 +2162,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
   const [musicName,setMusicName]=useState<string|null>(null)
   const [suggestedMood,setSuggestedMood]=useState("Uplifting")
   const [adTitle,setAdTitle]=useState("")
+  const [aspectRatio,setAspectRatio]=useState("9:16")
   const [captionSettings,setCaptionSettings]=useState<CaptionSettings>({...DEFAULT_CAPTIONS})
   const [hookVariations,setHookVariations]=useState<any[][]>([])
   const [hookError,setHookError]=useState("")
@@ -2101,13 +2185,17 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
       // Inject brand intelligence learnings if available
       const intel=brand.brand_intelligence
       let intelBlock=""
-      if(intel&&(intel.best_hook_types?.length||intel.best_hook_patterns?.length)){
-        intelBlock=`\nBRAND PERFORMANCE LEARNINGS (apply these — based on real ad data):\n`
+      if(intel&&(intel.best_hook_types?.length||intel.best_hook_patterns?.length||intel.best_structures?.length)){
+        intelBlock=`\nBRAND PERFORMANCE LEARNINGS (apply these — based on real ad data from ${intel.total_ads_analysed||0} ads):\n`
         if(intel.best_hook_types?.length)intelBlock+=`• Best hook types for this brand: ${intel.best_hook_types.join(", ")}\n`
         if(intel.worst_hook_types?.length)intelBlock+=`• Avoid these hook types: ${intel.worst_hook_types.join(", ")}\n`
         if(intel.best_hook_patterns?.length)intelBlock+=`• Winning hook patterns: ${intel.best_hook_patterns.join("; ")}\n`
         if(intel.best_content_type)intelBlock+=`• Best performing content type: ${intel.best_content_type}\n`
         if(intel.avg_winning_hook_length)intelBlock+=`• Winning hooks average ${intel.avg_winning_hook_length} words\n`
+        if(intel.best_ad_length)intelBlock+=`• Best performing ad length: ${intel.best_ad_length}\n`
+        if(intel.best_awareness_stage)intelBlock+=`• Best performing awareness stage: ${intel.best_awareness_stage}\n`
+        if(intel.avg_section_count)intelBlock+=`• Winning ads average ${intel.avg_section_count} sections\n`
+        if(intel.best_structures?.length)intelBlock+=`• Top performing section structures:\n${intel.best_structures.map((s:string)=>`  - ${s}`).join("\n")}\n`
         intelBlock+="\n"
       }
 
@@ -2259,7 +2347,7 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
         if(d.url)finalVoiceoverUrl=d.url
       }catch(e){console.error("Voiceover upload failed:",e)}
     }
-    const adData={title,status,mode:"script" as const,sections:secs,voiceover_url:finalVoiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName,hookVariation:hookNum!=null?hookNum+1:null}}
+    const adData={title,status,mode:"script" as const,sections:secs,voiceover_url:finalVoiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName,hookVariation:hookNum!=null?hookNum+1:null,aspectRatio}}
     const savedAd=await onSaveForgedAd(adData)
     if(savedAd?.id){
       fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(e=>console.error("Background render error:",e))
@@ -2579,6 +2667,12 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
         <div style={{marginBottom:16}}>
           <Label>Ad Name (optional)</Label>
           <input value={adTitle} onChange={e=>setAdTitle(e.target.value)} placeholder={`e.g. ProblemAware_${form.contentType||"UGC"}_${(form.adLength||"30s").replace(" seconds","s")}_v1`} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
+        </div>
+        <div style={{marginBottom:16}}>
+          <Label>Aspect Ratio</Label>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {[{ratio:"9:16",label:"9:16 Portrait",platform:"TikTok/Reels/Stories"},{ratio:"1:1",label:"1:1 Square",platform:"Instagram/Facebook Feed"},{ratio:"4:5",label:"4:5 Vertical",platform:"Facebook/Instagram Feed"},{ratio:"16:9",label:"16:9 Landscape",platform:"YouTube/Website"}].map(opt=><button key={opt.ratio} onClick={()=>setAspectRatio(opt.ratio)} style={{background:aspectRatio===opt.ratio?C.accent:C.surface,color:aspectRatio===opt.ratio?"#000":C.text,border:"1px solid "+(aspectRatio===opt.ratio?C.accent:C.border),borderRadius:8,padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:aspectRatio===opt.ratio?700:400,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><div>{opt.label}</div><div style={{fontSize:10,opacity:0.7}}>{opt.platform}</div></button>)}
+          </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
           <Card pad={12}><div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover</div>{voiceoverUrl?<><audio src={voiceoverUrl} controls style={{width:"100%",height:32}}/><div style={{fontSize:11,color:C.green,marginTop:4}}>✓ {voiceoverVoice}</div><button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.muted,fontSize:10,cursor:"pointer",textDecoration:"underline",padding:0}}>Change</button></>:<div style={{fontSize:12,color:C.muted}}>None — <button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,textDecoration:"underline",padding:0}}>add one</button></div>}</Card>
@@ -2934,22 +3028,51 @@ function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{
   async function updateBrandIntelligence(updatedAds:ForgedAd[]){
     const adsWithData=updatedAds.filter(a=>a.metadata?.hook_rate||a.metadata?.cpa||a.metadata?.roas||a.star_rating)
     if(adsWithData.length<2)return
+    const avg=(arr:number[])=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10:0
+
+    // Hook type performance
     const hookPerf:Record<string,number[]>={}
     adsWithData.forEach(a=>{const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK");const hookType=hook?.hookType||"Unknown";const rate=parseFloat(a.metadata?.hook_rate||"0");if(rate>0){if(!hookPerf[hookType])hookPerf[hookType]=[];hookPerf[hookType].push(rate)}})
-    const avg=(arr:number[])=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10:0
     const hookEntries=Object.entries(hookPerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(b[1])-avg(a[1]))
     const best_hook_types=hookEntries.filter(([,v])=>avg(v)>=40).map(([k])=>k)
     const worst_hook_types=hookEntries.filter(([,v])=>avg(v)<30).map(([k])=>k)
-    const topAds=adsWithData.filter(a=>parseFloat(a.metadata?.hook_rate||"0")>=45)
+
+    // Top performing ads
+    const topAds=adsWithData.filter(a=>parseFloat(a.metadata?.hook_rate||"0")>=45||(a.star_rating||0)>=4)
     const best_hook_patterns:string[]=[]
-    topAds.forEach(a=>{const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK");const words=(hook?.spokenWords||"").trim();if(!words)return;if(/^\d/.test(words.split(" ")[0]))best_hook_patterns.push("Opens with a number");if(/I |My |We /.test(words.substring(0,20)))best_hook_patterns.push("First-person opening");if(words.split(" ").length<=6)best_hook_patterns.push("Short punchy hook (under 7 words)")})
+    topAds.forEach(a=>{const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK");const words=(hook?.spokenWords||"").trim();if(!words)return;if(/^\d/.test(words.split(" ")[0]))best_hook_patterns.push("Opens with a number");if(/I |My |We /.test(words.substring(0,20)))best_hook_patterns.push("First-person opening");if(words.split(" ").length<=6)best_hook_patterns.push("Short punchy hook (under 7 words)");if(/\?$/.test(words.trim()))best_hook_patterns.push("Ends with a question");if(/stop|wait|don't|never/i.test(words.substring(0,30)))best_hook_patterns.push("Pattern interrupt / negative opener")})
+
+    // Content type performance (lower CPA = better)
     const ctypePerf:Record<string,number[]>={}
     adsWithData.forEach(a=>{const ct=a.metadata?.contentType||"Unknown";const cpa=parseFloat(a.metadata?.cpa||"0");if(cpa>0){if(!ctypePerf[ct])ctypePerf[ct]=[];ctypePerf[ct].push(cpa)}})
     const ctypeEntries=Object.entries(ctypePerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(a[1])-avg(b[1]))
     const best_content_type=ctypeEntries[0]?.[0]||""
+
+    // Average winning hook length
     const hookLengths=topAds.map(a=>{const h=(a.sections||[]).find((s:any)=>s.type==="HOOK");return(h?.spokenWords||"").trim().split(/\s+/).filter(Boolean).length}).filter(l=>l>0)
     const avg_winning_hook_length=hookLengths.length?Math.round(hookLengths.reduce((a,b)=>a+b,0)/hookLengths.length):0
-    const intel={best_hook_types,worst_hook_types,best_hook_patterns:[...new Set(best_hook_patterns)],best_content_type,avg_winning_hook_length,total_ads_analysed:adsWithData.length,last_updated:new Date().toISOString()}
+
+    // Section structure analysis — what section counts and types work best
+    const sectionCounts=topAds.map(a=>(a.sections||[]).length).filter(n=>n>0)
+    const avg_section_count=sectionCounts.length?Math.round(avg(sectionCounts)):0
+    const winningStructures=topAds.map(a=>(a.sections||[]).map((s:any)=>s.type).join(" → ")).filter(Boolean)
+    const structureCounts:Record<string,number>={}
+    winningStructures.forEach(s=>{structureCounts[s]=(structureCounts[s]||0)+1})
+    const best_structures=Object.entries(structureCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([s])=>s)
+
+    // Ad length performance
+    const lengthPerf:Record<string,number[]>={}
+    adsWithData.forEach(a=>{const len=a.metadata?.adLength||"Unknown";const rate=parseFloat(a.metadata?.hook_rate||"0");if(rate>0){if(!lengthPerf[len])lengthPerf[len]=[];lengthPerf[len].push(rate)}})
+    const lengthEntries=Object.entries(lengthPerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(b[1])-avg(a[1]))
+    const best_ad_length=lengthEntries[0]?.[0]||""
+
+    // Awareness stage performance
+    const stagePerf:Record<string,number[]>={}
+    adsWithData.forEach(a=>{const st=a.metadata?.awarenessStage||"Unknown";const rate=parseFloat(a.metadata?.hook_rate||"0");if(rate>0){if(!stagePerf[st])stagePerf[st]=[];stagePerf[st].push(rate)}})
+    const stageEntries=Object.entries(stagePerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(b[1])-avg(a[1]))
+    const best_awareness_stage=stageEntries[0]?.[0]||""
+
+    const intel={best_hook_types,worst_hook_types,best_hook_patterns:[...new Set(best_hook_patterns)],best_content_type,avg_winning_hook_length,best_ad_length,best_awareness_stage,avg_section_count,best_structures,total_ads_analysed:adsWithData.length,last_updated:new Date().toISOString()}
     const updated={...brand,brand_intelligence:intel}
     setBrand(updated)
     if(brand.id)await supabase.from("brand_profile").update({brand_intelligence:intel}).eq("id",brand.id)
