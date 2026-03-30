@@ -40,51 +40,67 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const loadWorkspaces = useCallback(async () => {
-    // Fetch workspaces the user is a member of
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setLoading(false); return }
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setLoading(false); return }
 
-    // Step 1: Get user's workspace memberships
-    const { data: memberships, error: memErr } = await supabase
-      .from('workspace_members')
-      .select('workspace_id, role')
-      .eq('user_id', user.id)
-      .order('joined_at', { ascending: true })
+      console.log('[workspace] Loading workspaces for user:', user.id)
 
-    if (memErr) console.error('workspace_members query error:', memErr)
-
-    if (!memberships || memberships.length === 0) {
-      console.log('No workspace memberships found for user', user.id)
-      setLoading(false)
-      return
-    }
-
-    // Step 2: Get the actual workspace details
-    const wsIds = memberships.map(m => m.workspace_id)
-    const { data: workspaceRows, error: wsErr } = await supabase
-      .from('workspaces')
-      .select('id, name, slug, logo_url, created_at')
-      .in('id', wsIds)
-
-    if (wsErr) console.error('workspaces query error:', wsErr)
-
-    const ws: Workspace[] = (workspaceRows || []).map((w: any) => ({
-      ...w,
-      role: memberships.find(m => m.workspace_id === w.id)?.role || 'member',
-    }))
-    setWorkspaces(ws)
-
-    if (ws.length > 0) {
-      // Check user's last workspace preference
-      const { data: prefs } = await supabase
-        .from('user_preferences')
-        .select('last_workspace_id')
+      // Step 1: Get user's workspace memberships
+      const { data: memberships, error: memErr } = await supabase
+        .from('workspace_members')
+        .select('workspace_id, role')
         .eq('user_id', user.id)
-        .single()
 
-      const lastId = prefs?.last_workspace_id
-      const found = ws.find((w: Workspace) => w.id === lastId)
-      setActiveWorkspace(found || ws[0])
+      if (memErr) {
+        console.error('[workspace] workspace_members error:', memErr.message, memErr.code)
+        setLoading(false)
+        return
+      }
+
+      console.log('[workspace] Memberships found:', memberships?.length || 0)
+
+      if (!memberships || memberships.length === 0) {
+        setLoading(false)
+        return
+      }
+
+      // Step 2: Get the actual workspace details
+      const wsIds = memberships.map(m => m.workspace_id)
+      const { data: workspaceRows, error: wsErr } = await supabase
+        .from('workspaces')
+        .select('id, name, slug, logo_url, created_at')
+        .in('id', wsIds)
+
+      if (wsErr) {
+        console.error('[workspace] workspaces error:', wsErr.message, wsErr.code)
+        setLoading(false)
+        return
+      }
+
+      console.log('[workspace] Workspaces found:', workspaceRows?.length || 0)
+
+      const ws: Workspace[] = (workspaceRows || []).map((w: any) => ({
+        ...w,
+        role: memberships.find(m => m.workspace_id === w.id)?.role || 'member',
+      }))
+      setWorkspaces(ws)
+
+      if (ws.length > 0) {
+        // Check user's last workspace preference (use maybeSingle to avoid 406)
+        const { data: prefs } = await supabase
+          .from('user_preferences')
+          .select('last_workspace_id')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        const lastId = prefs?.last_workspace_id
+        const found = ws.find((w: Workspace) => w.id === lastId)
+        setActiveWorkspace(found || ws[0])
+        console.log('[workspace] Active workspace:', (found || ws[0])?.name)
+      }
+    } catch (err: any) {
+      console.error('[workspace] Unexpected error:', err.message)
     }
 
     setLoading(false)
