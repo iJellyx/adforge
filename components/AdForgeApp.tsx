@@ -1288,37 +1288,28 @@ function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,productN
   const [pickerIdx,setPickerIdx]=useState<number|null>(null)
   const [fillingIdx,setFillingIdx]=useState<number|null>(null)
   const [trimModalData,setTrimModalData]=useState<any>(null)
-  const [trimModal,setTrimModal]=useState<any>(null)
+  const [activeIdx,setActiveIdx]=useState(0)
   const [mutedClips,setMutedClips]=useState<Record<number,boolean>>(()=>{
     if(!voiceoverUrl)return{}
-    const m:Record<number,boolean>={}
-    ;(sections||[]).forEach((_:any,i:number)=>{m[i]=true})
-    return m
+    const m:Record<number,boolean>={};(sections||[]).forEach((_:any,i:number)=>{m[i]=true});return m
   })
-const [allMuted,setAllMuted]=useState(!!voiceoverUrl)
-  // Bake initial mute state into sections when voiceover is present
+  const [allMuted,setAllMuted]=useState(!!voiceoverUrl)
+  const [editingScript,setEditingScript]=useState(false)
+  const timelineRef=useRef<HTMLDivElement>(null)
+
   useEffect(()=>{
     if(voiceoverUrl&&sections.length>0&&!sections[0].hasOwnProperty('muted')){
       onChange(sections.map((s:any)=>({...s,muted:true})))
     }
   },[voiceoverUrl])
+
   function updM(idx:number,obj:any){onChange(sections.map((s:any,i:number)=>i===idx?{...s,...obj}:s))}
   function upd(idx:number,key:string,val:any){onChange(sections.map((s:any,i:number)=>i===idx?{...s,[key]:val}:s))}
   function addRow(){onChange([...sections,{id:Date.now(),type:"BODY",spokenWords:"",visualDirection:"",matchedClipIds:[],selectedClipId:null,autoSelected:false}])}
-  function removeRow(idx:number){onChange(sections.filter((_:any,i:number)=>i!==idx))}
-  function move(idx:number,dir:number){const a=[...sections],t=idx+dir;if(t<0||t>=a.length)return;[a[idx],a[t]]=[a[t],a[idx]];onChange(a)}
-  function toggleMuteAll(){
-  const next=!allMuted;setAllMuted(next)
-  const m:Record<number,boolean>={}
-  sections.forEach((_:any,i:number)=>{m[i]=next})
-  setMutedClips(m)
-  onChange(sections.map((s:any,i:number)=>({...s,muted:next})))
-}
-function toggleMuteClip(idx:number){
-  const next=!mutedClips[idx]
-  setMutedClips(prev=>({...prev,[idx]:next}))
-  updM(idx,{muted:next})
-}
+  function removeRow(idx:number){if(activeIdx>=sections.length-1)setActiveIdx(Math.max(0,sections.length-2));onChange(sections.filter((_:any,i:number)=>i!==idx))}
+  function move(idx:number,dir:number){const a=[...sections],t=idx+dir;if(t<0||t>=a.length)return;[a[idx],a[t]]=[a[t],a[idx]];setActiveIdx(t);onChange(a)}
+  function toggleMuteAll(){const next=!allMuted;setAllMuted(next);const m:Record<number,boolean>={};sections.forEach((_:any,i:number)=>{m[i]=next});setMutedClips(m);onChange(sections.map((s:any)=>({...s,muted:next})))}
+  function toggleMuteClip(idx:number){const next=!mutedClips[idx];setMutedClips(prev=>({...prev,[idx]:next}));updM(idx,{muted:next})}
 
   async function autofillRow(idx:number){
     const row=sections[idx];setFillingIdx(idx)
@@ -1326,93 +1317,136 @@ function toggleMuteClip(idx:number){
     setFillingIdx(null)
   }
 
-  return<div>
-    {trimModalData&&<TrimEditorModal
-    item={trimModalData.segClip}
-    trimStart={trimModalData.seg.trimStart}
-    trimEnd={trimModalData.seg.trimEnd}
-    originalDuration={libraryItems.find((i:Item)=>i.id===trimModalData.segClip.parent_id)?.duration_seconds||trimModalData.segClip.duration_seconds||30}
-    onSave={(updates:any)=>{
-      const {idx,segIdx}=trimModalData
-      const currentSegs=sections[idx]?.clipSegments&&sections[idx].clipSegments.length>0?sections[idx].clipSegments:[{id:"seg-"+idx+"-0",clipId:sections[idx]?.selectedClipId}]
-      const newSegs=currentSegs.map((s:any,si:number)=>si===segIdx?{...s,...updates}:s)
-      onChange(sections.map((s:any,i:number)=>i===idx?{...s,clipSegments:newSegs}:s))
-      setTrimModalData(null)
-    }}
-    onClose={()=>setTrimModalData(null)}
-  />}
-   {pickerIdx!==null&&<ClipPickerModal 
-    currentId={pickerIdx>=1000?sections[Math.floor(pickerIdx/1000)]?.clipSegments?.[pickerIdx%1000]?.clipId:sections[pickerIdx]?.selectedClipId} 
-    matchedIds={sections[Math.floor(pickerIdx>=1000?pickerIdx/1000:pickerIdx)]?.matchedClipIds||[]} 
-    libraryItems={libraryItems} 
-    sectionLabel={sections[Math.floor(pickerIdx>=1000?pickerIdx/1000:pickerIdx)]?.type||""} 
-    onSelect={(id:string)=>{
-      const secIdx=pickerIdx>=1000?Math.floor(pickerIdx/1000):pickerIdx
-      const segIdx=pickerIdx>=1000?pickerIdx%1000:0
-      const currentSegs=sections[secIdx]?.clipSegments&&sections[secIdx].clipSegments.length>0?sections[secIdx].clipSegments:[{id:`seg-${secIdx}-0`,clipId:sections[secIdx]?.selectedClipId||null}]
-      const newSegs=currentSegs.map((seg:any,si:number)=>si===segIdx?{...seg,clipId:id}:seg)
-      onChange(sections.map((s:any,i:number)=>i===secIdx?{...s,clipSegments:newSegs,selectedClipId:newSegs[0]?.clipId||id,autoSelected:false}:s))
-    }} 
-    onClose={()=>setPickerIdx(null)}/>}
-    <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",background:C.surface,borderBottom:"1px solid "+C.border}}>
-      <span style={{fontSize:12,color:C.muted,fontWeight:600}}>{sections.length} sections</span>
-      {voiceoverUrl&&<div style={{fontSize:11,color:C.green}}>🎙️ Voiceover active</div>}
+  // Build flat list of all clip segments for the timeline
+  const allClips=sections.flatMap((s:any,sIdx:number)=>{
+    const segs=s.clipSegments&&s.clipSegments.length>0?s.clipSegments:[{id:`seg-${sIdx}-0`,clipId:s.selectedClipId||null}]
+    return segs.map((seg:any,segIdx:number)=>{
+      const clip=seg.clipId?libraryItems.find((i:Item)=>i.id===seg.clipId):null
+      return{sIdx,segIdx,seg,clip,type:s.type,spoken:s.spokenWords||""}
+    })
+  })
+
+  const activeRow=sections[activeIdx]||sections[0]
+  const activeClip=activeRow?.selectedClipId?libraryItems.find((i:Item)=>i.id===activeRow.selectedClipId):null
+  const activeSc=secColor(activeRow?.type)
+  const alternatives=(activeRow?.matchedClipIds||[]).filter((id:string)=>id!==activeRow?.selectedClipId).map((id:string)=>libraryItems.find((i:Item)=>i.id===id)).filter(Boolean).slice(0,6)
+
+  // Scroll timeline to keep active section visible
+  useEffect(()=>{
+    const el=timelineRef.current?.querySelector(`[data-tidx="${activeIdx}"]`) as HTMLElement
+    if(el)el.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"})
+  },[activeIdx])
+
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
+    {trimModalData&&<TrimEditorModal item={trimModalData.segClip} trimStart={trimModalData.seg.trimStart} trimEnd={trimModalData.seg.trimEnd} originalDuration={libraryItems.find((i:Item)=>i.id===trimModalData.segClip.parent_id)?.duration_seconds||trimModalData.segClip.duration_seconds||30} onSave={(updates:any)=>{const{idx,segIdx}=trimModalData;const currentSegs=sections[idx]?.clipSegments&&sections[idx].clipSegments.length>0?sections[idx].clipSegments:[{id:"seg-"+idx+"-0",clipId:sections[idx]?.selectedClipId}];const newSegs=currentSegs.map((s:any,si:number)=>si===segIdx?{...s,...updates}:s);onChange(sections.map((s:any,i:number)=>i===idx?{...s,clipSegments:newSegs}:s));setTrimModalData(null)}} onClose={()=>setTrimModalData(null)}/>}
+    {pickerIdx!==null&&<ClipPickerModal currentId={pickerIdx>=1000?sections[Math.floor(pickerIdx/1000)]?.clipSegments?.[pickerIdx%1000]?.clipId:sections[pickerIdx]?.selectedClipId} matchedIds={sections[Math.floor(pickerIdx>=1000?pickerIdx/1000:pickerIdx)]?.matchedClipIds||[]} libraryItems={libraryItems} sectionLabel={sections[Math.floor(pickerIdx>=1000?pickerIdx/1000:pickerIdx)]?.type||""} onSelect={(id:string)=>{const secIdx=pickerIdx>=1000?Math.floor(pickerIdx/1000):pickerIdx;const segIdx=pickerIdx>=1000?pickerIdx%1000:0;const currentSegs=sections[secIdx]?.clipSegments&&sections[secIdx].clipSegments.length>0?sections[secIdx].clipSegments:[{id:`seg-${secIdx}-0`,clipId:sections[secIdx]?.selectedClipId||null}];const newSegs=currentSegs.map((seg:any,si:number)=>si===segIdx?{...seg,clipId:id}:seg);onChange(sections.map((s:any,i:number)=>i===secIdx?{...s,clipSegments:newSegs,selectedClipId:newSegs[0]?.clipId||id,autoSelected:false}:s))}} onClose={()=>setPickerIdx(null)}/>}
+
+    {/* ── Top bar ── */}
+    <div style={{padding:"10px 16px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10,background:C.surface}}>
+      <div style={{fontWeight:700,fontSize:14}}>🎬 Ad Editor</div>
+      <span style={{fontSize:11,color:C.muted}}>{sections.length} sections · {allClips.filter(c=>c.clip).length} clips</span>
+      {voiceoverUrl&&<span style={{fontSize:10,color:C.green,background:"#22c55e11",padding:"2px 7px",borderRadius:99,border:"1px solid #22c55e33"}}>🎙️ Voiceover</span>}
       <div style={{flex:1}}/>
-      <button onClick={toggleMuteAll} style={{background:allMuted?"#ef444422":C.accentSoft,border:"1px solid "+(allMuted?"#ef444466":C.accent+"44"),color:allMuted?"#ef4444":C.accent,borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>{allMuted?"🔇 All Muted":"🔊 Mute All"}</button>
+      <button onClick={toggleMuteAll} style={{background:allMuted?"#ef444422":C.accentSoft,border:"1px solid "+(allMuted?"#ef444466":C.accent+"44"),color:allMuted?"#ef4444":C.accent,borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>{allMuted?"🔇 Muted":"🔊 Audio"}</button>
     </div>
-    <div style={{overflowX:"auto",paddingBottom:8}}>
-      <div style={{display:"flex",gap:0,minWidth:"max-content"}}>
-        {sections.map((row:any,idx:number)=>{
-          const sc=secColor(row.type)
-          const selectedClip=row.selectedClipId?libraryItems.find((i:Item)=>i.id===row.selectedClipId):null
-          const alternatives=(row.matchedClipIds||[]).filter((id:string)=>id!==row.selectedClipId).slice(0,3).map((id:string)=>libraryItems.find((i:Item)=>i.id===id)).filter(Boolean)
-          const isMuted=mutedClips[idx]||false
-          const isFilling=fillingIdx===idx
-          return<div key={row.id||idx} style={{display:"flex",flexDirection:"column",width:240,flexShrink:0,borderRight:"1px solid "+C.border}}>
-            <div style={{background:sc.bg,borderBottom:"1px solid "+sc.bd,padding:"8px 12px",display:"flex",alignItems:"center",gap:6}}>
-              {readOnly?<span style={{background:sc.bg,color:sc.color,fontSize:10,fontWeight:800,border:"1px solid "+sc.bd,padding:"2px 8px",borderRadius:5}}>{row.type}</span>:<select value={row.type} onChange={e=>upd(idx,"type",e.target.value)} style={{background:"transparent",color:sc.color,border:"none",fontSize:10,fontWeight:800,outline:"none",cursor:"pointer"}}>{SEC_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select>}
-              {row.durationEstimate&&<span style={{fontSize:9,color:C.muted,marginLeft:"auto"}}>{row.durationEstimate}</span>}
-              {!readOnly&&<div style={{display:"flex",gap:3,marginLeft:"auto"}}>
-                <button onClick={()=>move(idx,-1)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,padding:"1px 3px"}}>←</button>
-                <button onClick={()=>move(idx,1)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,padding:"1px 3px"}}>→</button>
-                <button onClick={()=>autofillRow(idx)} disabled={!!isFilling} style={{background:"none",border:"none",color:isFilling?C.muted:C.accent,cursor:"pointer",fontSize:11,padding:"1px 3px"}}>{isFilling?"⏳":"✨"}</button>
-                <button onClick={()=>removeRow(idx)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:"1px 3px"}}>×</button>
-              </div>}
-            </div>
-            <div style={{background:C.bg,padding:10}}>
-              {/* Multi-clip segments */}
-              {(row.clipSegments||[{id:`seg-${idx}-0`,clipId:row.selectedClipId||null}]).map((seg:any,segIdx:number)=>{
-                const segClip=seg.clipId?libraryItems.find((i:Item)=>i.id===seg.clipId):null
-                return<div key={seg.id||segIdx} style={{marginBottom:8,border:"1px solid "+C.border,borderRadius:8,overflow:"hidden",background:C.bg}}>
-                  <div style={{position:"relative",width:"100%",paddingTop:"100%",background:"#E8E6FF",overflow:"hidden"}}>
-                    {segClip?.mux_playback_id?<div style={{position:"absolute",inset:0}}><ClipSegmentPlayer playbackId={segClip.mux_playback_id} start={segClip.start_seconds||0} end={segClip.end_seconds} muted={isMuted}/></div>:<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}><div style={{fontSize:18}}>🎬</div><div style={{fontSize:9,color:C.muted,textAlign:"center",padding:"0 4px"}}>No clip</div></div>}
-                    {segClip&&row.autoSelected&&segIdx===0&&<div style={{position:"absolute",top:4,left:4,background:C.green,color:"#fff",fontSize:7,fontWeight:800,padding:"1px 4px",borderRadius:3}}>AI</div>}
-                    {segClip&&<button onClick={()=>toggleMuteClip(idx)} style={{position:"absolute",bottom:4,left:4,background:"rgba(0,0,0,0.5)",border:"none",color:"#fff",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:9}}>{isMuted?"🔇":"🔊"}</button>}
-                    {!readOnly&&<button onClick={()=>setPickerIdx(idx*1000+segIdx)} style={{position:"absolute",bottom:4,right:4,background:C.accent,color:"#fff",border:"none",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:9,fontWeight:700}}>⇄</button>}
-                    {segClip&&!readOnly&&<button onClick={e=>{e.stopPropagation();setTrimModalData({segClip,idx,segIdx,seg})}} style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.65)",color:"#fff",border:"none",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:9,fontWeight:700}}>✂️</button>}
-                    {!readOnly&&segIdx>0&&<button onClick={()=>{const segs=(row.clipSegments||[]).filter((_:any,si:number)=>si!==segIdx);updM(idx,{clipSegments:segs,selectedClipId:segs[0]?.clipId||null})}} style={{position:"absolute",top:4,right:4,background:"rgba(220,38,38,0.8)",color:"#fff",border:"none",borderRadius:4,padding:"2px 5px",cursor:"pointer",fontSize:9}}>✕</button>}
-                  </div>
-                  {segClip&&<div style={{padding:"4px 6px",fontSize:9,color:C.text,fontWeight:600,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical" as any}}>{segClip.title}</div>}
-                </div>
-              })}
-              {/* Add clip button */}
-              {!readOnly&&<button onClick={()=>{
-                const currentSegs=row.clipSegments&&row.clipSegments.length>0?row.clipSegments:[{id:`seg-${idx}-0`,clipId:row.selectedClipId||null}]
-                const newSeg={id:`seg-${idx}-${Date.now()}`,clipId:null}
-                updM(idx,{clipSegments:[...currentSegs,newSeg]})
-                setPickerIdx(idx*1000+currentSegs.length)
-              }} style={{width:"100%",background:"#EDE8FF",border:"1.5px dashed "+C.accent,color:C.accent,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:10,fontWeight:700,marginBottom:8}}>+ Add clip to section</button>}
-              {!readOnly&&!(row.clipSegments?.length>0||row.selectedClipId)&&(row.matchedClipIds||[]).length>0&&<button onClick={()=>setPickerIdx(idx*1000)} style={{width:"100%",background:"#FFFBEB",border:"1px solid #FCD34D",color:C.yellow,borderRadius:7,padding:"5px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:8}}>+ Pick ({row.matchedClipIds.length} matched)</button>}
-              {alternatives.length>0&&<div><div style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>Alternatives</div><div style={{display:"flex",gap:5}}>{alternatives.map((alt:Item)=><div key={alt.id} title={alt.title} onClick={()=>!readOnly&&updM(idx,{selectedClipId:alt.id,autoSelected:false})} style={{flex:1,position:"relative",paddingTop:"177.78%",background:"#111",borderRadius:6,overflow:"hidden",cursor:readOnly?"default":"pointer",border:"2px solid "+(alt.id===row.selectedClipId?C.accent:C.border)}}>{alt.mux_playback_id?<img src={muxThumb(alt.mux_playback_id,alt.thumbnail_time||alt.start_seconds||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🎬</div>}</div>)}</div></div>}
-            </div>
-            <div style={{padding:"10px 12px",background:C.surface,borderTop:"1px solid "+C.border,flex:1}}>
-              {isFilling?<div style={{color:C.muted,fontSize:12,fontStyle:"italic"}}>AI writing…</div>
-              :readOnly?<><div style={{fontSize:13,lineHeight:1.7,marginBottom:6,whiteSpace:"pre-wrap"}}>{row.spokenWords}</div>{row.visualDirection&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",lineHeight:1.5}}>{row.visualDirection}</div>}</>
-              :<><textarea value={row.spokenWords||""} onChange={e=>upd(idx,"spokenWords",e.target.value)} placeholder="Spoken words…" style={{width:"100%",background:"transparent",border:"none",resize:"none",color:C.text,fontSize:12,lineHeight:1.7,outline:"none",fontFamily:"inherit",minHeight:70,boxSizing:"border-box",marginBottom:4}}/><textarea value={row.visualDirection||""} onChange={e=>upd(idx,"visualDirection",e.target.value)} placeholder="Visual direction…" style={{width:"100%",background:"transparent",border:"none",resize:"none",color:C.muted,fontSize:11,lineHeight:1.5,outline:"none",fontFamily:"inherit",minHeight:40,boxSizing:"border-box"}}/></>}
+
+    {/* ── Main area: Preview + Detail panel ── */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 320px",minHeight:340}}>
+      {/* Left: Large clip preview */}
+      <div style={{position:"relative",background:"#0a0a0f",display:"flex",alignItems:"center",justifyContent:"center",minHeight:300}}>
+        {activeClip?.mux_playback_id?<div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <ClipSegmentPlayer playbackId={activeClip.mux_playback_id} start={activeClip.start_seconds||0} end={activeClip.end_seconds} muted={mutedClips[activeIdx]||false}/>
+        </div>:<div style={{textAlign:"center",color:C.muted,padding:40}}>
+          <div style={{fontSize:40,marginBottom:8}}>🎬</div>
+          <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>No clip assigned</div>
+          <div style={{fontSize:12}}>Click "Change Clip" to assign one</div>
+        </div>}
+        {/* Section badge overlay */}
+        <div style={{position:"absolute",top:12,left:12,background:activeSc.bg,color:activeSc.color,fontSize:10,fontWeight:800,padding:"3px 10px",borderRadius:6,border:"1px solid "+activeSc.bd,backdropFilter:"blur(8px)"}}>{activeRow?.type}</div>
+        {activeClip&&activeRow?.autoSelected&&<div style={{position:"absolute",top:12,left:activeSc?100:12,background:C.green,color:"#fff",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:4}}>AI Matched</div>}
+        {/* Navigation arrows */}
+        <button onClick={()=>setActiveIdx(Math.max(0,activeIdx-1))} disabled={activeIdx===0} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",background:"#000a",border:"1px solid #fff2",color:activeIdx===0?"#fff3":"#fff",borderRadius:8,padding:"8px 12px",cursor:activeIdx===0?"default":"pointer",fontSize:16,backdropFilter:"blur(4px)"}}>‹</button>
+        <button onClick={()=>setActiveIdx(Math.min(sections.length-1,activeIdx+1))} disabled={activeIdx>=sections.length-1} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"#000a",border:"1px solid #fff2",color:activeIdx>=sections.length-1?"#fff3":"#fff",borderRadius:8,padding:"8px 12px",cursor:activeIdx>=sections.length-1?"default":"pointer",fontSize:16,backdropFilter:"blur(4px)"}}>›</button>
+      </div>
+
+      {/* Right: Section detail panel */}
+      <div style={{borderLeft:"1px solid "+C.border,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        {/* Section header */}
+        <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border,background:activeSc.bg}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+            {readOnly?<span style={{color:activeSc.color,fontSize:12,fontWeight:800}}>{activeRow?.type}</span>:<select value={activeRow?.type} onChange={e=>upd(activeIdx,"type",e.target.value)} style={{background:"transparent",color:activeSc.color,border:"none",fontSize:12,fontWeight:800,outline:"none",cursor:"pointer"}}>{SEC_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select>}
+            <div style={{display:"flex",gap:4}}>
+              {!readOnly&&<button onClick={()=>move(activeIdx,-1)} disabled={activeIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:10}}>← Move</button>}
+              {!readOnly&&<button onClick={()=>move(activeIdx,1)} disabled={activeIdx>=sections.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:10}}>Move →</button>}
+              {!readOnly&&<button onClick={()=>removeRow(activeIdx)} style={{background:"#ef444422",border:"1px solid #ef444433",color:"#ef4444",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:10}}>×</button>}
             </div>
           </div>
+        </div>
+
+        {/* Script text */}
+        <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border,flex:editingScript?1:0,minHeight:editingScript?120:0,maxHeight:editingScript?300:80,overflow:"auto",transition:"all 0.2s"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1}}>Script</span>
+            {!readOnly&&<button onClick={()=>setEditingScript(!editingScript)} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:10,fontWeight:600}}>{editingScript?"Collapse":"Edit"}</button>}
+          </div>
+          {fillingIdx===activeIdx?<div style={{color:C.muted,fontSize:12,fontStyle:"italic"}}>AI writing…</div>
+          :editingScript&&!readOnly?<>
+            <textarea value={activeRow?.spokenWords||""} onChange={e=>upd(activeIdx,"spokenWords",e.target.value)} placeholder="Spoken words…" style={{width:"100%",background:C.bg,border:"1px solid "+C.border,borderRadius:6,resize:"none",color:C.text,fontSize:12,lineHeight:1.6,outline:"none",fontFamily:"inherit",minHeight:60,boxSizing:"border-box",padding:"6px 8px",marginBottom:6}}/>
+            <textarea value={activeRow?.visualDirection||""} onChange={e=>upd(activeIdx,"visualDirection",e.target.value)} placeholder="Visual direction…" style={{width:"100%",background:C.bg,border:"1px solid "+C.border,borderRadius:6,resize:"none",color:C.muted,fontSize:11,lineHeight:1.5,outline:"none",fontFamily:"inherit",minHeight:40,boxSizing:"border-box",padding:"6px 8px"}}/>
+            {!readOnly&&<button onClick={()=>autofillRow(activeIdx)} disabled={!!fillingIdx} style={{background:C.accentSoft,border:"1px solid "+C.accent+"44",color:C.accent,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:10,fontWeight:600,marginTop:4}}>✨ AI Rewrite</button>}
+          </>
+          :<div>
+            <div style={{fontSize:12,lineHeight:1.6,color:C.text,marginBottom:2}}>{(activeRow?.spokenWords||"No script").substring(0,120)}{(activeRow?.spokenWords||"").length>120?"…":""}</div>
+            {activeRow?.visualDirection&&<div style={{fontSize:10,color:C.muted,fontStyle:"italic"}}>{activeRow.visualDirection.substring(0,80)}</div>}
+          </div>}
+        </div>
+
+        {/* Clip actions */}
+        <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>Clip</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {!readOnly&&<button onClick={()=>setPickerIdx(activeIdx*1000)} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700}}>⇄ Change Clip</button>}
+            {activeClip&&!readOnly&&<button onClick={()=>{const seg=(activeRow?.clipSegments||[{id:"seg-"+activeIdx+"-0",clipId:activeRow?.selectedClipId}])[0];setTrimModalData({segClip:activeClip,idx:activeIdx,segIdx:0,seg})}} style={{background:C.surface,color:C.text,border:"1px solid "+C.border,borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:600}}>✂️ Trim</button>}
+            {activeClip&&<button onClick={()=>toggleMuteClip(activeIdx)} style={{background:mutedClips[activeIdx]?"#ef444422":C.surface,color:mutedClips[activeIdx]?"#ef4444":C.text,border:"1px solid "+(mutedClips[activeIdx]?"#ef444433":C.border),borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:600}}>{mutedClips[activeIdx]?"🔇 Muted":"🔊 Audio"}</button>}
+          </div>
+        </div>
+
+        {/* Quick-swap alternatives */}
+        {alternatives.length>0&&<div style={{padding:"10px 14px",flex:1,overflow:"auto"}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:8}}>Quick Swap</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+            {alternatives.map((alt:Item)=><div key={alt.id} title={alt.title} onClick={()=>{if(!readOnly){const segs=activeRow?.clipSegments&&activeRow.clipSegments.length>0?activeRow.clipSegments:[{id:`seg-${activeIdx}-0`,clipId:activeRow?.selectedClipId}];const newSegs=segs.map((s:any,si:number)=>si===0?{...s,clipId:alt.id}:s);updM(activeIdx,{clipSegments:newSegs,selectedClipId:alt.id,autoSelected:false})}}} style={{position:"relative",paddingTop:"177%",background:"#111",borderRadius:6,overflow:"hidden",cursor:readOnly?"default":"pointer",border:"2px solid "+C.border,transition:"border-color 0.15s"}} onMouseEnter={e=>(e.currentTarget.style.borderColor=C.accent)} onMouseLeave={e=>(e.currentTarget.style.borderColor=C.border)}>
+              {alt.mux_playback_id?<img src={muxThumb(alt.mux_playback_id,alt.thumbnail_time||alt.start_seconds||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🎬</div>}
+              <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(transparent,#000c)",padding:"12px 4px 3px",fontSize:8,color:"#fff",fontWeight:600,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{alt.title}</div>
+            </div>)}
+          </div>
+        </div>}
+      </div>
+    </div>
+
+    {/* ── Timeline track ── */}
+    <div style={{borderTop:"1px solid "+C.border,background:C.bg}}>
+      <div ref={timelineRef} style={{overflowX:"auto",padding:"10px 12px",display:"flex",gap:4,scrollBehavior:"smooth"}}>
+        {sections.map((row:any,idx:number)=>{
+          const sc=secColor(row.type)
+          const segs=row.clipSegments&&row.clipSegments.length>0?row.clipSegments:[{id:`seg-${idx}-0`,clipId:row.selectedClipId||null}]
+          const isActive=idx===activeIdx
+          return<div key={row.id||idx} data-tidx={idx} onClick={()=>setActiveIdx(idx)} style={{display:"flex",gap:2,cursor:"pointer",flexShrink:0}}>
+            {segs.map((seg:any,segIdx:number)=>{
+              const clip=seg.clipId?libraryItems.find((i:Item)=>i.id===seg.clipId):null
+              return<div key={seg.id||segIdx} style={{width:80,borderRadius:6,overflow:"hidden",border:"2px solid "+(isActive?C.accent:"transparent"),transition:"border-color 0.15s,transform 0.15s",transform:isActive?"translateY(-2px)":"none",background:C.card}}>
+                <div style={{position:"relative",paddingTop:"56.25%",background:clip?"#111":"#E8E6FF",overflow:"hidden"}}>
+                  {clip?.mux_playback_id?<img src={muxThumb(clip.mux_playback_id,clip.thumbnail_time||clip.start_seconds||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:C.muted}}>🎬</div>}
+                  {row.autoSelected&&segIdx===0&&<div style={{position:"absolute",top:2,left:2,background:C.green,color:"#fff",fontSize:6,fontWeight:800,padding:"0px 3px",borderRadius:2}}>AI</div>}
+                </div>
+                <div style={{padding:"3px 4px",background:sc.bg,borderTop:"2px solid "+sc.color}}>
+                  <div style={{fontSize:7,fontWeight:800,color:sc.color,textTransform:"uppercase" as const,letterSpacing:0.5,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{row.type}{segs.length>1?` ${segIdx+1}/${segs.length}`:""}</div>
+                </div>
+              </div>
+            })}
+          </div>
         })}
-        {!readOnly&&<div style={{width:60,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",padding:12}}><button onClick={addRow} style={{background:"none",border:"2px dashed "+C.border,color:C.muted,borderRadius:10,width:44,height:44,cursor:"pointer",fontSize:22,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button></div>}
+        {!readOnly&&<button onClick={addRow} style={{width:44,height:56,flexShrink:0,background:"none",border:"2px dashed "+C.border,color:C.muted,borderRadius:6,cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",alignSelf:"flex-start"}}>+</button>}
       </div>
     </div>
   </div>
@@ -1421,16 +1455,47 @@ function toggleMuteClip(idx:number){
 // ── Clip Picker Modal ─────────────────────────────────────────────────────
 function ClipPickerModal({currentId,matchedIds,libraryItems,sectionLabel,onSelect,onClose}:any){
   const [search,setSearch]=useState("")
+  const [filterType,setFilterType]=useState<"all"|"broll"|"talking_head">("all")
+
+  function classifyItem(item:Item):"broll"|"talking_head"|"mixed"{
+    const tags=((item.analysis?.scene_tags||[]).join(" ")+" "+(item.analysis?.summary||"")+" "+(item.analysis?.content_type||"")).toLowerCase()
+    if(tags.includes("product")||tags.includes("close-up")||tags.includes("demo")||tags.includes("lifestyle")||tags.includes("b-roll")||tags.includes("ingredient")||tags.includes("result"))return"broll"
+    if(tags.includes("talking head")||tags.includes("person speaking")||tags.includes("ugc")||tags.includes("testimonial"))return"talking_head"
+    return(item.transcript||"").length>50?"talking_head":"broll"
+  }
+
   const matched=libraryItems.filter((i:Item)=>matchedIds.includes(i.id))
   const others=libraryItems.filter((i:Item)=>!matchedIds.includes(i.id))
-  const fl=(arr:Item[])=>!search.trim()?arr:arr.filter((i:Item)=>[i.title,i.creator,...(i.analysis?.scene_tags||[])].some((f:any)=>f&&String(f).toLowerCase().includes(search.toLowerCase())))
+  const fl=(arr:Item[])=>{
+    let r=arr
+    if(search.trim())r=r.filter((i:Item)=>[i.title,i.creator,...(i.analysis?.scene_tags||[])].some((f:any)=>f&&String(f).toLowerCase().includes(search.toLowerCase())))
+    if(filterType!=="all")r=r.filter(i=>classifyItem(i)===filterType)
+    return r
+  }
+  // Sort b-roll first in matched clips
+  const sortedMatched=[...fl(matched)].sort((a,b)=>{const ac=classifyItem(a)==="broll"?0:1;const bc=classifyItem(b)==="broll"?0:1;return ac-bc})
+  const sortedOthers=[...fl(others)].sort((a,b)=>{const ac=classifyItem(a)==="broll"?0:1;const bc=classifyItem(b)==="broll"?0:1;return ac-bc})
+
+  const clipCard=(item:Item)=>{
+    const cls=classifyItem(item)
+    return<div key={item.id} style={{cursor:"pointer",position:"relative"}} onClick={()=>{onSelect(item.id);onClose()}}>
+      <VideoCard item={item} compact={false} highlight={item.id!==currentId} isSelected={item.id===currentId} onClick={()=>{}} selectMode={false} onToggleSelect={()=>{}}/>
+      <div style={{position:"absolute",top:4,right:4,background:cls==="broll"?"#22c55edd":"#f59e0bdd",color:"#fff",fontSize:7,fontWeight:800,padding:"1px 5px",borderRadius:3,zIndex:5}}>{cls==="broll"?"B-ROLL":"TALKING"}</div>
+    </div>
+  }
+
   return<div onClick={onClose} style={{position:"fixed",inset:0,background:"#000000dd",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
     <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:12,padding:24,maxWidth:760,width:"100%",marginTop:40}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div><div style={{fontWeight:700,fontSize:17}}>Change Clip</div><div style={{fontSize:13,color:C.muted}}>for <strong style={{color:C.text}}>{sectionLabel}</strong></div></div><Btn onClick={onClose} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px",fontSize:12}}>✕</Btn></div>
-      <Input value={search} onChange={(e:any)=>setSearch(e.target.value)} placeholder="Search…" style={{marginBottom:20}}/>
-      {fl(matched).length>0&&<div style={{marginBottom:24}}><div style={{fontSize:11,fontWeight:700,color:C.green,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>🎯 AI-Matched ({fl(matched).length})</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>{fl(matched).map((item:Item)=><div key={item.id} style={{cursor:"pointer"}} onClick={()=>{onSelect(item.id);onClose()}}><VideoCard item={item} compact={false} highlight={item.id!==currentId} isSelected={item.id===currentId} onClick={()=>{}} selectMode={false} onToggleSelect={()=>{}}/></div>)}</div></div>}
-      {fl(others).length>0&&<div><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>All Library ({fl(others).length})</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>{fl(others).map((item:Item)=><div key={item.id} style={{cursor:"pointer"}} onClick={()=>{onSelect(item.id);onClose()}}><VideoCard item={item} compact={false} isSelected={item.id===currentId} onClick={()=>{}} selectMode={false} onToggleSelect={()=>{}}/></div>)}</div></div>}
-      {fl(matched).length===0&&fl(others).length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}>No clips found.</div>}
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        <Input value={search} onChange={(e:any)=>setSearch(e.target.value)} placeholder="Search clips…" style={{flex:1}}/>
+        <div style={{display:"flex",gap:4}}>
+          {([["all","All"],["broll","B-Roll"],["talking_head","Talking"]] as [typeof filterType,string][]).map(([v,l])=><button key={v} onClick={()=>setFilterType(v)} style={{background:filterType===v?C.accent:C.surface,color:filterType===v?"#fff":C.muted,border:"1px solid "+(filterType===v?C.accent:C.border),borderRadius:6,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{l}</button>)}
+        </div>
+      </div>
+      {sortedMatched.length>0&&<div style={{marginBottom:24}}><div style={{fontSize:11,fontWeight:700,color:C.green,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>🎯 AI-Matched ({sortedMatched.length})</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>{sortedMatched.map(clipCard)}</div></div>}
+      {sortedOthers.length>0&&<div><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>All Library ({sortedOthers.length})</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>{sortedOthers.map(clipCard)}</div></div>}
+      {sortedMatched.length===0&&sortedOthers.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}>No clips found{filterType!=="all"?" with this filter. Try 'All'.":"."}</div>}
     </div>
   </div>
 }
@@ -2007,22 +2072,34 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
       const raw=await callClaude([{role:"user",content:prompt}],2000)
       const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
       let secs=(data.sections||[]).map((s:any,i:number)=>({...s,id:Date.now()+i,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
-      if(items.length>0)secs=await matchClips(secs,items)
+      if(items.length>0)secs=await matchClips(secs,items,!!voiceoverUrl)
       setSuggestedMood(data.suggested_music_mood||"Uplifting")
       setSections(secs);setGenMeta({form,productName:prod?.name||"General"});setView("review");setStep("script")
     }catch(e:any){setError("Error generating script: "+(e?.message||"Unknown error. Try again."));setGenerating(false);return}
     setGenerating(false)
   }
 
-  async function matchClips(secs:any[],libItems:Item[]){
+  async function matchClips(secs:any[],libItems:Item[],hasVoiceover?:boolean){
     const clips=libItems.filter(i=>i.mux_playback_id)
     const matchPool=clips.length>0?clips:libItems.filter(i=>i.mux_playback_id)
     const usedIds=new Set<string>()
 
+    // Classify clips as b-roll vs talking head to help Claude
+    const classifyClip=(item:Item)=>{
+      const tags=(item.analysis?.scene_tags||[]).join(" ").toLowerCase()
+      const summary=(item.analysis?.summary||"").toLowerCase()
+      const transcript=(item.transcript||"").trim()
+      const contentType=(item.analysis?.content_type||"").toLowerCase()
+      const isTalkingHead=tags.includes("talking head")||tags.includes("person speaking")||contentType.includes("ugc")||contentType.includes("testimonial")||(transcript.length>50&&(tags.includes("face")||tags.includes("person")))
+      const isBroll=tags.includes("product")||tags.includes("close-up")||tags.includes("demo")||tags.includes("lifestyle")||tags.includes("b-roll")||contentType.includes("product")||contentType.includes("demo")||summary.includes("product")||summary.includes("close")||summary.includes("ingredient")
+      return isBroll?"BROLL":isTalkingHead?"TALKING_HEAD":"MIXED"
+    }
+
     const libSummary=matchPool.map(item=>{
       const a=item.analysis||{}
       const quotes=(a.key_quotes||[]).slice(0,2).join(" | ")
-      return "ID:"+item.id+"|role:"+(a.clip_role||item.clip_role||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(",")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,200)+(quotes?"|quotes:"+quotes:"")+"|ad_potential:"+(a.ad_potential||"")+"|type:"+item.type
+      const clipClass=classifyClip(item)
+      return "ID:"+item.id+"|class:"+clipClass+"|role:"+(a.clip_role||item.clip_role||"")+"|use:"+(a.use_case||"")+"|tags:"+(a.scene_tags||[]).join(",")+"|summary:"+(a.summary||item.description||"").substring(0,100)+"|transcript:"+(item.transcript||"").substring(0,200)+(quotes?"|quotes:"+quotes:"")+"|ad_potential:"+(a.ad_potential||"")+"|type:"+item.type
     }).join("\n")
 
     const sectionDesc=secs.map((s:any,i:number)=>{
@@ -2031,7 +2108,14 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
       return "Section "+i+" ["+s.type+"]: spoken=\""+words.substring(0,120)+"\" visual=\""+visual.substring(0,60)+"\""
     }).join("\n")
 
-    const prompt="You are an expert direct response video editor for DTC brands.\n\nAnalyse each script section and determine HOW MANY clips it needs to best tell the story visually.\n\nSCRIPT SECTIONS:\n"+sectionDesc+"\n\nCLIP LIBRARY ("+matchPool.length+" clips):\n"+libSummary+"\n\nRULES:\n1. Each section can use 1-4 clips depending on how many distinct visual moments exist in the spoken words\n2. A 30s ad should have roughly 8-15 total clips across all sections\n3. Match clips by VISUAL CONTENT — if script says yellow teeth, find a clip of yellow teeth\n4. Use clip tags, transcript, use_case to find best visual match\n5. NEVER use the same clip twice across the whole ad\n6. For each clip slot, provide 2 alternatives\n\nReturn ONLY valid JSON array — one entry per CLIP SLOT:\n[{\"section\":0,\"slot\":0,\"best_id\":\"clip_uuid\",\"alt_ids\":[\"alt1\",\"alt2\"],\"phrase\":\"specific phrase this clip covers\",\"reason\":\"why this clip matches\"},...]"
+    const voiceoverRules=hasVoiceover?`
+7. CRITICAL — VOICEOVER MODE: This ad has a voiceover narration. The voiceover provides ALL the spoken audio. Therefore:
+   - STRONGLY PREFER clips classified as BROLL (product shots, demos, close-ups, lifestyle, ingredients, results)
+   - AVOID clips classified as TALKING_HEAD (people speaking to camera) because their mouth movement will conflict with the voiceover audio
+   - Only use TALKING_HEAD clips if absolutely no BROLL alternative exists for a section
+   - Even for SOCIAL PROOF sections, prefer product-in-use or results clips over talking head testimonials`:""
+
+    const prompt="You are an expert direct response video editor for DTC brands.\n\nAnalyse each script section and determine HOW MANY clips it needs to best tell the story visually.\n\nSCRIPT SECTIONS:\n"+sectionDesc+"\n\nCLIP LIBRARY ("+matchPool.length+" clips):\n"+libSummary+"\n\nRULES:\n1. Each section can use 1-4 clips depending on how many distinct visual moments exist in the spoken words\n2. A 30s ad should have roughly 8-15 total clips across all sections\n3. Match clips by VISUAL CONTENT — if script says yellow teeth, find a clip of yellow teeth\n4. Use clip tags, transcript, use_case to find best visual match\n5. NEVER use the same clip twice across the whole ad\n6. For each clip slot, provide 2 alternatives"+voiceoverRules+"\n\nReturn ONLY valid JSON array — one entry per CLIP SLOT:\n[{\"section\":0,\"slot\":0,\"best_id\":\"clip_uuid\",\"alt_ids\":[\"alt1\",\"alt2\"],\"phrase\":\"specific phrase this clip covers\",\"reason\":\"why this clip matches\"},...]"
 
     try{
       const raw=await callClaude([{role:"user",content:prompt}],2000)
@@ -2355,7 +2439,7 @@ Return ONLY valid JSON:
   } else {
     const hookSecs=hookVariations[selectedHooks[i]]||sections
     setMatching(true)
-    const matched=items.length>0?await matchClips(hookSecs,items).catch(()=>hookSecs):hookSecs
+    const matched=items.length>0?await matchClips(hookSecs,items,!!voiceoverUrl).catch(()=>hookSecs):hookSecs
     setSections(matched)
     setHookSections(prev=>({...prev,[i]:matched}))
     setMatching(false)
@@ -2371,7 +2455,7 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
           <button onClick={()=>setStep("audio")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Audio</button>
           <div style={{display:"flex",gap:10}}>
-            <Btn onClick={async()=>{setMatching(true);const u=await(async()=>{try{return await matchClips(sections,items)}catch{return sections}})();setSections(u);setHookSections(prev=>({...prev,[activeHookIdx]:u}));setMatching(false)}} disabled={matching||items.length===0} style={{background:matching?C.border:C.accentSoft,color:matching?C.muted:C.accent,border:"1px solid "+C.accent+"44"}}>{matching?"🔍 Matching…":"🔄 Re-match"}</Btn>
+            <Btn onClick={async()=>{setMatching(true);const u=await(async()=>{try{return await matchClips(sections,items,!!voiceoverUrl)}catch{return sections}})();setSections(u);setHookSections(prev=>({...prev,[activeHookIdx]:u}));setMatching(false)}} disabled={matching||items.length===0} style={{background:matching?C.border:C.accentSoft,color:matching?C.muted:C.accent,border:"1px solid "+C.accent+"44"}}>{matching?"🔍 Matching…":"🔄 Re-match"}</Btn>
             <Btn onClick={()=>setStep("forge")} style={{background:C.accent,color:"#fff"}}>Next: Forge →</Btn>
           </div>
         </div>
@@ -2438,7 +2522,7 @@ style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,bor
           <Btn onClick={()=>{setSections(disp);setView("review");setStep("script")}} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44"}}>Edit Script</Btn>
           <Btn onClick={async()=>{
             const fresh=disp.map((s:any)=>({...s,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
-            const matched=items.length>0?await matchClips(fresh,items):fresh
+            const matched=items.length>0?await matchClips(fresh,items,!!voiceoverUrl):fresh
             setSections(matched);setView("review");setStep("audio")
           }} style={{background:C.green+"22",color:C.green,border:"1px solid "+C.green+"44"}}>↺ Reuse Script</Btn>
           <Btn onClick={()=>handleDeleteScript(selected.id!)} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433"}}>Delete</Btn>
