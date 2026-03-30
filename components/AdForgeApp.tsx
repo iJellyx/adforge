@@ -339,6 +339,20 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
         newAudios[i]=await generateAndUpload(sectionsWithWords[i].spokenWords,i,sectionsWithWords.length)
       }
       setSectionAudios(newAudios)
+
+      // Stitch all section audios into one continuous voiceover
+      try{
+        setProgress(95)
+        const sectionUrls=sectionsWithWords.map((_:any,i:number)=>newAudios[i]).filter(Boolean)
+        if(sectionUrls.length>1){
+          const stitchRes=await fetch("/api/voiceover/stitch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sectionUrls})})
+          const stitchData=await stitchRes.json()
+          if(stitchData.url){
+            ;(window as any).__voStitchData={url:stitchData.url,sectionOffsets:stitchData.sectionOffsets,sectionDurations:stitchData.sectionDurations}
+          }
+        }
+      }catch(e){console.warn("Stitch failed, using first section URL:",e)}
+
       setProgress(100)
     }catch(e:any){setError(e.message)}
     setGenerating(false)
@@ -417,8 +431,15 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
             const combinedUrl=allHookResults[0].find((s:any)=>s.voiceover_url)?.voiceover_url||""
             onSave(allHookResults[0],selectedVoiceObj?.name||selectedVoice,combinedUrl,allHookResults)
           } else {
-            const updatedSections=sectionsWithWords.map((s:any,i:number)=>sectionAudios[i]?{...s,voiceover_url:sectionAudios[i]}:s)
-            const combinedUrl=Object.values(sectionAudios)[0] as string
+            const stitchData=(window as any).__voStitchData
+            const updatedSections=sectionsWithWords.map((s:any,i:number)=>{
+              const base=sectionAudios[i]?{...s,voiceover_url:sectionAudios[i]}:s
+              if(stitchData?.sectionOffsets){
+                return{...base,vo_offset:stitchData.sectionOffsets[i]||0,vo_duration:stitchData.sectionDurations[i]||0}
+              }
+              return base
+            })
+            const combinedUrl=stitchData?.url||Object.values(sectionAudios)[0] as string
             onSave(updatedSections,selectedVoiceObj?.name||selectedVoice,combinedUrl,null)
           }
         }} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Use These</Btn>}
@@ -2106,7 +2127,28 @@ function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,o
           perfBlock+="\n"
         }
       }
-      const prompt=ctx+intelBlock+perfBlock+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Use specific brand/product details — names, claims, real numbers, differentiators. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
+      // Build a summary of available footage so Claude writes visual directions that match real clips
+      let footageBlock=""
+      if(items.length>0){
+        const clips=items.filter((i:Item)=>i.mux_playback_id)
+        const brollClips=clips.filter((i:Item)=>{const a=i.analysis||{};return a.is_broll===true||a.content_type==="Product Demo"||(a.scene_tags||[]).some((t:string)=>/product|demo|close|ingredient|lifestyle/i.test(t))})
+        const talkingHeads=clips.filter((i:Item)=>{const a=i.analysis||{};return a.is_talking_head===true||a.content_type==="Talking Head"||a.content_type==="UGC"})
+        const tagCounts:Record<string,number>={}
+        clips.forEach((i:Item)=>{(i.analysis?.creative_tags||[]).forEach((t:string)=>{tagCounts[t]=(tagCounts[t]||0)+1});(i.analysis?.scene_tags||[]).slice(0,3).forEach((t:string)=>{tagCounts[t]=(tagCounts[t]||0)+1})})
+        const topTags=Object.entries(tagCounts).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([t])=>t)
+        const roles=clips.map((i:Item)=>i.clip_role||i.analysis?.clip_role).filter(Boolean)
+        const roleCounts:Record<string,number>={}
+        roles.forEach((r:string)=>{roleCounts[r]=(roleCounts[r]||0)+1})
+
+        footageBlock=`\nAVAILABLE FOOTAGE (${clips.length} clips in library — write visual directions that match what actually exists):\n`
+        footageBlock+=`• B-roll/product shots: ${brollClips.length} clips\n`
+        footageBlock+=`• Talking head/UGC: ${talkingHeads.length} clips\n`
+        if(topTags.length)footageBlock+=`• Visual content available: ${topTags.join(", ")}\n`
+        if(Object.keys(roleCounts).length)footageBlock+=`• Clip roles available: ${Object.entries(roleCounts).map(([r,c])=>`${r.replace(/_/g," ")} (${c})`).join(", ")}\n`
+        footageBlock+=`IMPORTANT: Write visual directions that reference footage types you KNOW exist above. Don't ask for shots the library doesn't have.\n\n`
+      }
+
+      const prompt=ctx+intelBlock+perfBlock+footageBlock+`SCRIPT REQ:\nContent type: ${form.contentType}\nLength: ${form.adLength}\nStage: ${stage.label} — ${stage.desc}\nCustomer: ${form.customerAvatar||brand.target_customer||""}\nPains: ${form.painPoints||""}\nDesires: ${form.desires||""}\nObjections: ${form.objections||""}\nRequest: ${form.request||""}\n\nWrite a direct response video ad script. Use specific brand/product details — names, claims, real numbers, differentiators. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","durationEstimate":"0-3s"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
       const raw=await callClaude([{role:"user",content:prompt}],2000)
       const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
       let secs=(data.sections||[]).map((s:any,i:number)=>({...s,id:Date.now()+i,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
