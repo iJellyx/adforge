@@ -268,6 +268,8 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
   const [allHookResults,setAllHookResults]=useState<any[][]|null>(null)
   const [regeneratingSection,setRegeneratingSection]=useState<number|null>(null)
 
+  const sectionsWithWords=(sections||[]).filter((s:any)=>s.spokenWords?.trim())
+
   // Expose regenerateSection globally so ScriptTable can call it
   useEffect(()=>{
     (window as any).__voiceoverRegenerateSection=async(sectionIdx:number,callback:(success:boolean)=>void)=>{
@@ -284,8 +286,6 @@ function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
       else setError(d.error||"Check your ELEVENLABS_API_KEY in Vercel Settings")
     }).catch(()=>setError("Could not connect to ElevenLabs")).finally(()=>setLoading(false))
   },[])
-
-  const sectionsWithWords=(sections||[]).filter((s:any)=>s.spokenWords?.trim())
   const selectedVoiceObj=voices.find(v=>v.id===selectedVoice)
   const allGenerated=sectionsWithWords.length>0&&sectionsWithWords.every((_:any,i:number)=>sectionAudios[i])
 
