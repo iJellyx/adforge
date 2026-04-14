@@ -149,6 +149,7 @@ RULES:
         duration_seconds: seg.end_seconds - seg.start_seconds,
         transcript: segTranscript || undefined,
         clip_role: seg.clip_role || null,
+        clip_status: 'pending',
         workspace_id: item.workspace_id,
         analysis: {
           content_type: analysis.content_type,
