@@ -4,6 +4,14 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createServiceClient } from '@/lib/supabase/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
+// Allow up to 5 minutes for the full processing pipeline
+export const maxDuration = 300
+
+// Fetch with timeout helper
+function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 30000): Promise<Response> {
+  return fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) })
+}
+
 export async function POST(req: NextRequest) {
   const mux = new Mux({
     tokenId: process.env.MUX_TOKEN_ID!,
@@ -39,6 +47,15 @@ export async function POST(req: NextRequest) {
   const playbackId = asset.playback_ids?.[0]?.id
   const duration = asset.duration || 30
 
+  // ── IMMEDIATELY set status to analysing so client knows processing started ──
+  await supabase.from('items').update({
+    mux_asset_id: asset.id,
+    mux_playback_id: playbackId,
+    mux_status: 'analysing',
+    duration_seconds: duration,
+  }).eq('id', itemId)
+  console.log(`[${itemId}] Asset ready — status set to analysing, starting pipeline`)
+
   // ── Step 1: Deepgram transcription ────────────────────────────────────────
   let autoTranscript = ''
   let wordTimestamps: any[] = []
@@ -46,15 +63,15 @@ export async function POST(req: NextRequest) {
     try {
       const mp4Url = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`
       let audioFetch: Response | null = null
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const tryFetch = await fetch(mp4Url)
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const tryFetch = await fetchWithTimeout(mp4Url, {}, 15000)
         if (tryFetch.ok) { audioFetch = tryFetch; break }
-        console.log(`MP4 not ready yet (attempt ${attempt + 1}/5), waiting 30s…`)
-        await new Promise(r => setTimeout(r, 30000))
+        console.log(`[${itemId}] MP4 not ready yet (attempt ${attempt + 1}/10), waiting 5s…`)
+        await new Promise(r => setTimeout(r, 5000))
       }
       if (audioFetch) {
         const audioBuffer = await audioFetch.arrayBuffer()
-        const tRes = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true&utterances=true&words=true', {
+        const tRes = await fetchWithTimeout('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true&utterances=true&words=true', {
           method: 'POST',
           headers: {
             'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
@@ -62,7 +79,7 @@ export async function POST(req: NextRequest) {
             'Content-Length': audioBuffer.byteLength.toString(),
           },
           body: audioBuffer,
-        })
+        }, 60000)
         if (tRes.ok) {
           const tData = await tRes.json()
           autoTranscript = tData.results?.channels?.[0]?.alternatives?.[0]?.transcript || ''
@@ -96,20 +113,22 @@ export async function POST(req: NextRequest) {
       const { data: candidates } = await dupQuery
 
       if (candidates && candidates.length > 0) {
-        console.log(`Found ${candidates.length} duration-match candidates for duplicate check`)
+        // Limit to 3 candidates max to prevent long serial Gemini loops
+        const limitedCandidates = candidates.slice(0, 3)
+        console.log(`Found ${candidates.length} duration-match candidates, checking top ${limitedCandidates.length}`)
 
         // Check thumbnail similarity using Gemini for each candidate
         const newThumbUrl = `https://image.mux.com/${playbackId}/thumbnail.jpg?time=0&width=320`
 
-        for (const candidate of candidates) {
+        for (const candidate of limitedCandidates) {
           if (!candidate.mux_playback_id) continue
 
           const candidateThumbUrl = `https://image.mux.com/${candidate.mux_playback_id}/thumbnail.jpg?time=0&width=320`
 
-          // Fetch both thumbnails
+          // Fetch both thumbnails (with timeout)
           const [newThumbRes, candThumbRes] = await Promise.all([
-            fetch(newThumbUrl),
-            fetch(candidateThumbUrl),
+            fetchWithTimeout(newThumbUrl, {}, 10000),
+            fetchWithTimeout(candidateThumbUrl, {}, 10000),
           ])
 
           if (!newThumbRes.ok || !candThumbRes.ok) continue
@@ -184,13 +203,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Update transcript data (status already set to 'analysing' above)
   const { data: item } = await supabase
     .from('items')
     .update({
-      mux_asset_id: asset.id,
-      mux_playback_id: playbackId,
-      mux_status: 'analysing',
-      duration_seconds: duration,
       ...(autoTranscript ? { transcript: autoTranscript } : {}),
       ...(wordTimestamps.length > 0 ? { word_timestamps: wordTimestamps } : {}),
     })
@@ -228,8 +244,8 @@ Title: ${item.title}, Duration: ${duration}s, Transcript: ${autoTranscript||'not
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
       const mp4Url = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`
       
-      // Fetch video as base64 for Gemini
-      const videoRes = await fetch(mp4Url)
+      // Fetch video as base64 for Gemini (60s timeout for large files)
+      const videoRes = await fetchWithTimeout(mp4Url, {}, 60000)
       if (videoRes.ok) {
         const videoBuffer = await videoRes.arrayBuffer()
         const base64Video = Buffer.from(videoBuffer).toString('base64')

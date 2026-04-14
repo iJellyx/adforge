@@ -2,7 +2,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useWorkspace } from '@/lib/workspace-context'
+import { useTheme } from '@/lib/theme-context'
 import WorkspaceSwitcher from '@/components/WorkspaceSwitcher'
+import { Film, Wand2, Zap, Lightbulb, Settings, Sun, Moon, Plus, LogOut } from 'lucide-react'
 import type { Item, Script, ForgedAd, BrandProfile, Product } from './adforge/types'
 import { C, DEFAULT_BRAND } from './adforge/constants'
 import { LibraryTab } from './adforge/tabs/LibraryTab'
@@ -12,9 +14,12 @@ import { BrandTab } from './adforge/tabs/BrandTab'
 import { WinningAdsTab } from './adforge/tabs/WinningAdsTab'
 
 // ── Root App ──────────────────────────────────────────────────────────────
+const NAV_ICONS: Record<string,any> = { library: Film, scripts: Wand2, forged: Zap, winning: Lightbulb, brand: Settings }
+
 export default function AdForgeApp(){
   const supabase=createClient()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
+  const { theme, toggleTheme } = useTheme()
   const [tab,setTab]=useState("library")
   const [libView,setLibView]=useState("grid")
   const [items,setItems]=useState<Item[]>([])
@@ -102,39 +107,44 @@ export default function AdForgeApp(){
     </div>
   </div>
 
-  const navItem=(id:string,label:string,icon:string)=>{
+  const navItem=(id:string,label:string)=>{
     const active=tab===id
-    return<button onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",margin:"0 8px",borderRadius:10,border:"none",background:active?"rgba(91,73,255,0.12)":"transparent",color:active?C.accent:C.muted,fontWeight:active?700:500,fontSize:13,cursor:"pointer",width:"calc(100% - 16px)",textAlign:"left",fontFamily:"inherit",borderRight:active?"2px solid "+C.accent:"2px solid transparent"}}>
-      <span style={{fontSize:15,flexShrink:0}}>{icon}</span>{label}
-      {id==="forged"&&draftCount>0&&<span style={{background:C.yellow,color:"#fff",borderRadius:99,fontSize:9,padding:"1px 6px",fontWeight:800,marginLeft:"auto"}}>{draftCount}</span>}
+    const Icon=NAV_ICONS[id]
+    return<button onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",margin:"0 10px",borderRadius:10,border:"none",background:active?"var(--af-sidebar-active)":"transparent",color:active?"var(--af-sidebar-text-active)":"var(--af-sidebar-text)",fontWeight:active?700:500,fontSize:13,cursor:"pointer",width:"calc(100% - 20px)",textAlign:"left",fontFamily:"inherit",borderLeft:active?"3px solid var(--af-accent)":"3px solid transparent",transition:"all 0.15s ease"}}>
+      {Icon&&<Icon size={17} style={{flexShrink:0,opacity:active?1:0.7}}/>}{label}
+      {id==="forged"&&draftCount>0&&<span style={{background:"var(--af-yellow)",color:"#000",borderRadius:99,fontSize:9,padding:"1px 6px",fontWeight:800,marginLeft:"auto"}}>{draftCount}</span>}
     </button>
   }
 
   return<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",color:C.text,display:"flex"}}>
     {/* Sidebar */}
-    <div style={{width:220,background:"#0F1133",display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0}}>
+    <div style={{width:240,background:"var(--af-sidebar)",display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0}}>
       {/* Brand */}
-      <div style={{padding:"20px 16px 16px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
-        <div style={{fontWeight:800,fontSize:20,color:"#fff",letterSpacing:"-0.02em",marginBottom:8}}>Ad<span style={{color:"#7C6FFF"}}>Forge</span></div>
+      <div style={{padding:"24px 20px 18px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+        <div style={{fontWeight:800,fontSize:22,color:"#fff",letterSpacing:"-0.03em",marginBottom:10}}>Ad<span style={{color:"var(--af-accent)"}}>Forge</span></div>
         <WorkspaceSwitcher/>
       </div>
       {/* Nav */}
-      <div style={{padding:"12px 0",flex:1}}>
-        {navItem("library","Library","✂️")}
-        {navItem("scripts","Create Ad","✦")}
-        {navItem("forged","My Ads","⚡")}
-        {navItem("winning","Inspiration","💡")}
-        {navItem("brand","Brand","⚙️")}
+      <div style={{padding:"16px 0",flex:1,display:"flex",flexDirection:"column",gap:2}}>
+        {navItem("library","Library")}
+        {navItem("scripts","Create Ad")}
+        {navItem("forged","My Ads")}
+        {navItem("winning","Inspiration")}
+        <div style={{flex:1}}/>
+        {navItem("brand","Brand")}
       </div>
       {/* Footer */}
-      <div style={{padding:"12px 16px 20px",borderTop:"1px solid rgba(255,255,255,0.08)"}}>
-        {tab==="library"&&libView!=="add"&&<button onClick={()=>setLibView("add")} style={{width:"100%",background:"rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.7)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:50,padding:"9px",fontFamily:"inherit",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:8}}>+ Add Content</button>}
-        <button onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts")}} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:50,padding:"11px",fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer"}}>✦ Create Ad</button>
-        <button onClick={handleSignOut} style={{width:"100%",background:"none",border:"none",color:"rgba(255,255,255,0.25)",cursor:"pointer",fontSize:11,marginTop:10,fontFamily:"inherit"}}>Sign out</button>
+      <div style={{padding:"12px 16px 20px",borderTop:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",gap:8}}>
+        {tab==="library"&&libView!=="add"&&<button onClick={()=>setLibView("add")} style={{width:"100%",background:"rgba(255,255,255,0.06)",color:"rgba(255,255,255,0.6)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:50,padding:"9px",fontFamily:"inherit",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"background 0.15s"}}><Plus size={14}/>Add Content</button>}
+        <button onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts")}} style={{width:"100%",background:"var(--af-accent)",color:"#fff",border:"none",borderRadius:50,padding:"11px",fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all 0.15s"}}><Wand2 size={15}/>Create Ad</button>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
+          <button onClick={handleSignOut} style={{background:"none",border:"none",color:"rgba(255,255,255,0.20)",cursor:"pointer",fontSize:11,fontFamily:"inherit",display:"flex",alignItems:"center",gap:4,transition:"color 0.15s"}}><LogOut size={12}/>Sign out</button>
+          <button onClick={toggleTheme} style={{background:"rgba(255,255,255,0.06)",border:"none",color:"rgba(255,255,255,0.40)",cursor:"pointer",borderRadius:8,padding:6,display:"flex",alignItems:"center",transition:"all 0.15s"}}>{theme==="dark"?<Sun size={14}/>:<Moon size={14}/>}</button>
+        </div>
       </div>
     </div>
     {/* Main content */}
-    <div style={{marginLeft:220,flex:1,minHeight:"100vh",background:C.bg}}>
+    <div style={{marginLeft:240,flex:1,minHeight:"100vh",background:C.bg}}>
       {/* Onboarding checklist */}
       {showOnboarding&&tab==="library"&&<div style={{background:"#fff",borderBottom:"1px solid "+C.border,padding:"16px 28px",display:"flex",alignItems:"center",gap:20,flexWrap:"wrap"}}>
         <div style={{flex:1,minWidth:200}}>

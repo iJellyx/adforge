@@ -159,19 +159,22 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
         xhr.setRequestHeader("Content-Type",entry.file.type)
         xhr.send(entry.file)
       })
-      // Poll briefly to catch duplicate detection
+      // Poll for status — wait for analysing/ready/duplicate (up to 2 minutes)
       let pollAttempts = 0
       let finalStatus = 'done'
-      while (pollAttempts < 10) {
-        await new Promise(r => setTimeout(r, 3000))
+      while (pollAttempts < 30) {
+        await new Promise(r => setTimeout(r, 4000))
         const supabase = createClient()
         const { data: statusCheck } = await supabase.from('items').select('mux_status').eq('id', itemId).single()
         if (statusCheck?.mux_status === 'duplicate') { finalStatus = 'duplicate'; break }
-        if (statusCheck?.mux_status === 'analysing' || statusCheck?.mux_status === 'ready') break
+        if (statusCheck?.mux_status === 'ready') break
+        if (statusCheck?.mux_status === 'analysing') {
+          updateQueue(idx, {progress: 80, msg: 'AI analysing video…'})
+        }
         pollAttempts++
       }
-      updateQueue(idx, {status: finalStatus, progress: 100, msg: finalStatus === 'duplicate' ? 'Duplicate blocked' : 'Done! ✓'})
-      if (finalStatus !== 'duplicate') onRefresh()
+      updateQueue(idx, {status: finalStatus, progress: 100, msg: finalStatus === 'duplicate' ? 'Duplicate blocked' : 'Uploaded — AI processing in background'})
+      onRefresh()
 
     }catch(e:any){
       updateQueue(idx,{status:"error",msg:"Failed: "+e.message})

@@ -1,6 +1,6 @@
 import type { BrandProfile, Product, CaptionSettings } from './types'
 
-export const C = { bg:"#F4F2FF",surface:"#ffffff",card:"#ffffff",border:"rgba(91,73,255,0.12)",accent:"#5B49FF",accentSoft:"#EDE8FF",text:"#0F1133",muted:"#6B6894",green:"#16A34A",yellow:"#D97706",red:"#DC2626" }
+export const C = { bg:"var(--af-bg)",surface:"var(--af-surface)",card:"var(--af-card)",border:"var(--af-border)",accent:"var(--af-accent)",accentSoft:"var(--af-accent-soft)",text:"var(--af-text)",muted:"var(--af-muted)",green:"var(--af-green)",yellow:"var(--af-yellow)",red:"var(--af-red)" }
 export const GENDERS = ["Male","Female","Non-binary","Other"]
 export const AGE_RANGES = ["Under 18","18-24","25-34","35-44","45+"]
 export const SEC_TYPES = ["HOOK","PROBLEM","AGITATE","SOLUTION","SOCIAL PROOF","BODY","CTA"]

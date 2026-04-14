@@ -4,11 +4,68 @@
   padding: 0;
 }
 
-body {
-  background: #0a0a0f;
-  color: #f0f0f5;
+/* ── Dark Theme (default) ── */
+:root {
+  --af-bg: #0c0c14;
+  --af-surface: #13131e;
+  --af-card: #1a1a28;
+  --af-card-hover: #212130;
+  --af-border: rgba(139, 127, 255, 0.10);
+  --af-border-strong: rgba(139, 127, 255, 0.22);
+  --af-accent: #8B7FFF;
+  --af-accent-hover: #9d93ff;
+  --af-accent-soft: rgba(139, 127, 255, 0.10);
+  --af-text: #f0f0f5;
+  --af-text-secondary: #9898b0;
+  --af-muted: #5e5e78;
+  --af-green: #34d399;
+  --af-yellow: #fbbf24;
+  --af-red: #f87171;
+  --af-sidebar: #08080e;
+  --af-sidebar-text: rgba(255,255,255,0.50);
+  --af-sidebar-text-active: #8B7FFF;
+  --af-sidebar-hover: rgba(139,127,255,0.08);
+  --af-sidebar-active: rgba(139,127,255,0.14);
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+/* ── Light Theme ── */
+:root.light {
+  --af-bg: #f4f4f8;
+  --af-surface: #ffffff;
+  --af-card: #ffffff;
+  --af-card-hover: #f8f8fb;
+  --af-border: rgba(0, 0, 0, 0.08);
+  --af-border-strong: rgba(0, 0, 0, 0.15);
+  --af-accent: #5B49FF;
+  --af-accent-hover: #4a39e8;
+  --af-accent-soft: rgba(91, 73, 255, 0.08);
+  --af-text: #0F1133;
+  --af-text-secondary: #6B6894;
+  --af-muted: #9ca3af;
+  --af-green: #16A34A;
+  --af-yellow: #D97706;
+  --af-red: #DC2626;
+  --af-sidebar: #0F1133;
+  --af-sidebar-text: rgba(255,255,255,0.55);
+  --af-sidebar-text-active: #8B7FFF;
+  --af-sidebar-hover: rgba(139,127,255,0.08);
+  --af-sidebar-active: rgba(139,127,255,0.14);
 }
+
+body {
+  background: var(--af-bg);
+  color: var(--af-text);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--af-border-strong); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--af-muted); }
+
+/* Animations */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes af-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
