@@ -8,7 +8,6 @@ import { Btn, Label, Card, STitle, Chip } from '../ui-primitives'
 import { StitchedPreview } from '../StitchedPreview'
 import { ScorePanel } from '../ScorePanel'
 import { ExportVideo } from '../ExportVideo'
-import { ArrowDown, Play, Check, Clock, AlertTriangle, X, Search, Star, Copy, Pencil, Zap, Trash2, Film, BarChart3 } from 'lucide-react'
 
 function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
   const [checking,setChecking]=useState(false)
@@ -16,6 +15,7 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
   const [msg,setMsg]=useState("")
 
   useEffect(()=>{
+    // Auto-check status when opened
     if(ad.render_status==="rendering")checkStatus()
   },[])
 
@@ -32,7 +32,7 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
   }
 
   async function startRender(){
-    setMsg("Starting render...")
+    setMsg("Starting render…")
     try{
       await fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:ad.id})})
       onRefresh()
@@ -42,7 +42,7 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
 
   async function downloadMp4(){
     if(!ad.render_url)return
-    setDownloading(true);setMsg("Downloading...")
+    setDownloading(true);setMsg("Downloading…")
     try{
       const res=await fetch(ad.render_url)
       const blob=await res.blob()
@@ -52,45 +52,45 @@ function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
       a.download=`${ad.title||"adforge-ad"}.mp4`
       a.click()
       setTimeout(()=>URL.revokeObjectURL(url),15000)
-      setMsg("Downloaded!")
+      setMsg("✓ Downloaded!")
     }catch(e:any){setMsg("Download failed: "+e.message)}
     setDownloading(false)
   }
 
   const renderStatus=ad.render_status||"pending"
 
-  return(
-    <div className="bg-card border border-border rounded-lg p-5 mt-4">
-      <div className="font-bold text-base mb-1 flex items-center gap-2"><ArrowDown className="w-4 h-4" /> Download MP4</div>
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:20,marginTop:16}}>
+    <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>⬇️ Download MP4</div>
 
-      {renderStatus==="pending"&&<div>
-        <div className="text-sm text-text-muted mb-3">Render not started yet.</div>
-        <Btn onClick={startRender} style={{background:"var(--color-accent)",color:"#fff",width:"100%",padding:12}}>{msg||"Start Rendering"}</Btn>
-      </div>}
+    {renderStatus==="pending"&&<div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:12}}>Render not started yet.</div>
+      <Btn onClick={startRender} style={{background:C.accent,color:"#fff",width:"100%",padding:12}}>{msg||"🎬 Start Rendering"}</Btn>
+    </div>}
 
-      {renderStatus==="rendering"&&<div>
-        <div className="bg-warning-soft border border-warning/20 rounded-lg px-3.5 py-2.5 text-sm text-warning mb-3 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Rendering in progress — usually takes 1-2 minutes.</div>
-        <div className="flex gap-2.5">
-          <Btn onClick={checkStatus} disabled={checking} style={{background:"var(--color-accent-soft)",color:"var(--color-accent)",border:"1px solid var(--color-accent-muted)",flex:1}}>{checking?"Checking...":"Check Status"}</Btn>
-        </div>
-        {msg&&<div className="text-xs text-text-muted mt-2">{msg}</div>}
-      </div>}
+    {renderStatus==="rendering"&&<div>
+      <div style={{background:"#f59e0b11",border:"1px solid #f59e0b33",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#fbbf24",marginBottom:12}}>⏳ Rendering in progress — usually takes 1-2 minutes.</div>
+      <div style={{display:"flex",gap:10}}>
+        <Btn onClick={checkStatus} disabled={checking} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44",flex:1}}>{checking?"Checking…":"🔄 Check Status"}</Btn>
+      </div>
+      {msg&&<div style={{fontSize:12,color:C.muted,marginTop:8}}>{msg}</div>}
+    </div>}
 
-      {renderStatus==="ready"&&<div>
-        <div className="bg-success-soft border border-success/20 rounded-lg px-3.5 py-2.5 text-sm text-success mb-3 flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> Your MP4 is ready to download!</div>
-        <Btn onClick={downloadMp4} disabled={downloading} style={{background:"var(--color-success)",color:"#000",fontWeight:700,width:"100%",padding:14,fontSize:15,borderRadius:12}}>{downloading?"Downloading...":"Download MP4"}</Btn>
-        {msg&&<div className={`text-xs mt-2 font-semibold ${msg.includes("Downloaded")?"text-success":"text-danger"}`}>{msg}</div>}
-      </div>}
+    {renderStatus==="ready"&&<div>
+      <div style={{background:"#22c55e11",border:"1px solid #22c55e33",borderRadius:8,padding:"10px 14px",fontSize:13,color:C.green,marginBottom:12}}>✅ Your MP4 is ready to download!</div>
+      <Btn onClick={downloadMp4} disabled={downloading} style={{background:C.green,color:"#000",fontWeight:700,width:"100%",padding:14,fontSize:15,borderRadius:12}}>{downloading?"⏳ Downloading…":"⬇️ Download MP4"}</Btn>
+      {msg&&<div style={{fontSize:12,color:msg.includes("✓")?C.green:C.red,marginTop:8,fontWeight:600}}>{msg}</div>}
+    </div>}
 
-      {renderStatus==="failed"&&<div>
-        <div className="bg-danger-soft border border-danger/20 rounded-lg px-3.5 py-2.5 text-sm text-danger mb-3 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" /> Render failed. Try again.</div>
-        <Btn onClick={startRender} style={{background:"var(--color-accent)",color:"#fff",width:"100%",padding:12}}>Retry Render</Btn>
-      </div>}
-    </div>
-  )
+    {renderStatus==="failed"&&<div>
+      <div style={{background:"#ef444411",border:"1px solid #ef444433",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#ef4444",marginBottom:12}}>❌ Render failed. Try again.</div>
+      <Btn onClick={startRender} style={{background:C.accent,color:"#fff",width:"100%",padding:12}}>🔄 Retry Render</Btn>
+    </div>}
+  </div>
 }
 
-// ── Forged Ad Card ────────────────────────────────────────────────────────
+
+
+// ── Forged Ads Tab ────────────────────────────────────────────────────────
 function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleSelect,onDuplicate}:{ad:ForgedAd,items:Item[],onOpen:()=>void,onRefresh:()=>void,selectMode:boolean,isSelected:boolean,onToggleSelect:()=>void,onDuplicate?:()=>void}){
   const supabase=createClient()
   const [hovered,setHovered]=useState(false)
@@ -120,7 +120,7 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
   const currentThumb=currentClip?.mux_playback_id?muxThumb(currentClip.mux_playback_id,currentClip.thumbnail_time||0):null
 
   const renderStatus=(ad as any).render_status||"pending"
-  const renderBadge=renderStatus==="ready"?{cls:"bg-success-soft text-success border-success/30",label:"Ready"}:renderStatus==="rendering"?{cls:"bg-warning-soft text-warning border-warning/30",label:"Rendering"}:renderStatus==="failed"?{cls:"bg-danger-soft text-danger border-danger/30",label:"Failed"}:{cls:"bg-white/10 text-text-muted border-white/10",label:"Pending"}
+  const renderBadge=renderStatus==="ready"?{bg:"#22c55e22",color:C.green,label:"✓ Ready"}:renderStatus==="rendering"?{bg:"#f59e0b22",color:C.yellow,label:"⏳ Rendering"}:renderStatus==="failed"?{bg:"#ef444422",color:"#ef4444",label:"❌ Failed"}:{bg:"#ffffff11",color:C.muted,label:"Pending"}
 
   async function quickDownload(e:React.MouseEvent){
     e.stopPropagation()
@@ -146,68 +146,68 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
 
   function handleClick(){if(selectMode)onToggleSelect();else onOpen()}
 
-  return(
-    <div
-      onMouseEnter={()=>setHovered(true)}
-      onMouseLeave={()=>setHovered(false)}
-      onClick={handleClick}
-      className={`bg-card border-2 rounded-lg overflow-hidden cursor-pointer transition-all duration-150 flex flex-col relative hover:shadow-glow ${
-        isSelected?"border-accent":hovered?"border-accent":"border-border hover:border-border-strong"
-      } ${hovered&&!selectMode?"-translate-y-0.5":""}`}
-    >
-      {/* Select checkbox */}
-      {selectMode&&<div className={`absolute top-2 left-2 z-20 w-[22px] h-[22px] rounded-md border-2 flex items-center justify-center ${isSelected?"bg-accent border-white":"bg-black/40 border-white/30"}`}>
-        {isSelected&&<Check className="w-3 h-3 text-white" />}
+  return<div
+    onMouseEnter={()=>setHovered(true)}
+    onMouseLeave={()=>setHovered(false)}
+    onClick={handleClick}
+    style={{background:C.card,border:"2px solid "+(isSelected?C.accent:hovered?C.accent:C.border),borderRadius:10,overflow:"hidden",cursor:"pointer",transition:"border-color 0.15s,transform 0.15s",transform:hovered&&!selectMode?"translateY(-2px)":"none",display:"flex",flexDirection:"column",position:"relative"}}
+  >
+    {/* Select checkbox */}
+    {selectMode&&<div style={{position:"absolute",top:8,left:8,zIndex:20,width:22,height:22,borderRadius:6,background:isSelected?C.accent:"#000a",border:"2px solid "+(isSelected?"#fff":"#fff5"),display:"flex",alignItems:"center",justifyContent:"center"}}>
+      {isSelected&&<span style={{color:"#fff",fontSize:12,fontWeight:800}}>✓</span>}
+    </div>}
+
+    {/* Thumbnail */}
+    <div style={{position:"relative",paddingTop:"177.78%",background:"#111",overflow:"hidden",flexShrink:0}}>
+      {currentThumb&&<img src={currentThumb} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",transition:"opacity 0.3s"}}/>}
+
+      {/* Hover overlay */}
+      {hovered&&!selectMode&&<div style={{position:"absolute",inset:0,background:"#00000055",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{width:48,height:48,borderRadius:"50%",background:"#000a",border:"2px solid #fff6",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>▶</div>
       </div>}
 
-      {/* Thumbnail */}
-      <div className="relative pt-[177.78%] bg-[#111] overflow-hidden shrink-0">
-        {currentThumb&&<img src={currentThumb} alt="" className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"/>}
+      {/* Clip progress dots */}
+      {clips.length>1&&hovered&&<div style={{position:"absolute",bottom:40,left:8,right:8,display:"flex",gap:3}}>
+        {clips.map((_:any,i:number)=><div key={i} style={{height:2,flex:1,borderRadius:2,background:i===thumbIdx?"#fff":"#ffffff44",transition:"background 0.3s"}}/>)}
+      </div>}
 
-        {hovered&&!selectMode&&<div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-          <div className="w-12 h-12 rounded-full bg-black/40 border-2 border-white/30 flex items-center justify-center"><Play className="w-5 h-5 text-white" /></div>
-        </div>}
-
-        {clips.length>1&&hovered&&<div className="absolute bottom-10 left-2 right-2 flex gap-0.5">
-          {clips.map((_:any,i:number)=><div key={i} className={`h-0.5 flex-1 rounded-full transition-colors duration-300 ${i===thumbIdx?"bg-white":"bg-white/30"}`}/>)}
-        </div>}
-
-        {/* Render status */}
-        <div className={`absolute top-2 right-2 ${renderBadge.cls} text-[9px] font-bold px-[7px] py-0.5 rounded-full backdrop-blur-sm border`} style={selectMode?{right:8}:renderStatus==="ready"?{right:40}:undefined}>
-          {renderBadge.label}
-        </div>
-
-        {renderStatus==="ready"&&!selectMode&&<button onClick={quickDownload} disabled={downloading} className="absolute top-2 right-2 bg-black/40 border border-white/20 text-white rounded-lg px-2 py-1.5 cursor-pointer text-sm backdrop-blur-sm hover:bg-black/60 transition-colors">
-          {downloading?"...":""}
-          <ArrowDown className="w-3.5 h-3.5" />
-        </button>}
-
-        <div className="absolute bottom-2 left-2 flex gap-1 flex-wrap max-w-[calc(100%-16px)]">
-          {ad.metadata?.contentType&&<span className="bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm">{ad.metadata.contentType}</span>}
-          {stage&&<span className="text-white text-[8px] font-bold px-1.5 py-0.5 rounded" style={{background:stageColor+"dd"}}>{stage.label}</span>}
-        </div>
-
-        <div className="absolute bottom-2 right-2 flex gap-1">
-          {ad.voiceover_url&&<span className="bg-black/60 text-[10px] px-1 py-0.5 rounded">🎙️</span>}
-          {ad.music_url&&<span className="bg-black/60 text-[10px] px-1 py-0.5 rounded">🎵</span>}
-        </div>
+      {/* Render status */}
+      <div style={{position:"absolute",top:8,right:selectMode?8:renderStatus==="ready"?40:8,background:renderBadge.bg,color:renderBadge.color,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:99,backdropFilter:"blur(4px)",border:"1px solid "+renderBadge.color+"44"}}>
+        {renderBadge.label}
       </div>
 
-      {/* Card body */}
-      <div className="px-3 py-2.5 flex-1 flex flex-col gap-1.5">
-        <div className="flex justify-between items-start gap-1.5">
-          <div className="font-bold text-xs leading-tight overflow-hidden line-clamp-2 flex-1">{ad.title}</div>
-          {ad.metadata?.grade&&<div className="shrink-0 text-[11px] font-extrabold px-[7px] py-0.5 rounded-md leading-snug border" style={{background:gradeColor(ad.metadata.grade).bg,color:gradeColor(ad.metadata.grade).text,borderColor:gradeColor(ad.metadata.grade).text+"33"}} title={`Clip-Script Match: ${ad.metadata.score||0}/100`}>{ad.metadata.grade}</div>}
-        </div>
-        <div className="flex gap-0.5" onMouseLeave={()=>setHoverRating(0)}>
-          {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={e=>{e.stopPropagation();setHoverRating(star)}} onClick={e=>{e.stopPropagation();saveRating(star)}} className={`cursor-pointer text-sm transition-colors ${(hoverRating||rating)>=star?"text-warning":"text-black/15"}`}><Star className="w-3.5 h-3.5" fill={(hoverRating||rating)>=star?"currentColor":"none"} /></span>)}
-        </div>
-        <div className="text-[10px] text-text-muted">{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}{ad.metadata?.adLength?` · ${ad.metadata.adLength}`:""}</div>
-        {(ad as any).notes&&<div className="text-[10px] text-text-muted italic overflow-hidden whitespace-nowrap text-ellipsis">{(ad as any).notes}</div>}
-        {onDuplicate&&!selectMode&&<button onClick={e=>{e.stopPropagation();onDuplicate()}} className="mt-1 w-full bg-accent-soft text-accent border border-accent/20 rounded-md px-2 py-1 text-[10px] font-bold cursor-pointer hover:bg-accent-muted transition-colors flex items-center justify-center gap-1"><Copy className="w-3 h-3" /> Duplicate</button>}
+      {/* Quick download */}
+      {renderStatus==="ready"&&!selectMode&&<button onClick={quickDownload} disabled={downloading} style={{position:"absolute",top:8,right:8,background:"#000a",border:"1px solid #fff3",color:"#fff",borderRadius:8,padding:"5px 8px",cursor:"pointer",fontSize:13,backdropFilter:"blur(4px)"}}>
+        {downloading?"…":"⬇️"}
+      </button>}
+
+      {/* Tag overlays bottom */}
+      <div style={{position:"absolute",bottom:8,left:8,display:"flex",gap:4,flexWrap:"wrap",maxWidth:"calc(100% - 16px)"}}>
+        {ad.metadata?.contentType&&<span style={{background:"#000b",color:"#fff",fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:4,backdropFilter:"blur(4px)"}}>{ad.metadata.contentType}</span>}
+        {stage&&<span style={{background:stageColor+"dd",color:"#fff",fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:4}}>{stage.label}</span>}
+      </div>
+
+      {/* Audio indicators */}
+      <div style={{position:"absolute",bottom:8,right:8,display:"flex",gap:3}}>
+        {ad.voiceover_url&&<span style={{background:"#000b",fontSize:10,padding:"2px 4px",borderRadius:4}}>🎙️</span>}
+        {ad.music_url&&<span style={{background:"#000b",fontSize:10,padding:"2px 4px",borderRadius:4}}>🎵</span>}
       </div>
     </div>
-  )
+
+    {/* Card body — compact */}
+    <div style={{padding:"10px 12px",flex:1,display:"flex",flexDirection:"column",gap:5}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
+        <div style={{fontWeight:700,fontSize:12,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any,flex:1}}>{ad.title}</div>
+        {ad.metadata?.grade&&<div style={{flexShrink:0,background:gradeColor(ad.metadata.grade).bg,color:gradeColor(ad.metadata.grade).text,fontSize:11,fontWeight:800,padding:"2px 7px",borderRadius:6,lineHeight:1.4,border:"1px solid "+gradeColor(ad.metadata.grade).text+"33"}} title={`Clip-Script Match: ${ad.metadata.score||0}/100`}>{ad.metadata.grade}</div>}
+      </div>
+      <div style={{display:"flex",gap:2}} onMouseLeave={()=>setHoverRating(0)}>
+        {[1,2,3,4,5].map(star=><span key={star} onMouseEnter={e=>{e.stopPropagation();setHoverRating(star)}} onClick={e=>{e.stopPropagation();saveRating(star)}} style={{cursor:"pointer",fontSize:13,color:(hoverRating||rating)>=star?"#f59e0b":"rgba(0,0,0,0.15)",transition:"color 0.1s"}}>★</span>)}
+      </div>
+      <div style={{fontSize:10,color:C.muted}}>{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}{ad.metadata?.adLength?` · ${ad.metadata.adLength}`:""}</div>
+      {(ad as any).notes&&<div style={{fontSize:10,color:C.muted,fontStyle:"italic",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>📝 {(ad as any).notes}</div>}
+      {onDuplicate&&!selectMode&&<button onClick={e=>{e.stopPropagation();onDuplicate()}} style={{marginTop:4,width:"100%",background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"33",borderRadius:6,padding:"4px 8px",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>📋 Duplicate</button>}
+    </div>
+  </div>
 }
 
 export function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{ads:ForgedAd[],items:Item[],brand:BrandProfile,setBrand:(b:BrandProfile)=>void,onRefresh:()=>void,onEditAd:(ad:ForgedAd)=>void,onCreateV2:(ad:ForgedAd)=>void}){
@@ -238,34 +238,49 @@ export function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCrea
     const adsWithData=updatedAds.filter(a=>a.metadata?.hook_rate||a.metadata?.cpa||a.metadata?.roas||a.star_rating)
     if(adsWithData.length<2)return
     const avg=(arr:number[])=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10:0
+
+    // Hook type performance
     const hookPerf:Record<string,number[]>={}
     adsWithData.forEach(a=>{const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK");const hookType=hook?.hookType||"Unknown";const rate=parseFloat(a.metadata?.hook_rate||"0");if(rate>0){if(!hookPerf[hookType])hookPerf[hookType]=[];hookPerf[hookType].push(rate)}})
     const hookEntries=Object.entries(hookPerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(b[1])-avg(a[1]))
     const best_hook_types=hookEntries.filter(([,v])=>avg(v)>=40).map(([k])=>k)
     const worst_hook_types=hookEntries.filter(([,v])=>avg(v)<30).map(([k])=>k)
+
+    // Top performing ads
     const topAds=adsWithData.filter(a=>parseFloat(a.metadata?.hook_rate||"0")>=45||(a.star_rating||0)>=4)
     const best_hook_patterns:string[]=[]
     topAds.forEach(a=>{const hook=(a.sections||[]).find((s:any)=>s.type==="HOOK");const words=(hook?.spokenWords||"").trim();if(!words)return;if(/^\d/.test(words.split(" ")[0]))best_hook_patterns.push("Opens with a number");if(/I |My |We /.test(words.substring(0,20)))best_hook_patterns.push("First-person opening");if(words.split(" ").length<=6)best_hook_patterns.push("Short punchy hook (under 7 words)");if(/\?$/.test(words.trim()))best_hook_patterns.push("Ends with a question");if(/stop|wait|don't|never/i.test(words.substring(0,30)))best_hook_patterns.push("Pattern interrupt / negative opener")})
+
+    // Content type performance (lower CPA = better)
     const ctypePerf:Record<string,number[]>={}
     adsWithData.forEach(a=>{const ct=a.metadata?.contentType||"Unknown";const cpa=parseFloat(a.metadata?.cpa||"0");if(cpa>0){if(!ctypePerf[ct])ctypePerf[ct]=[];ctypePerf[ct].push(cpa)}})
     const ctypeEntries=Object.entries(ctypePerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(a[1])-avg(b[1]))
     const best_content_type=ctypeEntries[0]?.[0]||""
+
+    // Average winning hook length
     const hookLengths=topAds.map(a=>{const h=(a.sections||[]).find((s:any)=>s.type==="HOOK");return(h?.spokenWords||"").trim().split(/\s+/).filter(Boolean).length}).filter(l=>l>0)
     const avg_winning_hook_length=hookLengths.length?Math.round(hookLengths.reduce((a,b)=>a+b,0)/hookLengths.length):0
+
+    // Section structure analysis — what section counts and types work best
     const sectionCounts=topAds.map(a=>(a.sections||[]).length).filter(n=>n>0)
     const avg_section_count=sectionCounts.length?Math.round(avg(sectionCounts)):0
-    const winningStructures=topAds.map(a=>(a.sections||[]).map((s:any)=>s.type).join(" > ")).filter(Boolean)
+    const winningStructures=topAds.map(a=>(a.sections||[]).map((s:any)=>s.type).join(" → ")).filter(Boolean)
     const structureCounts:Record<string,number>={}
     winningStructures.forEach(s=>{structureCounts[s]=(structureCounts[s]||0)+1})
     const best_structures=Object.entries(structureCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([s])=>s)
+
+    // Ad length performance
     const lengthPerf:Record<string,number[]>={}
     adsWithData.forEach(a=>{const len=a.metadata?.adLength||"Unknown";const rate=parseFloat(a.metadata?.hook_rate||"0");if(rate>0){if(!lengthPerf[len])lengthPerf[len]=[];lengthPerf[len].push(rate)}})
     const lengthEntries=Object.entries(lengthPerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(b[1])-avg(a[1]))
     const best_ad_length=lengthEntries[0]?.[0]||""
+
+    // Awareness stage performance
     const stagePerf:Record<string,number[]>={}
     adsWithData.forEach(a=>{const st=a.metadata?.awarenessStage||"Unknown";const rate=parseFloat(a.metadata?.hook_rate||"0");if(rate>0){if(!stagePerf[st])stagePerf[st]=[];stagePerf[st].push(rate)}})
     const stageEntries=Object.entries(stagePerf).filter(([,v])=>v.length>0).sort((a,b)=>avg(b[1])-avg(a[1]))
     const best_awareness_stage=stageEntries[0]?.[0]||""
+
     const intel={best_hook_types,worst_hook_types,best_hook_patterns:[...new Set(best_hook_patterns)],best_content_type,avg_winning_hook_length,best_ad_length,best_awareness_stage,avg_section_count,best_structures,total_ads_analysed:adsWithData.length,last_updated:new Date().toISOString()}
     const updated={...brand,brand_intelligence:intel}
     setBrand(updated)
@@ -282,6 +297,7 @@ export function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCrea
     setPerfSaving(false);onRefresh();setPerfOpen(false)
   }
 
+  // Auto-poll render status every 15 seconds
   useEffect(()=>{
     async function pollRenderStatus(){
       const rendering=ads.filter(a=>(a as any).render_status==="rendering")
@@ -319,6 +335,7 @@ export function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCrea
     onRefresh();setAutoRendering(false)
   }
 
+  // Filter
   const filtered=ads.filter(ad=>{
     if(renderFilter&&(ad as any).render_status!==renderFilter)return false
     if(search.trim()){const q=search.toLowerCase();if(![ad.title,ad.metadata?.contentType,ad.metadata?.productName,ad.metadata?.awarenessStage,(ad as any).notes].some((f:any)=>f&&String(f).toLowerCase().includes(q)))return false}
@@ -326,6 +343,7 @@ export function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCrea
     return true
   })
 
+  // Group by awareness stage
   const stageOrder=["problem_aware","unaware","solution_aware","product_aware","most_aware",""]
   const stageGroups:Record<string,ForgedAd[]>={}
   filtered.forEach(ad=>{const s=ad.metadata?.awarenessStage||"";if(!stageGroups[s])stageGroups[s]=[];stageGroups[s].push(ad)})
@@ -339,152 +357,155 @@ export function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCrea
   const totalPending=ads.filter(a=>(a as any).render_status==="pending"||!(a as any).render_status||(a as any).render_status==="failed").length
   const allFilteredIds=filtered.map(a=>a.id)
 
-  return(
-    <div className="p-7 max-w-[1200px] mx-auto">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-5 flex-wrap gap-3">
-        <div>
-          <STitle size={24} mb={4}><Zap className="w-5 h-5 inline" /> Forged Ads</STitle>
-          <div className="text-sm text-text-muted">Your complete video ad library — organised by awareness stage</div>
-        </div>
-        <div className="flex gap-2 flex-wrap items-center">
-          {totalPending>0&&<Btn onClick={autoRenderAll} disabled={autoRendering} style={{background:"var(--color-accent-soft)",color:"var(--color-accent)",border:"1px solid var(--color-accent-muted)",fontSize:12,padding:"7px 14px"}}>{autoRendering?"Rendering...":(<><Film className="w-3.5 h-3.5 inline"/> Render All ({totalPending})</>)}</Btn>}
-          {!selectMode&&<Btn onClick={()=>setSelectMode(true)} style={{background:"none",border:"1px solid var(--color-border)",color:"var(--color-text-muted)",fontSize:12,padding:"7px 14px"}}>Select</Btn>}
-          {selectMode&&<>
-            <Btn onClick={()=>{setSelectedIds(allFilteredIds)}} style={{background:"var(--color-accent-soft)",color:"var(--color-accent)",border:"1px solid var(--color-accent-muted)",fontSize:12,padding:"7px 14px"}}>Select All ({filtered.length})</Btn>
-            <Btn onClick={bulkDelete} disabled={selectedIds.length===0||deleting} style={{background:selectedIds.length>0?"rgba(239,68,68,0.2)":"var(--color-border)",color:selectedIds.length>0?"var(--color-danger)":"var(--color-text-muted)",border:"1px solid "+(selectedIds.length>0?"rgba(239,68,68,0.4)":"var(--color-border)"),fontSize:12,padding:"7px 14px"}}><Trash2 className="w-3 h-3 inline"/> Delete ({selectedIds.length})</Btn>
-            <Btn onClick={()=>{setSelectMode(false);setSelectedIds([])}} style={{background:"none",border:"1px solid var(--color-border)",color:"var(--color-text-muted)",fontSize:12,padding:"7px 14px"}}>Cancel</Btn>
-          </>}
-        </div>
+  return<div style={{padding:28,maxWidth:1200,margin:"0 auto"}}>
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12}}>
+      <div>
+        <STitle size={24} mb={4}>⚡ Forged Ads</STitle>
+        <div style={{fontSize:13,color:C.muted}}>Your complete video ad library — organised by awareness stage</div>
       </div>
-
-      {/* Search + filter row */}
-      <div className="flex gap-2.5 mb-4 flex-wrap items-center">
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search ads by name, product, stage..." className="flex-1 min-w-[220px] bg-surface border border-border rounded-lg px-3 py-2 text-text text-sm outline-none focus:border-accent transition-colors"/>
-        <button onClick={()=>setRenderFilter(renderFilter==="ready"?null:"ready")} className={`rounded-lg px-3.5 py-[7px] cursor-pointer text-xs font-semibold border transition-colors ${renderFilter==="ready"?"bg-success-soft border-success text-success":"bg-surface border-border text-text-muted hover:border-border-strong"}`}><Check className="w-3 h-3 inline" /> Ready ({totalReady})</button>
-        <button onClick={()=>setRenderFilter(renderFilter==="rendering"?null:"rendering")} className={`rounded-lg px-3.5 py-[7px] cursor-pointer text-xs font-semibold border transition-colors ${renderFilter==="rendering"?"bg-warning-soft border-warning text-warning":"bg-surface border-border text-text-muted hover:border-border-strong"}`}><Clock className="w-3 h-3 inline" /> Rendering ({totalRendering})</button>
-        {(activeTag||renderFilter||search)&&<button onClick={()=>{setActiveTag(null);setRenderFilter(null);setSearch("")}} className="bg-transparent border-none text-text-muted cursor-pointer text-xs underline">Clear filters</button>}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        {totalPending>0&&<Btn onClick={autoRenderAll} disabled={autoRendering} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"7px 14px"}}>{autoRendering?"⏳ Rendering…":`🎬 Render All (${totalPending})`}</Btn>}
+        {!selectMode&&<Btn onClick={()=>setSelectMode(true)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"7px 14px"}}>Select</Btn>}
+        {selectMode&&<>
+          <Btn onClick={()=>{setSelectedIds(allFilteredIds)}} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"7px 14px"}}>Select All ({filtered.length})</Btn>
+          <Btn onClick={bulkDelete} disabled={selectedIds.length===0||deleting} style={{background:selectedIds.length>0?"#ef444433":C.border,color:selectedIds.length>0?"#ef4444":C.muted,border:"1px solid "+(selectedIds.length>0?"#ef444466":C.border),fontSize:12,padding:"7px 14px"}}>Delete ({selectedIds.length})</Btn>
+          <Btn onClick={()=>{setSelectMode(false);setSelectedIds([])}} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"7px 14px"}}>Cancel</Btn>
+        </>}
       </div>
+    </div>
 
-      {/* Tag cloud */}
-      {ads.length>0&&<div className="flex gap-1.5 flex-wrap mb-5">
-        {[...new Set(ads.flatMap(ad=>[ad.metadata?.contentType,ad.metadata?.awarenessStage&&STAGES.find(s=>s.value===ad.metadata?.awarenessStage)?.label,ad.metadata?.productName&&ad.metadata.productName!=="General"?ad.metadata.productName:null].filter(Boolean)))].map((tag:any)=><button key={tag} onClick={()=>setActiveTag(activeTag===tag?null:tag)} className={`rounded-full px-3 py-1 cursor-pointer text-[11px] font-semibold border transition-colors ${activeTag===tag?"bg-accent text-white border-accent":"bg-surface text-text-muted border-border hover:border-border-strong"}`}>{tag}</button>)}
-      </div>}
+    {/* Search + filter row */}
+    <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search ads by name, product, stage…" style={{flex:1,minWidth:220,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",color:C.text,fontSize:13,outline:"none"}}/>
 
-      {/* Preview modal */}
-      {previewAd&&<div onClick={()=>setPreviewId(null)} className="fixed inset-0 bg-black/90 z-[300] flex items-start justify-center p-5 overflow-y-auto">
-        <div onClick={e=>e.stopPropagation()} className="bg-surface border border-border rounded-xl p-6 max-w-[900px] w-full mt-5 animate-scale-in">
-          <div className="flex justify-between items-start mb-5 gap-4">
-            <div className="flex-1">
-              <div className="font-bold text-lg mb-1.5">{previewAd.title}</div>
-              <div className="flex gap-2 flex-wrap items-center mb-2">
-                <span className={`rounded-full text-[10px] font-bold px-[7px] py-px border ${previewAd.status==="complete"?"bg-success-soft border-success/30 text-success":"bg-warning-soft border-warning/30 text-warning"}`}>{previewAd.status==="complete"?"Complete":"Draft"}</span>
-                {previewAd.mode==="broll"&&<Chip label="B-Roll" color={{bg:"#22c55e22",color:"var(--color-success)"}}/>}
-                {previewAd.metadata?.contentType&&<Chip label={previewAd.metadata.contentType} color={{bg:"#0891b222",color:"#38bdf8"}}/>}
-                {previewAd.metadata?.awarenessStage&&<Chip label={STAGES.find(s=>s.value===previewAd.metadata?.awarenessStage)?.label||previewAd.metadata.awarenessStage} color={{bg:STAGE_COLORS[previewAd.metadata.awarenessStage]+"22",color:STAGE_COLORS[previewAd.metadata.awarenessStage]}}/>}
-                {previewAd.created_at&&<span className="text-[11px] text-text-muted">Created {new Date(previewAd.created_at).toLocaleDateString()}</span>}
+      {/* Render status filter buttons */}
+      <button onClick={()=>setRenderFilter(renderFilter==="ready"?null:"ready")} style={{background:renderFilter==="ready"?"#22c55e33":C.surface,border:"1px solid "+(renderFilter==="ready"?"#22c55e":C.border),color:renderFilter==="ready"?C.green:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>✓ Ready ({totalReady})</button>
+      <button onClick={()=>setRenderFilter(renderFilter==="rendering"?null:"rendering")} style={{background:renderFilter==="rendering"?"#f59e0b33":C.surface,border:"1px solid "+(renderFilter==="rendering"?"#f59e0b":C.border),color:renderFilter==="rendering"?C.yellow:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>⏳ Rendering ({totalRendering})</button>
+
+      {(activeTag||renderFilter||search)&&<button onClick={()=>{setActiveTag(null);setRenderFilter(null);setSearch("")}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:12,textDecoration:"underline"}}>Clear filters</button>}
+    </div>
+
+    {/* Tag cloud */}
+    {ads.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>
+      {[...new Set(ads.flatMap(ad=>[ad.metadata?.contentType,ad.metadata?.awarenessStage&&STAGES.find(s=>s.value===ad.metadata?.awarenessStage)?.label,ad.metadata?.productName&&ad.metadata.productName!=="General"?ad.metadata.productName:null].filter(Boolean)))].map((tag:any)=><button key={tag} onClick={()=>setActiveTag(activeTag===tag?null:tag)} style={{background:activeTag===tag?C.accent:C.surface,color:activeTag===tag?"#fff":C.muted,border:"1px solid "+(activeTag===tag?C.accent:C.border),borderRadius:99,padding:"4px 11px",cursor:"pointer",fontSize:11,fontWeight:600}}>{tag}</button>)}
+    </div>}
+
+    {/* Preview modal */}
+    {previewAd&&<div onClick={()=>setPreviewId(null)} style={{position:"fixed",inset:0,background:"#000000ee",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:12,padding:24,maxWidth:900,width:"100%",marginTop:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,gap:16}}>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:18,marginBottom:6}}>{previewAd.title}</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
+              <span style={{background:previewAd.status==="complete"?"#22c55e22":"#f59e0b22",color:previewAd.status==="complete"?C.green:C.yellow,border:"1px solid "+(previewAd.status==="complete"?"#22c55e44":"#f59e0b44"),borderRadius:99,fontSize:10,fontWeight:700,padding:"1px 7px"}}>{previewAd.status==="complete"?"✅ Complete":"📝 Draft"}</span>
+              {previewAd.mode==="broll"&&<Chip label="🎬 B-Roll" color={{bg:"#22c55e22",color:C.green}}/>}
+              {previewAd.metadata?.contentType&&<Chip label={previewAd.metadata.contentType} color={{bg:"#0891b222",color:"#38bdf8"}}/>}
+              {previewAd.metadata?.awarenessStage&&<Chip label={STAGES.find(s=>s.value===previewAd.metadata?.awarenessStage)?.label||previewAd.metadata.awarenessStage} color={{bg:STAGE_COLORS[previewAd.metadata.awarenessStage]+"22",color:STAGE_COLORS[previewAd.metadata.awarenessStage]}}/>}
+              {previewAd.created_at&&<span style={{fontSize:11,color:C.muted}}>Created {new Date(previewAd.created_at).toLocaleDateString()}</span>}
+            </div>
+            {editingNotes===previewAd.id
+              ?<div style={{display:"flex",gap:8,marginTop:8}}>
+                <input value={notesVal} onChange={e=>setNotesVal(e.target.value)} placeholder="Add internal notes…" autoFocus style={{flex:1,background:C.surface,border:"1px solid "+C.accent,borderRadius:8,padding:"6px 10px",color:C.text,fontSize:13,outline:"none"}}/>
+                <Btn onClick={()=>saveNotes(previewAd.id)} style={{background:C.green,color:"#000",fontWeight:700,padding:"6px 12px",fontSize:12}}>Save</Btn>
+                <Btn onClick={()=>setEditingNotes(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"6px 12px",fontSize:12}}>Cancel</Btn>
               </div>
-              {editingNotes===previewAd.id
-                ?<div className="flex gap-2 mt-2">
-                  <input value={notesVal} onChange={e=>setNotesVal(e.target.value)} placeholder="Add internal notes..." autoFocus className="flex-1 bg-surface border border-accent rounded-lg px-2.5 py-1.5 text-text text-sm outline-none"/>
-                  <Btn onClick={()=>saveNotes(previewAd.id)} style={{background:"var(--color-success)",color:"#000",fontWeight:700,padding:"6px 12px",fontSize:12}}>Save</Btn>
-                  <Btn onClick={()=>setEditingNotes(null)} style={{background:"none",border:"1px solid var(--color-border)",color:"var(--color-text-muted)",padding:"6px 12px",fontSize:12}}>Cancel</Btn>
-                </div>
-                :<div onClick={()=>{setEditingNotes(previewAd.id);setNotesVal((previewAd as any).notes||"")}} className={`text-xs cursor-pointer mt-1.5 underline ${(previewAd as any).notes?"text-text-muted":"text-accent"}`}>
-                  {(previewAd as any).notes?`${(previewAd as any).notes}`:"+ Add notes"}
-                </div>}
-            </div>
-            <div className="flex gap-2 shrink-0 flex-wrap">
-              {previewAd.mode!=="broll"&&<Btn onClick={()=>{onEditAd(previewAd);setPreviewId(null)}} style={{background:"var(--color-accent-soft)",color:"var(--color-accent)",border:"1px solid var(--color-accent-muted)",fontSize:12,padding:"6px 12px"}}><Pencil className="w-3 h-3 inline"/> Edit</Btn>}
-              {previewAd.mode!=="broll"&&<Btn onClick={()=>{onCreateV2(previewAd);setPreviewId(null)}} style={{background:"rgba(34,197,94,0.08)",color:"var(--color-success)",border:"1px solid rgba(34,197,94,0.27)",fontSize:12,padding:"6px 12px"}}><Zap className="w-3 h-3 inline"/> v2</Btn>}
-              {previewAd.status==="draft"&&<Btn onClick={()=>{markComplete(previewAd.id);setPreviewId(null)}} style={{background:"rgba(34,197,94,0.13)",color:"var(--color-success)",border:"1px solid rgba(34,197,94,0.27)",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
-              <Btn onClick={()=>{deleteAd(previewAd.id);setPreviewId(null)}} style={{background:"rgba(239,68,68,0.13)",color:"var(--color-danger)",border:"1px solid rgba(239,68,68,0.2)",fontSize:12,padding:"6px 12px"}}><Trash2 className="w-3 h-3 inline"/> Delete</Btn>
-              <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid var(--color-border)",color:"var(--color-text-muted)",padding:"5px 12px"}}><X className="w-3.5 h-3.5"/></Btn>
-            </div>
-          </div>
-          {previewAd.sections&&previewAd.sections.length>0&&<div className="mb-5"><StitchedPreview sections={previewAd.sections} libraryItems={items} voiceoverUrl={previewAd.voiceover_url} musicUrl={previewAd.music_url}/></div>}
-          <div className="flex gap-3 flex-wrap mb-4">
-            {previewAd.voiceover_url&&<div className="flex-1 min-w-[200px]"><div className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5">Voiceover · {previewAd.voiceover_voice}</div><audio src={previewAd.voiceover_url} controls className="w-full h-9"/></div>}
-            {previewAd.music_url&&<div className="flex-1 min-w-[200px]"><div className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5">Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls className="w-full h-9"/></div>}
-          </div>
-          {/* Performance logging */}
-          <div className="mb-4">
-            {!perfOpen
-              ?<button onClick={()=>setPerfOpen(true)} className="bg-surface border border-border text-text-muted rounded-lg px-3.5 py-1.5 cursor-pointer text-xs w-full text-left hover:border-border-strong transition-colors flex items-center gap-1.5">
-                <BarChart3 className="w-3.5 h-3.5" /> {previewAd.metadata?.hook_rate?`Hook rate: ${previewAd.metadata.hook_rate}%${previewAd.metadata?.cpa?` · CPA: £${previewAd.metadata.cpa}`:""}${previewAd.metadata?.roas?` · ROAS: ${previewAd.metadata.roas}x`:""}`:"Log performance data"}
-              </button>
-              :<div className="bg-bg border border-border rounded-lg p-3.5">
-                <div className="font-bold text-sm mb-2.5 flex items-center gap-1.5"><BarChart3 className="w-4 h-4" /> Log Performance Data</div>
-                <div className="grid grid-cols-2 gap-2.5 mb-3">
-                  {([["Hook Rate %","hook_rate","e.g. 42"],["CPA ($)","cpa","e.g. 18"],["ROAS","roas","e.g. 3.2"],["Spend ($)","spend","e.g. 500"]] as [string,string,string][]).map(([label,key,ph])=>
-                    <div key={key}><Label>{label}</Label><input value={perfVals[key]||""} onChange={e=>setPerfVals(v=>({...v,[key]:e.target.value}))} placeholder={ph} className="bg-surface border border-border rounded-lg px-2.5 py-[7px] text-text text-sm outline-none w-full"/></div>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Btn onClick={savePerf} disabled={perfSaving} style={{background:"var(--color-accent)",color:"#fff",flex:1}}>{perfSaving?"Saving...":"Save + Update Intelligence"}</Btn>
-                  <Btn onClick={()=>setPerfOpen(false)} style={{background:"none",border:"1px solid var(--color-border)",color:"var(--color-text-muted)"}}>Cancel</Btn>
-                </div>
+              :<div onClick={()=>{setEditingNotes(previewAd.id);setNotesVal((previewAd as any).notes||"")}} style={{fontSize:12,color:(previewAd as any).notes?C.muted:C.accent,cursor:"pointer",marginTop:6,textDecoration:"underline"}}>
+                {(previewAd as any).notes?`📝 ${(previewAd as any).notes}`:"+ Add notes"}
               </div>}
           </div>
-          <ScorePanel ad={previewAd} onScored={(scored)=>{onRefresh()}}/>
-          <ForgedAdDownload ad={previewAd} onRefresh={onRefresh}/>
-        </div>
-      </div>}
-
-      {/* Empty state */}
-      {ads.length===0&&<Card style={{textAlign:"center",padding:60}}><Zap className="w-10 h-10 mx-auto mb-3 text-text-muted" /><STitle mb={6}>No forged ads yet</STitle><div className="text-text-muted text-sm">Create an ad from the Scripts tab and save it here.</div></Card>}
-      {ads.length>0&&filtered.length===0&&<Card style={{textAlign:"center",padding:40}}><Search className="w-7 h-7 mx-auto mb-2 text-text-muted" /><div className="text-text-muted text-sm">No ads match your filters.<br/><button onClick={()=>{setSearch("");setActiveTag(null);setRenderFilter(null)}} className="bg-transparent border-none text-accent cursor-pointer text-sm underline mt-2">Clear all filters</button></div></Card>}
-
-      {/* Pending renders section */}
-      {ads.filter(a=>!a.render_status||a.render_status==="pending"||a.render_status==="failed").length>0&&<div className="mb-5 border border-warning/30 rounded-lg overflow-hidden">
-        <div className="bg-warning-soft px-5 py-3.5 flex items-center gap-3 border-b border-warning/20">
-          <div className="w-2.5 h-2.5 rounded-full bg-warning shrink-0"/>
-          <div className="flex-1">
-            <div className="font-bold text-[15px] text-warning flex items-center gap-1.5"><Clock className="w-4 h-4" /> Waiting to Render</div>
-            <div className="text-[11px] text-text-muted mt-0.5">These ads are saved but haven't been rendered to MP4 yet</div>
+          <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap"}}>
+            {previewAd.mode!=="broll"&&<Btn onClick={()=>{onEditAd(previewAd);setPreviewId(null)}} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px"}}>✏️ Edit Ad</Btn>}
+            {previewAd.mode!=="broll"&&<Btn onClick={()=>{onCreateV2(previewAd);setPreviewId(null)}} style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontSize:12,padding:"6px 12px"}}>⚡ Create v2</Btn>}
+            {previewAd.status==="draft"&&<Btn onClick={()=>{markComplete(previewAd.id);setPreviewId(null)}} style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",fontSize:12,padding:"6px 12px"}}>Mark Complete</Btn>}
+            <Btn onClick={()=>{deleteAd(previewAd.id);setPreviewId(null)}} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433",fontSize:12,padding:"6px 12px"}}>Delete</Btn>
+            <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕</Btn>
           </div>
-          <Btn onClick={autoRenderAll} disabled={autoRendering} style={{background:"var(--color-warning)",color:"#000",fontWeight:700,fontSize:12,padding:"7px 14px"}}>{autoRendering?"Starting...":(<><Film className="w-3.5 h-3.5 inline"/> Render All</>)}</Btn>
         </div>
-        <div className="p-4 bg-bg flex flex-col gap-2">
-          {ads.filter(a=>!a.render_status||a.render_status==="pending"||a.render_status==="failed").map(ad=><div key={ad.id} className="flex items-center gap-3 bg-card border border-border rounded-lg px-3.5 py-2.5">
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm overflow-hidden whitespace-nowrap text-ellipsis">{ad.title}</div>
-              <div className="text-[11px] text-text-muted mt-0.5">{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}{ad.render_status==="failed"?<span className="text-danger ml-2"><AlertTriangle className="w-3 h-3 inline"/> Last render failed</span>:""}</div>
-            </div>
-            <Btn onClick={async()=>{await fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:ad.id})});onRefresh()}} style={{background:"var(--color-accent-soft)",color:"var(--color-accent)",border:"1px solid var(--color-accent-muted)",fontSize:12,padding:"6px 12px",flexShrink:0}}><Film className="w-3 h-3 inline"/> Render</Btn>
-            <Btn onClick={()=>setPreviewId(ad.id)} style={{background:"none",border:"1px solid var(--color-border)",color:"var(--color-text-muted)",fontSize:12,padding:"6px 10px",flexShrink:0}}>Open</Btn>
-          </div>)}
+        {previewAd.sections&&previewAd.sections.length>0&&<div style={{marginBottom:20}}><StitchedPreview sections={previewAd.sections} libraryItems={items} voiceoverUrl={previewAd.voiceover_url} musicUrl={previewAd.music_url}/></div>}
+        <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
+          {previewAd.voiceover_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover · {previewAd.voiceover_voice}</div><audio src={previewAd.voiceover_url} controls style={{width:"100%",height:36}}/></div>}
+          {previewAd.music_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls style={{width:"100%",height:36}}/></div>}
         </div>
-      </div>}
+        {/* Performance logging */}
+        <div style={{marginBottom:16}}>
+          {!perfOpen
+            ?<button onClick={()=>setPerfOpen(true)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,width:"100%",textAlign:"left" as const}}>
+              📊 {previewAd.metadata?.hook_rate?`Hook rate: ${previewAd.metadata.hook_rate}%${previewAd.metadata?.cpa?` · CPA: £${previewAd.metadata.cpa}`:""}${previewAd.metadata?.roas?` · ROAS: ${previewAd.metadata.roas}x`:""}`:"+  Log performance data"}
+            </button>
+            :<div style={{background:C.bg,border:"1px solid "+C.border,borderRadius:10,padding:14}}>
+              <div style={{fontWeight:700,fontSize:13,marginBottom:10}}>📊 Log Performance Data</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+                {([["Hook Rate %","hook_rate","e.g. 42"],["CPA (£)","cpa","e.g. 18"],["ROAS","roas","e.g. 3.2"],["Spend (£)","spend","e.g. 500"]] as [string,string,string][]).map(([label,key,ph])=>
+                  <div key={key}><Label>{label}</Label><input value={perfVals[key]||""} onChange={e=>setPerfVals(v=>({...v,[key]:e.target.value}))} placeholder={ph} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"7px 10px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const}}/></div>
+                )}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <Btn onClick={savePerf} disabled={perfSaving} style={{background:C.accent,color:"#fff",flex:1}}>{perfSaving?"Saving…":"💾 Save + Update Intelligence"}</Btn>
+                <Btn onClick={()=>setPerfOpen(false)} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn>
+              </div>
+            </div>}
+        </div>
+        {/* Clip-Script Match Score */}
+        <ScorePanel ad={previewAd} onScored={(scored)=>{onRefresh()}}/>
 
-      {/* Stage folders */}
-      {allStages.map(stageKey=>{
-        const stageAds=stageGroups[stageKey]||[]
-        const stageInfo=STAGES.find(s=>s.value===stageKey)
-        const stageColor=STAGE_COLORS[stageKey]||C.accent
-        const expanded=isExpanded(stageKey)
-        const readyCount=stageAds.filter(a=>(a as any).render_status==="ready").length
+        <ForgedAdDownload ad={previewAd} onRefresh={onRefresh}/>
+      </div>
+    </div>}
 
-        return<div key={stageKey} className="mb-4 border border-border rounded-lg overflow-hidden">
-          <div onClick={()=>toggleStage(stageKey)} className={`bg-card px-5 py-3.5 flex items-center gap-3 cursor-pointer hover:bg-card-hover transition-colors ${expanded?"border-b border-border":""}`}>
-            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{background:stageColor}}/>
-            <div className="flex-1">
-              <div className="font-bold text-[15px]">{stageInfo?.label||"General"}</div>
-              {stageInfo&&<div className="text-[11px] text-text-muted mt-0.5">{stageInfo.desc}</div>}
-            </div>
-            <div className="flex gap-2 items-center">
-              <span className="rounded-full text-[11px] font-bold px-2.5 py-0.5 border" style={{background:stageColor+"22",color:stageColor,borderColor:stageColor+"44"}}>{stageAds.length} ad{stageAds.length!==1?"s":""}</span>
-              {readyCount>0&&<span className="bg-success-soft text-success border border-success/30 rounded-full text-[11px] font-bold px-2.5 py-0.5"><Check className="w-3 h-3 inline"/> {readyCount} ready</span>}
-              <span className="text-xs text-text-muted ml-1">{expanded?"▲":"▼"}</span>
-            </div>
+    {/* Empty state */}
+    {ads.length===0&&<Card style={{textAlign:"center",padding:60}}><div style={{fontSize:40,marginBottom:12}}>⚡</div><STitle mb={6}>No forged ads yet</STitle><div style={{color:C.muted,fontSize:13}}>Create an ad from the Scripts tab and save it here.</div></Card>}
+    {ads.length>0&&filtered.length===0&&<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:28,marginBottom:8}}>🔍</div><div style={{color:C.muted,fontSize:14}}>No ads match your filters.<br/><button onClick={()=>{setSearch("");setActiveTag(null);setRenderFilter(null)}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,textDecoration:"underline",marginTop:8}}>Clear all filters</button></div></Card>}
+
+{/* Pending renders section */}
+    {ads.filter(a=>!a.render_status||a.render_status==="pending"||a.render_status==="failed").length>0&&<div style={{marginBottom:20,border:"1px solid #f59e0b44",borderRadius:10,overflow:"hidden"}}>
+      <div style={{background:"#f59e0b11",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #f59e0b33"}}>
+        <div style={{width:10,height:10,borderRadius:"50%",background:C.yellow,flexShrink:0}}/>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:700,fontSize:15,color:C.yellow}}>⏳ Waiting to Render</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:1}}>These ads are saved but haven't been rendered to MP4 yet</div>
+        </div>
+        <Btn onClick={autoRenderAll} disabled={autoRendering} style={{background:C.yellow,color:"#000",fontWeight:700,fontSize:12,padding:"7px 14px"}}>{autoRendering?"⏳ Starting…":"🎬 Render All"}</Btn>
+      </div>
+      <div style={{padding:16,background:C.bg,display:"flex",flexDirection:"column",gap:8}}>
+        {ads.filter(a=>!a.render_status||a.render_status==="pending"||a.render_status==="failed").map(ad=><div key={ad.id} style={{display:"flex",alignItems:"center",gap:12,background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:"10px 14px"}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:600,fontSize:13,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ad.title}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{ad.created_at?new Date(ad.created_at).toLocaleDateString():""}{ad.render_status==="failed"?<span style={{color:"#ef4444",marginLeft:8}}>❌ Last render failed</span>:""}</div>
           </div>
-          {expanded&&<div className="p-5 bg-bg">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5">
-              {stageAds.map(ad=><ForgedAdCard key={ad.id} ad={ad} items={items} onOpen={()=>setPreviewId(ad.id)} onRefresh={onRefresh} selectMode={selectMode} isSelected={selectedIds.includes(ad.id)} onToggleSelect={()=>setSelectedIds(prev=>prev.includes(ad.id)?prev.filter(x=>x!==ad.id):[...prev,ad.id])} onDuplicate={()=>onCreateV2(ad)}/>)}
-            </div>
-          </div>}
+          <Btn onClick={async()=>{await fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:ad.id})});onRefresh()}} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44",fontSize:12,padding:"6px 12px",flexShrink:0}}>🎬 Render</Btn>
+          <Btn onClick={()=>setPreviewId(ad.id)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:12,padding:"6px 10px",flexShrink:0}}>Open</Btn>
+        </div>)}
+      </div>
+    </div>}
+
+    {/* Stage folders */}
+    {allStages.map(stageKey=>{
+      const stageAds=stageGroups[stageKey]||[]
+      const stageInfo=STAGES.find(s=>s.value===stageKey)
+      const stageColor=STAGE_COLORS[stageKey]||C.accent
+      const expanded=isExpanded(stageKey)
+      const readyCount=stageAds.filter(a=>(a as any).render_status==="ready").length
+
+      return<div key={stageKey} style={{marginBottom:16,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden"}}>
+        <div onClick={()=>toggleStage(stageKey)} style={{background:C.card,padding:"14px 20px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderBottom:expanded?"1px solid "+C.border:"none"}}>
+          <div style={{width:10,height:10,borderRadius:"50%",background:stageColor,flexShrink:0}}/>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:15}}>{stageInfo?.label||"General"}</div>
+            {stageInfo&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{stageInfo.desc}</div>}
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{background:stageColor+"22",color:stageColor,border:"1px solid "+stageColor+"44",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 10px"}}>{stageAds.length} ad{stageAds.length!==1?"s":""}</span>
+            {readyCount>0&&<span style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 10px"}}>✓ {readyCount} ready</span>}
+            <span style={{fontSize:12,color:C.muted,marginLeft:4}}>{expanded?"▲":"▼"}</span>
+          </div>
         </div>
-      })}
-    </div>
-  )
+        {expanded&&<div style={{padding:20,background:C.bg}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>
+            {stageAds.map(ad=><ForgedAdCard key={ad.id} ad={ad} items={items} onOpen={()=>setPreviewId(ad.id)} onRefresh={onRefresh} selectMode={selectMode} isSelected={selectedIds.includes(ad.id)} onToggleSelect={()=>setSelectedIds(prev=>prev.includes(ad.id)?prev.filter(x=>x!==ad.id):[...prev,ad.id])} onDuplicate={()=>onCreateV2(ad)}/>)}
+          </div>
+        </div>}
+      </div>
+    })}
+  </div>
 }

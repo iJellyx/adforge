@@ -1,12 +1,12 @@
 'use client'
 import React, { useState, useEffect, useRef } from 'react'
-import { Scissors, Play, Pause, SkipBack, SkipForward, RotateCcw, X } from 'lucide-react'
 import { C } from './constants'
 import { fmt, muxThumb } from './utils'
 import { Btn } from './ui-primitives'
 
 export function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,onClose}:any){
   const fullDur=originalDuration||item.duration_seconds||30
+  // If clip is a sub-clip, the playback ID belongs to the original — use it
   const playbackId=item.mux_playback_id
   const [inPt,setInPt]=useState(trimStart??item.start_seconds??0)
   const [outPt,setOutPt]=useState(trimEnd??item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||5))
@@ -78,65 +78,55 @@ export function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,
   const selDur=outPt-inPt
   const thumbCount=10
 
-  return<div onClick={onClose} className="bg-overlay fixed inset-0 z-[500] flex items-center justify-center p-5 animate-fade-in">
-    <div onClick={e=>e.stopPropagation()} className="bg-surface border border-border rounded-xl w-full max-w-3xl overflow-hidden shadow-xl animate-scale-in">
-      <div className="px-5 py-4 border-b border-border flex items-center gap-3">
-        <div className="flex-1">
-          <div className="font-extrabold text-[15px] text-text flex items-center gap-2"><Scissors className="w-4 h-4" /> Trim Clip</div>
-          <div className="text-xs text-text-muted mt-0.5">{item.title}</div>
+  return<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:20,width:"100%",maxWidth:780,overflow:"hidden"}}>
+      <div style={{padding:"16px 20px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:12}}>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:800,fontSize:15,color:C.text}}>✂️ Trim Clip</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.title}</div>
         </div>
-        <div className="bg-accent-soft border border-border rounded-md px-3 py-1.5 text-xs font-bold text-accent">{selDur.toFixed(1)}s selected</div>
-        <button onClick={onClose} className="bg-transparent border border-border rounded-md px-3 py-1.5 cursor-pointer text-xs text-text-muted hover:border-border-strong transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50">Cancel</button>
-        <button onClick={()=>onSave({trimStart:inPt,trimEnd:outPt})} className="bg-accent text-white border-none rounded-md px-5 py-2 cursor-pointer text-sm font-bold hover:bg-accent-hover transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50">Save Trim</button>
+        <div style={{background:"#EDE8FF",border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:C.accent}}>{selDur.toFixed(1)}s selected</div>
+        <button onClick={onClose} style={{background:"none",border:"1px solid "+C.border,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,color:C.muted,fontFamily:"inherit"}}>Cancel</button>
+        <button onClick={()=>onSave({trimStart:inPt,trimEnd:outPt})} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Save Trim</button>
       </div>
-      <div className="bg-black relative flex items-center justify-center max-h-[340px] overflow-hidden">
-        <video ref={vidRef} playsInline preload="auto" muted className="max-h-[340px] w-full object-contain block cursor-pointer" onClick={togglePlay}/>
-        {!playing&&<div onClick={togglePlay} className="absolute w-14 h-14 rounded-full bg-black/60 border-2 border-white/30 flex items-center justify-center text-white cursor-pointer hover:bg-black/80 transition-all duration-150">
-          <Play className="w-5 h-5 ml-0.5" />
-        </div>}
-        <div className="absolute bottom-2.5 right-3 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded-md">{curTime.toFixed(1)}s / {fullDur.toFixed(1)}s</div>
+      <div style={{background:"#000",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:340,overflow:"hidden"}}>
+        <video ref={vidRef} playsInline preload="auto" muted style={{maxHeight:340,width:"100%",objectFit:"contain",display:"block",cursor:"pointer"}} onClick={togglePlay}/>
+        {!playing&&<div onClick={togglePlay} style={{position:"absolute",width:56,height:56,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"2px solid rgba(255,255,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,color:"#fff",cursor:"pointer"}}>▶</div>}
+        <div style={{position:"absolute",bottom:10,right:12,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:5}}>{curTime.toFixed(1)}s / {fullDur.toFixed(1)}s</div>
       </div>
-      <div className="px-5 pt-4 pb-5">
-        <div className="flex justify-between text-xs text-text-muted mb-1.5">
-          <span className="text-success font-bold">In: {inPt.toFixed(2)}s</span>
-          <span className="text-accent font-bold">Duration: {selDur.toFixed(2)}s</span>
-          <span className="text-danger font-bold">Out: {outPt.toFixed(2)}s</span>
+      <div style={{padding:"16px 20px 20px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginBottom:6}}>
+          <span style={{color:C.green,fontWeight:700}}>In: {inPt.toFixed(2)}s</span>
+          <span style={{color:C.accent,fontWeight:700}}>Duration: {selDur.toFixed(2)}s</span>
+          <span style={{color:C.red,fontWeight:700}}>Out: {outPt.toFixed(2)}s</span>
         </div>
-        <div ref={tlRef} onMouseDown={onTlDown} className="relative h-[60px] rounded-md overflow-hidden cursor-crosshair select-none mb-2.5">
-          <div className="absolute inset-0 flex">
+        <div ref={tlRef} onMouseDown={onTlDown} style={{position:"relative",height:60,borderRadius:10,overflow:"hidden",cursor:"crosshair",userSelect:"none",marginBottom:10}}>
+          <div style={{position:"absolute",inset:0,display:"flex"}}>
             {Array.from({length:thumbCount},(_,ti)=>{
               const tt=(ti/thumbCount)*fullDur
               const bg="url("+muxThumb(item.mux_playback_id,tt)+")"
-              return<div key={ti} className="flex-1 bg-cover bg-center" style={{backgroundImage:bg}}/>
+              return<div key={ti} style={{flex:1,backgroundImage:bg,backgroundSize:"cover",backgroundPosition:"center"}}/>
             })}
           </div>
-          <div className="absolute top-0 left-0 h-full bg-black/65" style={{width:inPct+"%"}}/>
-          <div className="absolute top-0 right-0 h-full bg-black/65" style={{width:(100-outPct)+"%"}}/>
-          <div className="absolute top-0 h-full border-2 border-accent box-border" style={{left:inPct+"%",width:(outPct-inPct)+"%"}}/>
-          <div className="absolute -top-1 w-3.5 h-[68px] bg-success rounded cursor-ew-resize z-10 flex items-center justify-center" style={{left:"calc("+inPct+"% - 7px)"}}>
-            <div className="w-0.5 h-6 bg-white/80 rounded"/>
+          <div style={{position:"absolute",top:0,left:0,width:inPct+"%",height:"100%",background:"rgba(0,0,0,0.65)"}}/>
+          <div style={{position:"absolute",top:0,right:0,width:(100-outPct)+"%",height:"100%",background:"rgba(0,0,0,0.65)"}}/>
+          <div style={{position:"absolute",top:0,left:inPct+"%",width:(outPct-inPct)+"%",height:"100%",border:"2px solid "+C.accent,boxSizing:"border-box" as const}}/>
+          <div style={{position:"absolute",top:-4,left:"calc("+inPct+"% - 7px)",width:14,height:68,background:C.green,borderRadius:4,cursor:"ew-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:2,height:24,background:"rgba(255,255,255,0.8)",borderRadius:2}}/>
           </div>
-          <div className="absolute -top-1 w-3.5 h-[68px] bg-danger rounded cursor-ew-resize z-10 flex items-center justify-center" style={{left:"calc("+outPct+"% - 7px)"}}>
-            <div className="w-0.5 h-6 bg-white/80 rounded"/>
+          <div style={{position:"absolute",top:-4,left:"calc("+outPct+"% - 7px)",width:14,height:68,background:"#DC2626",borderRadius:4,cursor:"ew-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:2,height:24,background:"rgba(255,255,255,0.8)",borderRadius:2}}/>
           </div>
-          <div className="absolute top-0 w-0.5 h-full bg-white pointer-events-none z-20" style={{left:"calc("+curPct+"% - 1px)"}}/>
+          <div style={{position:"absolute",top:0,left:"calc("+curPct+"% - 1px)",width:2,height:"100%",background:"#fff",pointerEvents:"none",zIndex:20}}/>
         </div>
-        <div className="flex justify-between text-[9px] text-text-muted mb-3.5">
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.muted,marginBottom:14}}>
           {Array.from({length:6},(_,ti)=><span key={ti}>{((ti/5)*fullDur).toFixed(0)}s</span>)}
         </div>
-        <div className="flex gap-2">
-          <button onClick={()=>seekTo(inPt)} className="bg-surface border border-border text-text-muted rounded-md px-3.5 py-2 cursor-pointer text-xs hover:border-border-strong transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 flex items-center gap-1">
-            <SkipBack className="w-3 h-3" /> In
-          </button>
-          <button onClick={togglePlay} className="bg-accent text-white border-none rounded-md py-2.5 cursor-pointer text-sm font-bold flex-1 hover:bg-accent-hover transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 flex items-center justify-center gap-1.5">
-            {playing?<><Pause className="w-4 h-4" /> Pause</>:<><Play className="w-4 h-4" /> Play Selection</>}
-          </button>
-          <button onClick={()=>seekTo(outPt-0.1)} className="bg-surface border border-border text-text-muted rounded-md px-3.5 py-2 cursor-pointer text-xs hover:border-border-strong transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 flex items-center gap-1">
-            Out <SkipForward className="w-3 h-3" />
-          </button>
-          <button onClick={()=>{setInPt(item.start_seconds??0);setOutPt(item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||fullDur))}} className="bg-danger-soft border border-danger/30 text-danger rounded-md px-3 py-2 cursor-pointer text-xs hover:bg-danger/20 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-danger/50 flex items-center gap-1">
-            <RotateCcw className="w-3 h-3" /> Reset
-          </button>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>seekTo(inPt)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>⏮ In</button>
+          <button onClick={togglePlay} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"9px 0",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit",flex:1}}>{playing?"⏸ Pause":"▶ Play Selection"}</button>
+          <button onClick={()=>seekTo(outPt-0.1)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Out ⏭</button>
+          <button onClick={()=>{setInPt(item.start_seconds??0);setOutPt(item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||fullDur))}} style={{background:"#FEF2F2",border:"1px solid #FECACA",color:C.red,borderRadius:8,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Reset</button>
         </div>
       </div>
     </div>

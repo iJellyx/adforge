@@ -1,6 +1,5 @@
 'use client'
 import { useState } from 'react'
-import { ChevronUp, ChevronDown, Mic, Music, Check, Save, Zap, RefreshCw, Search, AlertTriangle, Settings, Loader2, X } from 'lucide-react'
 import { Item, ForgedAd, BrandProfile, CaptionSettings } from './types'
 import { C, SEC_TYPES, DEFAULT_CAPTIONS } from './constants'
 import { secColor, callClaude } from './utils'
@@ -72,19 +71,19 @@ export function AdWorkspace({
   const [audioOpen,setAudioOpen]=useState(!voiceoverUrl)
   const [settingsOpen,setSettingsOpen]=useState(false)
 
-  return<div className="flex gap-0 min-h-screen">
+  return<div style={{display:"flex",gap:0,minHeight:"100vh"}}>
     {/* LEFT COLUMN */}
-    <div className="flex-[3] p-6 overflow-y-auto border-r border-border">
+    <div style={{flex:3,padding:24,overflowY:"auto",borderRight:"1px solid "+C.border}}>
       {/* Header */}
-      <div className="flex justify-between items-center mb-5 flex-wrap gap-2.5">
-        <button onClick={onBack} className="bg-transparent border-none text-text-muted cursor-pointer text-sm hover:text-text transition-colors duration-150">&larr; Back</button>
-        <div className="text-sm text-text-muted">{genMeta?.productName} &middot; {genMeta?.form?.contentType}</div>
-        {autoCount>0&&<span className="bg-success-soft border border-success/40 rounded-full px-2.5 py-1 text-xs text-success font-semibold flex items-center gap-1"><Zap className="w-3 h-3" /> {autoCount} auto-matched</span>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+        <button onClick={onBack} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>&larr; Back</button>
+        <div style={{fontSize:13,color:C.muted}}>{genMeta?.productName} &middot; {genMeta?.form?.contentType}</div>
+        {autoCount>0&&<span style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:99,padding:"3px 10px",fontSize:11,color:"#15803D",fontWeight:600}}>&#10022; {autoCount} auto-matched</span>}
       </div>
 
       {/* Hook Variations */}
-      {hookVariations.length>0?<div className="mb-5">
-        <div className="flex gap-2 flex-wrap mb-3">
+      {hookVariations.length>0?<div style={{marginBottom:20}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
           {hookVariations.map((_:any[],i:number)=>{
             const hook=hookVariations[i]?.[0]
             const isActive=activeHookIdx===i
@@ -93,60 +92,54 @@ export function AdWorkspace({
               const existingSecs=hookSections[i]
               if(existingSecs)setSections(existingSecs)
               else setSections(hookVariations[i]||sections)
-            }} className={`rounded-md px-3.5 py-1.5 cursor-pointer text-xs transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 ${isActive?"bg-accent text-white font-bold border border-accent":"bg-surface text-text-muted border border-border hover:border-border-strong font-medium"}`}>
-              {i===0?"Original":`Hook ${i+1} -- ${hook?.hookType||""}`}{isActive&&<Check className="w-3 h-3 inline ml-1" />}
+            }} style={{background:isActive?C.accent:C.surface,color:isActive?"#fff":C.muted,border:"1px solid "+(isActive?C.accent:C.border),borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:isActive?700:500}}>
+              {i===0?"Original":`Hook ${i+1} — ${hook?.hookType||""}`}{isActive?" \u2713":""}
             </button>
           })}
         </div>
-      </div>:<div className="mb-4">
-        <Btn onClick={onGenerateHooks} disabled={generatingHooks||sections.length===0} className={`flex items-center gap-1.5 border border-accent/30 transition-all duration-150 ${generatingHooks?"bg-border text-text-muted":"bg-accent-soft text-accent hover:bg-accent hover:text-white"}`}>
-          {generatingHooks?<><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</>:<><Zap className="w-3.5 h-3.5" /> Generate 3 Hook Variations</>}
-        </Btn>
-        {hookError&&<div className="text-xs text-danger mt-1.5">{hookError}</div>}
+      </div>:<div style={{marginBottom:16}}>
+        <Btn onClick={onGenerateHooks} disabled={generatingHooks||sections.length===0} style={{background:generatingHooks?C.border:C.accentSoft,color:generatingHooks?C.muted:C.accent,border:"1px solid "+C.accent+"44"}}>{generatingHooks?"\u23F3 Generating\u2026":"\u26A1 Generate 3 Hook Variations"}</Btn>
+        {hookError&&<div style={{fontSize:11,color:C.red,marginTop:6}}>{hookError}</div>}
       </div>}
 
       {/* V2 banner */}
-      {isV2&&<div className="bg-success-soft border-[1.5px] border-success/40 rounded-md px-3.5 py-2.5 text-sm text-success mb-3 flex items-center gap-2">
-        <Zap className="w-4 h-4" /> Creating v2 from <strong>"{genMeta?.sourceTitle}"</strong> -- same structure, ready for a new hook.
-      </div>}
+      {isV2&&<div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#15803D",marginBottom:12}}>&zwj;&#9889; Creating v2 from <strong>&ldquo;{genMeta?.sourceTitle}&rdquo;</strong> &mdash; same structure, ready for a new hook.</div>}
 
       {/* Script Table */}
-      <Card className="p-0 overflow-hidden mb-4">
+      <Card style={{padding:0,overflow:"hidden",marginBottom:16}}>
         <ScriptTable sections={sections} onChange={(s:any[])=>{setSections(s);setHookSections(prev=>({...prev,[activeHookIdx]:s}))}} libraryItems={items} readOnly={false} brandName={brand.name} productName={genMeta?.productName} voiceoverUrl={voiceoverUrl}/>
       </Card>
 
       {/* Re-match button */}
-      <Btn onClick={onMatchClips} disabled={matching||items.length===0} className={`flex items-center gap-1.5 border border-accent/30 transition-all duration-150 ${matching?"bg-border text-text-muted":"bg-accent-soft text-accent hover:bg-accent hover:text-white"}`}>
-        {matching?<><Loader2 className="w-3.5 h-3.5 animate-spin" /> Matching...</>:<><RefreshCw className="w-3.5 h-3.5" /> Re-match Clips</>}
-      </Btn>
+      <Btn onClick={onMatchClips} disabled={matching||items.length===0} style={{background:matching?C.border:C.accentSoft,color:matching?C.muted:C.accent,border:"1px solid "+C.accent+"44"}}>{matching?"\uD83D\uDD0D Matching\u2026":"\uD83D\uDD04 Re-match Clips"}</Btn>
     </div>
 
     {/* RIGHT COLUMN */}
-    <div className="flex-[2] p-6 sticky top-0 h-screen overflow-y-auto">
+    <div style={{flex:2,padding:24,position:"sticky",top:0,height:"100vh",overflowY:"auto"}}>
       {/* Live Preview */}
-      <div className="mb-5">
+      <div style={{marginBottom:20}}>
         <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl} captionSettings={captionSettings} onCaptionChange={setCaptionSettings}/>
       </div>
 
       {/* Audio Panel */}
-      <div className="mb-4 border border-border rounded-lg overflow-hidden">
-        <button onClick={()=>setAudioOpen(!audioOpen)} className="w-full flex justify-between items-center px-4 py-3 bg-surface border-none cursor-pointer text-sm font-semibold text-text hover:bg-card-hover transition-colors duration-150">
-          <span className="flex items-center gap-2"><Mic className="w-4 h-4" /> Audio</span>
-          {audioOpen?<ChevronUp className="w-3.5 h-3.5 text-text-muted" />:<ChevronDown className="w-3.5 h-3.5 text-text-muted" />}
+      <div style={{marginBottom:16,border:"1px solid "+C.border,borderRadius:12,overflow:"hidden"}}>
+        <button onClick={()=>setAudioOpen(!audioOpen)} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",background:C.surface,border:"none",cursor:"pointer",fontSize:14,fontWeight:600,color:C.text}}>
+          <span>&#127908; Audio</span>
+          <span style={{fontSize:12,color:C.muted}}>{audioOpen?"\u25B2":"\u25BC"}</span>
         </button>
-        {audioOpen&&<div className="p-4 bg-card">
+        {audioOpen&&<div style={{padding:16,background:C.card}}>
           {/* Voiceover status */}
-          {voiceoverUrl&&<div className="bg-success-soft border border-success/30 rounded-md px-4 py-2.5 mb-3 flex items-center gap-2.5">
-            <Check className="w-4 h-4 text-success" />
-            <div className="flex-1"><div className="text-sm font-semibold text-success">Voiceover ready -- {voiceoverVoice}</div><audio src={voiceoverUrl} controls className="w-full h-7 mt-1"/></div>
-            <button onClick={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}} className="bg-transparent border-none text-text-muted cursor-pointer text-xs underline hover:text-text transition-colors duration-150">Remove</button>
+          {voiceoverUrl&&<div style={{background:"#22c55e11",border:"1px solid #22c55e44",borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{color:C.green,fontSize:16}}>&check;</span>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.green}}>Voiceover ready &mdash; {voiceoverVoice}</div><audio src={voiceoverUrl} controls style={{width:"100%",height:28,marginTop:4}}/></div>
+            <button onClick={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,textDecoration:"underline"}}>Remove</button>
           </div>}
 
           {/* Music status */}
-          {musicUrl&&<div className="bg-accent-soft border border-accent/30 rounded-md px-4 py-2.5 mb-3 flex items-center gap-2.5">
-            <Check className="w-4 h-4 text-accent" />
-            <div className="flex-1"><div className="text-sm font-semibold text-accent">Music selected -- {musicName}</div><audio src={musicUrl} controls className="w-full h-7 mt-1"/></div>
-            <button onClick={()=>{setMusicUrl(null);setMusicName(null)}} className="bg-transparent border-none text-text-muted cursor-pointer text-xs underline hover:text-text transition-colors duration-150">Remove</button>
+          {musicUrl&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff44",borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{color:C.accent,fontSize:16}}>&check;</span>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.accent}}>Music selected &mdash; {musicName}</div><audio src={musicUrl} controls style={{width:"100%",height:28,marginTop:4}}/></div>
+            <button onClick={()=>{setMusicUrl(null);setMusicName(null)}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,textDecoration:"underline"}}>Remove</button>
           </div>}
 
           {/* Voiceover Generator */}
@@ -167,40 +160,37 @@ export function AdWorkspace({
           />
 
           {/* Music Picker */}
-          <div className="mt-4">
+          <div style={{marginTop:16}}>
             <MusicPicker suggestedMood={suggestedMood} onSave={(url:string|null,name:string|null)=>{setMusicUrl(url);setMusicName(name)}}/>
           </div>
         </div>}
       </div>
 
       {/* Settings Panel */}
-      <div className="mb-4 border border-border rounded-lg overflow-hidden">
-        <button onClick={()=>setSettingsOpen(!settingsOpen)} className="w-full flex justify-between items-center px-4 py-3 bg-surface border-none cursor-pointer text-sm font-semibold text-text hover:bg-card-hover transition-colors duration-150">
-          <span className="flex items-center gap-2"><Settings className="w-4 h-4" /> Settings</span>
-          {settingsOpen?<ChevronUp className="w-3.5 h-3.5 text-text-muted" />:<ChevronDown className="w-3.5 h-3.5 text-text-muted" />}
+      <div style={{marginBottom:16,border:"1px solid "+C.border,borderRadius:12,overflow:"hidden"}}>
+        <button onClick={()=>setSettingsOpen(!settingsOpen)} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",background:C.surface,border:"none",cursor:"pointer",fontSize:14,fontWeight:600,color:C.text}}>
+          <span>&#9881;&#65039; Settings</span>
+          <span style={{fontSize:12,color:C.muted}}>{settingsOpen?"\u25B2":"\u25BC"}</span>
         </button>
-        {settingsOpen&&<div className="p-4 bg-card">
+        {settingsOpen&&<div style={{padding:16,background:C.card}}>
           {/* Ad Title */}
-          <div className="mb-4">
+          <div style={{marginBottom:16}}>
             <Label>Ad Name (optional)</Label>
-            <input value={adTitle} onChange={e=>setAdTitle(e.target.value)} placeholder={`e.g. ProblemAware_${form?.contentType||"UGC"}_${(form?.adLength||"30s").replace(" seconds","s")}_v1`} className="bg-surface border border-border rounded-md px-3 py-2 text-text text-sm outline-none w-full focus-visible:ring-2 focus-visible:ring-accent/50 transition-all duration-150"/>
+            <input value={adTitle} onChange={e=>setAdTitle(e.target.value)} placeholder={`e.g. ProblemAware_${form?.contentType||"UGC"}_${(form?.adLength||"30s").replace(" seconds","s")}_v1`} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
           </div>
 
           {/* Aspect Ratio */}
-          <div className="mb-4">
+          <div style={{marginBottom:16}}>
             <Label>Aspect Ratio</Label>
-            <div className="flex gap-2 flex-wrap">
-              {[{ratio:"9:16",label:"9:16 Portrait",platform:"TikTok/Reels/Stories"},{ratio:"1:1",label:"1:1 Square",platform:"Instagram/Facebook Feed"},{ratio:"4:5",label:"4:5 Vertical",platform:"Facebook/Instagram Feed"},{ratio:"16:9",label:"16:9 Landscape",platform:"YouTube/Website"}].map(opt=><button key={opt.ratio} onClick={()=>setAspectRatio(opt.ratio)} className={`rounded-md px-3 py-2.5 cursor-pointer text-xs flex flex-col items-center gap-1 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 ${aspectRatio===opt.ratio?"bg-accent text-white font-bold border border-accent":"bg-surface text-text border border-border hover:border-border-strong"}`}>
-                <div>{opt.label}</div>
-                <div className="text-[10px] opacity-70">{opt.platform}</div>
-              </button>)}
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {[{ratio:"9:16",label:"9:16 Portrait",platform:"TikTok/Reels/Stories"},{ratio:"1:1",label:"1:1 Square",platform:"Instagram/Facebook Feed"},{ratio:"4:5",label:"4:5 Vertical",platform:"Facebook/Instagram Feed"},{ratio:"16:9",label:"16:9 Landscape",platform:"YouTube/Website"}].map(opt=><button key={opt.ratio} onClick={()=>setAspectRatio(opt.ratio)} style={{background:aspectRatio===opt.ratio?C.accent:C.surface,color:aspectRatio===opt.ratio?"#000":C.text,border:"1px solid "+(aspectRatio===opt.ratio?C.accent:C.border),borderRadius:8,padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:aspectRatio===opt.ratio?700:400,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><div>{opt.label}</div><div style={{fontSize:10,opacity:0.7}}>{opt.platform}</div></button>)}
             </div>
           </div>
 
           {/* Caption toggle */}
           <div>
             <Label>Captions</Label>
-            <button onClick={()=>setCaptionSettings({...captionSettings,enabled:!captionSettings.enabled})} className={`rounded-md px-3.5 py-2 cursor-pointer text-xs font-semibold transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 ${captionSettings.enabled?"bg-accent text-white border border-accent":"bg-surface text-text border border-border hover:border-border-strong"}`}>{captionSettings.enabled?"Captions ON":"Captions OFF"}</button>
+            <button onClick={()=>setCaptionSettings({...captionSettings,enabled:!captionSettings.enabled})} style={{background:captionSettings.enabled?C.accent:C.surface,color:captionSettings.enabled?"#fff":C.text,border:"1px solid "+(captionSettings.enabled?C.accent:C.border),borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>{captionSettings.enabled?"Captions ON":"Captions OFF"}</button>
           </div>
         </div>}
       </div>
@@ -217,18 +207,14 @@ export function AdWorkspace({
           const estVoDur=totalWords/2.5
           if(totalClipDur===0||estVoDur===0)return null
           const ratio=estVoDur/totalClipDur
-          if(ratio>1.25)return<div className="bg-warning-soft border-[1.5px] border-warning/30 rounded-md px-3.5 py-2.5 text-sm text-warning mb-4 flex items-start gap-2"><AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" /> Voiceover may be longer than your clips (~{Math.round(estVoDur)}s script vs ~{Math.round(totalClipDur)}s clips). Consider adding more clips or trimming the script.</div>
-          if(ratio<0.7)return<div className="bg-warning-soft border-[1.5px] border-warning/30 rounded-md px-3.5 py-2.5 text-sm text-warning mb-4 flex items-start gap-2"><AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" /> Clips are longer than voiceover (~{Math.round(estVoDur)}s script vs ~{Math.round(totalClipDur)}s clips). Video will continue after voiceover ends.</div>
+          if(ratio>1.25)return<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#92400E",marginBottom:16}}>&zwj;&#9888;&#65039; Voiceover may be longer than your clips (~{Math.round(estVoDur)}s script vs ~{Math.round(totalClipDur)}s clips). Consider adding more clips or trimming the script.</div>
+          if(ratio<0.7)return<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#92400E",marginBottom:16}}>&zwj;&#9888;&#65039; Clips are longer than voiceover (~{Math.round(estVoDur)}s script vs ~{Math.round(totalClipDur)}s clips). Video will continue after voiceover ends.</div>
           return null
         })()}
 
-        <div className="flex gap-2.5 mb-4">
-          <Btn onClick={()=>onSave("draft")} className="flex-1 bg-surface text-text border border-border py-3.5 text-sm rounded-lg flex items-center justify-center gap-1.5 hover:border-border-strong transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50">
-            <Save className="w-4 h-4" /> Save Draft
-          </Btn>
-          <Btn onClick={()=>onSave("complete")} className="flex-1 bg-success text-black font-bold py-3.5 text-sm rounded-lg flex items-center justify-center gap-1.5 hover:bg-success/90 active:scale-[0.99] transition-all duration-150 focus-visible:ring-2 focus-visible:ring-success/50">
-            <Check className="w-4 h-4" /> Save {selectedHooks.length>1?`${selectedHooks.length} Hook Variations`:"& Complete"}
-          </Btn>
+        <div style={{display:"flex",gap:10,marginBottom:16}}>
+          <Btn onClick={()=>onSave("draft")} style={{flex:1,background:C.surface,color:C.text,border:"1px solid "+C.border,padding:14,fontSize:14,borderRadius:12}}>&#128190; Save Draft</Btn>
+          <Btn onClick={()=>onSave("complete")} style={{flex:1,background:C.green,color:"#000",fontWeight:700,padding:14,fontSize:14,borderRadius:12}}>&check; Save {selectedHooks.length>1?`${selectedHooks.length} Hook Variations`:"& Complete"}</Btn>
         </div>
 
         <ExportVideo sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl} onSave={onSave}/>

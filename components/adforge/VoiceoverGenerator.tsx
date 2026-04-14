@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Mic, Volume2, RefreshCw, Play, Pause, Check, Loader2, Search, AlertTriangle, Sparkles } from 'lucide-react'
 import { C } from './constants'
 import { secColor } from './utils'
 import { Btn, Label } from './ui-primitives'
@@ -38,6 +37,7 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
   const selectedVoiceObj=voices.find(v=>v.id===selectedVoice)
   const allGenerated=sectionsWithWords.length>0&&sectionsWithWords.every((_:any,i:number)=>sectionAudios[i])
 
+  // Generate and upload audio for a single text
   async function generateAndUpload(text:string,idx:number,total:number):Promise<string>{
     setProgress(Math.round((idx/total)*90))
     const res=await fetch("/api/elevenlabs/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,voiceId:selectedVoice})})
@@ -50,6 +50,7 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
     return upData.url||URL.createObjectURL(blob)
   }
 
+  // Regenerate audio for a single section
   async function regenerateSection(sectionIdx:number){
     if(!selectedVoice||!sectionsWithWords[sectionIdx])return
     setRegeneratingSection(sectionIdx);setError("")
@@ -58,6 +59,8 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
       const newAudioUrl=await generateAndUpload(sec.spokenWords,sectionIdx,sectionsWithWords.length)
       const newAudios={...sectionAudios,[sectionIdx]:newAudioUrl}
       setSectionAudios(newAudios)
+
+      // Re-stitch all section audios
       try{
         const sectionUrls=sectionsWithWords.map((_:any,i:number)=>newAudios[i]).filter(Boolean)
         if(sectionUrls.length>1){
@@ -78,6 +81,8 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
 
     try{
       if(allHookSections&&allHookSections.length>1){
+        // Generate voiceovers for all hook variations
+        // Body sections are shared — generate once
         const bodySections=sectionsWithWords.filter((s:any)=>s.type!=="HOOK")
         const bodyAudios:Record<number,string>={}
         for(let i=0;i<bodySections.length;i++){
@@ -85,11 +90,15 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
           const bodyIdx=sectionsWithWords.findIndex((s:any)=>s===sec)
           bodyAudios[bodyIdx]=await generateAndUpload(sec.spokenWords,i,bodySections.length+allHookSections.length)
         }
+
+        // Generate hook voiceover for each variation separately
         const allUpdatedHooks:any[][]=[]
         for(let hi=0;hi<allHookSections.length;hi++){
           const hookVariationSecs=allHookSections[hi]
           const hookSec=hookVariationSecs.find((s:any)=>s.type==="HOOK")
           const hookAudio=hookSec?await generateAndUpload(hookSec.spokenWords,bodySections.length+hi,bodySections.length+allHookSections.length):null
+
+          // Build updated sections for this hook variation
           const updatedSecs=hookVariationSecs.map((s:any,si:number)=>{
             if(s.type==="HOOK")return{...s,voiceover_url:hookAudio}
             const bodyIdx=sectionsWithWords.findIndex((bs:any)=>bs.spokenWords===s.spokenWords)
@@ -97,6 +106,7 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
           })
           allUpdatedHooks.push(updatedSecs)
         }
+
         const newAudios:Record<number,string>={}
         allUpdatedHooks[0].forEach((s:any,i:number)=>{if(s.voiceover_url)newAudios[i]=s.voiceover_url})
         setSectionAudios(newAudios)
@@ -107,12 +117,14 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
         return
       }
 
+      // Single hook — original flow
       const newAudios:Record<number,string>={}
       for(let i=0;i<sectionsWithWords.length;i++){
         newAudios[i]=await generateAndUpload(sectionsWithWords[i].spokenWords,i,sectionsWithWords.length)
       }
       setSectionAudios(newAudios)
 
+      // Stitch all section audios into one continuous voiceover
       try{
         setProgress(95)
         const sectionUrls=sectionsWithWords.map((_:any,i:number)=>newAudios[i]).filter(Boolean)
@@ -131,54 +143,43 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
   }
   const filteredVoices=voices.filter(v=>!voiceSearch||v.name.toLowerCase().includes(voiceSearch.toLowerCase())||(v.gender||"").toLowerCase().includes(voiceSearch.toLowerCase())||(v.accent||"").toLowerCase().includes(voiceSearch.toLowerCase()))
 
-  return<div className="bg-card border border-border rounded-lg p-5">
-    <div className="flex items-center gap-2 font-bold text-base mb-1">
-      <Mic className="w-4 h-4" />
-      AI Voiceover -- Per Section
-    </div>
-    <p className="text-sm text-text-muted mb-4">Generates a separate voiceover for each script section -- perfectly synced to each clip.</p>
-    {loading&&<div className="text-text-muted text-sm py-5 text-center">Loading voices...</div>}
-    {!loading&&error&&voices.length===0&&<div className="bg-danger-soft border border-danger/30 rounded-md px-3 py-2.5 text-xs text-danger mb-3">{error}</div>}
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:20}}>
+    <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>🎙️ AI Voiceover — Per Section</div>
+    <div style={{fontSize:13,color:C.muted,marginBottom:16}}>Generates a separate voiceover for each script section — perfectly synced to each clip.</div>
+    {loading&&<div style={{color:C.muted,fontSize:13,padding:"20px 0",textAlign:"center"}}>Loading voices…</div>}
+    {!loading&&error&&voices.length===0&&<div style={{background:"#ef444422",border:"1px solid #ef444433",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#ef4444",marginBottom:12}}>{error}</div>}
     {!loading&&voices.length>0&&<>
-      <div className="mb-3">
+      <div style={{marginBottom:12}}>
         <Label>Select Voice</Label>
-        <div className="relative mb-2">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
-          <input value={voiceSearch} onChange={e=>setVoiceSearch(e.target.value)} placeholder="Filter by name, gender, accent..." className="bg-surface border border-border rounded-md py-2 pl-9 pr-3 text-text text-sm outline-none w-full focus-visible:ring-2 focus-visible:ring-accent/50 transition-all duration-150"/>
-        </div>
-        <div className="max-h-40 overflow-y-auto border border-border rounded-md">
-          {filteredVoices.map((v:any)=><div key={v.id} onClick={()=>setSelectedVoice(v.id)} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer border-b border-border transition-colors duration-150 ${selectedVoice===v.id?"bg-accent-soft":""} hover:bg-card-hover`}>
-            <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-all duration-150 ${selectedVoice===v.id?"border-accent bg-accent":"border-border bg-transparent"}`}/>
-            <div className="flex-1">
-              <div className={`font-semibold text-sm ${selectedVoice===v.id?"text-accent":"text-text"}`}>{v.name}</div>
-              <div className="text-[10px] text-text-muted">{[v.gender,v.age,v.accent].filter(Boolean).join(" · ")}</div>
-            </div>
-            {v.preview_url&&<button onClick={e=>{e.stopPropagation();new Audio(v.preview_url).play()}} className="bg-surface border border-border text-text-muted rounded-md px-2 py-0.5 cursor-pointer text-xs hover:border-border-strong transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50">
-              <Play className="w-3 h-3" />
-            </button>}
+        <input value={voiceSearch} onChange={e=>setVoiceSearch(e.target.value)} placeholder="Filter by name, gender, accent…" style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const,marginBottom:8}}/>
+        <div style={{maxHeight:160,overflowY:"auto",border:"1px solid "+C.border,borderRadius:10}}>
+          {filteredVoices.map((v:any)=><div key={v.id} onClick={()=>setSelectedVoice(v.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",background:selectedVoice===v.id?C.accentSoft:"transparent",borderBottom:"1px solid "+C.border}}>
+            <div style={{width:16,height:16,borderRadius:"50%",border:"2px solid "+(selectedVoice===v.id?C.accent:C.border),background:selectedVoice===v.id?C.accent:"transparent",flexShrink:0}}/>
+            <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13,color:selectedVoice===v.id?C.accent:C.text}}>{v.name}</div><div style={{fontSize:10,color:C.muted}}>{[v.gender,v.age,v.accent].filter(Boolean).join(" · ")}</div></div>
+            {v.preview_url&&<button onClick={e=>{e.stopPropagation();new Audio(v.preview_url).play()}} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11}}>▶</button>}
           </div>)}
         </div>
       </div>
 
       {/* Section preview */}
-      <div className="mb-3.5">
+      <div style={{marginBottom:14}}>
         {allHookSections&&allHookSections.length>1
           ?<>
             <Label>Voiceovers to generate across {allHookSections.length} hook variations</Label>
-            <div className="flex flex-col gap-2">
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {allHookSections.map((hookSecs:any[],hi:number)=>{
                 const hookSec=hookSecs.find((s:any)=>s.type==="HOOK")
                 const isFirst=hi===0
                 const bodySections=hookSecs.filter((s:any)=>s.type!=="HOOK")
-                return<div key={hi} className="bg-surface rounded-md border border-border overflow-hidden">
-                  <div className={`px-3 py-2 border-b border-border flex items-center gap-2 ${isFirst?"bg-white/[0.03]":"bg-accent-soft"}`}>
-                    <span className={`text-xs font-bold ${isFirst?"text-text":"text-accent"}`}>{isFirst?"Original Hook":"Hook "+(hi+1)+" -- AI Variation"}</span>
-                    {allHookResults&&<span className="text-success text-xs ml-auto flex items-center gap-1"><Check className="w-3 h-3" /> Generated</span>}
+                return<div key={hi} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,overflow:"hidden"}}>
+                  <div style={{padding:"8px 12px",background:isFirst?"#ffffff08":C.accentSoft,borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:11,fontWeight:700,color:isFirst?C.text:C.accent}}>{isFirst?"Original Hook":"Hook "+(hi+1)+" — AI Variation"}</span>
+                    {allHookResults&&<span style={{color:C.green,fontSize:12,marginLeft:"auto"}}>✓ Generated</span>}
                   </div>
-                  <div className="px-3 py-2">
-                    <div className="text-xs text-text mb-1.5 italic">"{hookSec?.spokenWords?.substring(0,80)}..."</div>
-                    {hi===0&&<div className="text-[10px] text-text-muted">+ {bodySections.length} body sections shared across all variations</div>}
-                    {hi>0&&<div className="text-[10px] text-text-muted">Hook audio unique · Body audio shared from Hook 1</div>}
+                  <div style={{padding:"8px 12px"}}>
+                    <div style={{fontSize:12,color:C.text,marginBottom:6,fontStyle:"italic"}}>"{hookSec?.spokenWords?.substring(0,80)}…"</div>
+                    {hi===0&&<div style={{fontSize:10,color:C.muted}}>+ {bodySections.length} body sections shared across all variations</div>}
+                    {hi>0&&<div style={{fontSize:10,color:C.muted}}>Hook audio unique · Body audio shared from Hook 1</div>}
                   </div>
                 </div>
               })}
@@ -186,37 +187,31 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
           </>
           :<>
             <Label>Script Sections ({sectionsWithWords.length} sections to voice)</Label>
-            <div className="flex flex-col gap-1.5 max-h-44 overflow-y-auto">
+            <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:180,overflowY:"auto"}}>
               {sectionsWithWords.map((s:any,i:number)=>{
                 const sc=secColor(s.type)
                 const hasAudio=!!sectionAudios[i]
                 const isRegenerating=regeneratingSection===i
-                return<div key={i} className={`flex items-center gap-2 px-2.5 py-2 bg-surface rounded-md border ${hasAudio?"border-success":"border-border"}`}>
-                  <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded flex-shrink-0" style={{background:sc.bg,color:sc.color}}>{s.type}</span>
-                  <div className="flex-1 text-xs text-text-muted truncate">{s.spokenWords}</div>
-                  {hasAudio?<audio src={sectionAudios[i]} controls className="h-6 w-[120px]"/>:<span className="text-[10px] text-text-muted">Not generated</span>}
-                  {hasAudio&&<button onClick={()=>regenerateSection(i)} disabled={isRegenerating||!selectedVoice} title="Regenerate this section" className={`p-1 rounded-md transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 ${isRegenerating?"text-text-muted cursor-default opacity-60":"text-accent cursor-pointer hover:bg-accent-soft"}`}>
-                    {isRegenerating?<Loader2 className="w-3.5 h-3.5 animate-spin" />:<RefreshCw className="w-3.5 h-3.5" />}
-                  </button>}
-                  {hasAudio&&!isRegenerating&&<Check className="w-3.5 h-3.5 text-success" />}
+                return<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.surface,borderRadius:8,border:"1px solid "+(hasAudio?C.green:C.border)}}>
+                  <span style={{background:sc.bg,color:sc.color,fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:4,flexShrink:0}}>{s.type}</span>
+                  <div style={{flex:1,fontSize:11,color:C.muted,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{s.spokenWords}</div>
+                  {hasAudio?<audio src={sectionAudios[i]} controls style={{height:24,width:120}}/>:<span style={{fontSize:10,color:C.muted}}>Not generated</span>}
+                  {hasAudio&&<button onClick={()=>regenerateSection(i)} disabled={isRegenerating||!selectedVoice} title="Regenerate this section" style={{background:"none",border:"none",color:isRegenerating?C.muted:C.accent,cursor:isRegenerating?"default":"pointer",fontSize:13,padding:"2px 6px",display:"flex",alignItems:"center",justifyContent:"center",opacity:isRegenerating?0.6:1}}>{isRegenerating?"⏳":"🔄"}</button>}
+                  {hasAudio&&!isRegenerating&&<span style={{color:C.green,fontSize:12}}>✓</span>}
                 </div>
               })}
             </div>
           </>}
       </div>
 
-      {generating&&<div className="mb-3">
-        <div className="h-1.5 bg-border rounded-full overflow-hidden mb-1.5">
-          <div className="h-full bg-accent rounded-full transition-all duration-300" style={{width:progress+"%"}} />
-        </div>
-        <div className="text-xs text-text-muted">Generating section {Math.ceil(progress/100*sectionsWithWords.length)+1} of {sectionsWithWords.length}...</div>
+      {generating&&<div style={{marginBottom:12}}>
+        <div style={{height:5,background:C.border,borderRadius:4,overflow:"hidden",marginBottom:6}}><div style={{height:"100%",width:progress+"%",background:C.accent,borderRadius:4,transition:"width 0.3s"}}/></div>
+        <div style={{fontSize:11,color:C.muted}}>Generating section {Math.ceil(progress/100*sectionsWithWords.length)+1} of {sectionsWithWords.length}…</div>
       </div>}
-      {error&&<div className="bg-danger-soft border border-danger/30 rounded-md px-3 py-2 text-xs text-danger mb-3">{error}</div>}
+      {error&&<div style={{background:"#ef444422",border:"1px solid #ef444433",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#ef4444",marginBottom:12}}>{error}</div>}
 
-      <div className="flex gap-2.5">
-        <Btn onClick={generateAll} disabled={generating||!sectionsWithWords.length||!selectedVoice} className={`flex-1 py-3 rounded-lg font-bold text-white flex items-center justify-center gap-2 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 ${generating?"bg-border text-text-muted cursor-not-allowed":"bg-accent hover:bg-accent-hover active:scale-[0.99]"}`}>
-          {generating?<><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>:allGenerated?<><RefreshCw className="w-4 h-4" /> Regenerate All</>:<><Mic className="w-4 h-4" /> Generate Voiceovers</>}
-        </Btn>
+      <div style={{display:"flex",gap:10}}>
+        <Btn onClick={generateAll} disabled={generating||!sectionsWithWords.length||!selectedVoice} style={{background:generating?C.border:C.accent,color:"#fff",flex:1}}>{generating?"⏳ Generating…":allGenerated?"🔄 Regenerate All":"🎙️ Generate Voiceovers"}</Btn>
         {(allGenerated||allHookResults)&&<Btn onClick={()=>{
           if(allHookResults){
             const combinedUrl=allHookResults[0].find((s:any)=>s.voiceover_url)?.voiceover_url||""
@@ -229,6 +224,7 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
               if(stitchData?.sectionOffsets){
                 const voOffset=stitchData.sectionOffsets[i]||0
                 const voDuration=stitchData.sectionDurations[i]||0
+                // Extract word timestamps for this section
                 const sectionEnd=i<stitchData.sectionOffsets.length-1?stitchData.sectionOffsets[i+1]:Infinity
                 const sectionWordTimestamps=allWordTimestamps.filter((w:any)=>w.start>=voOffset-0.05&&w.start<sectionEnd-0.05).map((w:any)=>({word:w.word,start:w.start-voOffset,end:w.end-voOffset}))
                 return{...base,vo_offset:voOffset,vo_duration:voDuration,word_timestamps:sectionWordTimestamps}
@@ -238,13 +234,9 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
             const combinedUrl=stitchData?.url||Object.values(sectionAudios)[0] as string
             onSave(updatedSections,selectedVoiceObj?.name||selectedVoice,combinedUrl,null)
           }
-        }} className="bg-success text-black font-bold flex items-center gap-1.5 transition-all duration-150 hover:bg-success/90 focus-visible:ring-2 focus-visible:ring-success/50">
-          <Check className="w-3.5 h-3.5" /> Use These
-        </Btn>}
+        }} style={{background:C.green,color:"#000",fontWeight:700}}>✓ Use These</Btn>}
       </div>
     </>}
-    <div className="text-center mt-3">
-      <button onClick={onSkip} className="bg-transparent border-none text-text-muted cursor-pointer text-xs underline hover:text-text transition-colors duration-150">Skip -- my video already has audio</button>
-    </div>
+    <div style={{textAlign:"center",marginTop:12}}><button onClick={onSkip} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:12,textDecoration:"underline"}}>Skip — my video already has audio</button></div>
   </div>
 }

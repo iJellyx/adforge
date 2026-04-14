@@ -1,13 +1,12 @@
 'use client'
 import { useState, useMemo, useCallback } from 'react'
-import { Search, ChevronDown, ChevronUp, Paperclip, CheckCircle, Clock, XCircle, Anchor, Film, MessageSquare, Star, Zap } from 'lucide-react'
 import { C, CLIP_ROLES } from './constants'
 import { STitle, Input, Btn, Card } from './ui-primitives'
 import { VideoCard } from './VideoCard'
 import { createClient } from '@/lib/supabase/client'
 import type { Item } from './types'
 
-type Collection = { key:string; icon:React.ReactNode; label:string; filter:(i:Item)=>boolean }
+type Collection = { key:string; icon:string; label:string; filter:(i:Item)=>boolean }
 type SortOption = 'Newest'|'Oldest'|'A-Z'|'Quality'
 
 const SORT_OPTIONS: SortOption[] = ['Newest','Oldest','A-Z','Quality']
@@ -22,22 +21,25 @@ export function ClipsView({items,onRefresh,workspaceId,onSelectClip}:{items:Item
   const [sortOpen,setSortOpen]=useState(false)
   const [animatingOut,setAnimatingOut]=useState<Set<string>>(new Set())
 
+  // All clips
   const allClips = useMemo(()=>items.filter(i=>i.type==='clip'),[items])
 
+  // Smart collections
   const collections: Collection[] = useMemo(()=>[
-    {key:'all',icon:<Paperclip className="w-3.5 h-3.5" />,label:'All Clips',filter:()=>true},
-    {key:'approved',icon:<CheckCircle className="w-3.5 h-3.5" />,label:'Approved',filter:(i:Item)=>i.clip_status==='approved'},
-    {key:'pending',icon:<Clock className="w-3.5 h-3.5" />,label:'Pending',filter:(i:Item)=>!i.clip_status||i.clip_status==='pending'},
-    {key:'rejected',icon:<XCircle className="w-3.5 h-3.5" />,label:'Rejected',filter:(i:Item)=>i.clip_status==='rejected'},
-    {key:'_div1',icon:null,label:'',filter:()=>false},
-    {key:'hooks',icon:<Anchor className="w-3.5 h-3.5" />,label:'Hooks',filter:(i:Item)=>(i.clip_role||'').toLowerCase().includes('hook')},
-    {key:'broll',icon:<Film className="w-3.5 h-3.5" />,label:'B-Roll',filter:(i:Item)=>!!i.analysis?.is_broll},
-    {key:'talking_head',icon:<MessageSquare className="w-3.5 h-3.5" />,label:'Talking Head',filter:(i:Item)=>!!i.analysis?.is_talking_head},
-    {key:'high_quality',icon:<Star className="w-3.5 h-3.5" />,label:'High Quality',filter:(i:Item)=>i.analysis?.quality_score==='High'},
-    {key:'under5s',icon:<Zap className="w-3.5 h-3.5" />,label:'Under 5s',filter:(i:Item)=>(i.duration_seconds||999)<5},
-    {key:'_div2',icon:null,label:'',filter:()=>false},
+    {key:'all',icon:'\uD83D\uDCCE',label:'All Clips',filter:()=>true},
+    {key:'approved',icon:'\u2705',label:'Approved',filter:(i:Item)=>i.clip_status==='approved'},
+    {key:'pending',icon:'\u23F3',label:'Pending',filter:(i:Item)=>!i.clip_status||i.clip_status==='pending'},
+    {key:'rejected',icon:'\u274C',label:'Rejected',filter:(i:Item)=>i.clip_status==='rejected'},
+    {key:'_div1',icon:'',label:'',filter:()=>false},
+    {key:'hooks',icon:'\uD83C\uDFA3',label:'Hooks',filter:(i:Item)=>(i.clip_role||'').toLowerCase().includes('hook')},
+    {key:'broll',icon:'\uD83C\uDFAC',label:'B-Roll',filter:(i:Item)=>!!i.analysis?.is_broll},
+    {key:'talking_head',icon:'\uD83D\uDDE3\uFE0F',label:'Talking Head',filter:(i:Item)=>!!i.analysis?.is_talking_head},
+    {key:'high_quality',icon:'\u2B50',label:'High Quality',filter:(i:Item)=>i.analysis?.quality_score==='High'},
+    {key:'under5s',icon:'\u26A1',label:'Under 5s',filter:(i:Item)=>(i.duration_seconds||999)<5},
+    {key:'_div2',icon:'',label:'',filter:()=>false},
   ],[])
 
+  // Collect unique tags from all clips
   const allTags = useMemo(()=>{
     const tagMap = new Map<string,number>()
     allClips.forEach(clip=>{
@@ -50,19 +52,25 @@ export function ClipsView({items,onRefresh,workspaceId,onSelectClip}:{items:Item
     return Array.from(tagMap.entries()).sort((a,b)=>b[1]-a[1])
   },[allClips])
 
+  // Active collection filter
   const activeFilter = useMemo(()=>{
     const c = collections.find(c=>c.key===activeCollection)
     return c?.filter || (()=>true)
   },[activeCollection,collections])
 
+  // Filtered and sorted clips
   const filteredClips = useMemo(()=>{
     let result = allClips.filter(activeFilter)
+
+    // Tag filter (OR logic)
     if(activeTags.length>0){
       result = result.filter(clip=>{
         const clipTags = [...(clip.analysis?.scene_tags||[]),...(clip.analysis?.creative_tags||[])]
         return activeTags.some(t=>clipTags.includes(t))
       })
     }
+
+    // Search
     if(search.trim()){
       const q = search.toLowerCase()
       result = result.filter(clip=>
@@ -73,6 +81,8 @@ export function ClipsView({items,onRefresh,workspaceId,onSelectClip}:{items:Item
         [...(clip.analysis?.scene_tags||[]),...(clip.analysis?.creative_tags||[])].some((t:string)=>t.toLowerCase().includes(q))
       )
     }
+
+    // Sort
     if(sort==='Newest') result.sort((a,b)=>new Date(b.created_at||0).getTime()-new Date(a.created_at||0).getTime())
     else if(sort==='Oldest') result.sort((a,b)=>new Date(a.created_at||0).getTime()-new Date(b.created_at||0).getTime())
     else if(sort==='A-Z') result.sort((a,b)=>(a.title||'').localeCompare(b.title||''))
@@ -80,11 +90,14 @@ export function ClipsView({items,onRefresh,workspaceId,onSelectClip}:{items:Item
       const qOrder:Record<string,number>={High:0,Medium:1,Low:2}
       result.sort((a,b)=>(qOrder[a.analysis?.quality_score]??3)-(qOrder[b.analysis?.quality_score]??3))
     }
+
     return result
   },[allClips,activeFilter,activeTags,search,sort])
 
+  // Review mode stats
   const reviewedCount = useMemo(()=>allClips.filter(c=>c.clip_status==='approved'||c.clip_status==='rejected').length,[allClips])
 
+  // Approval handlers
   const handleApprove = useCallback(async(clip:Item)=>{
     setAnimatingOut(prev=>new Set(prev).add(clip.id))
     await supabase.from('items').update({clip_status:'approved'}).eq('id',clip.id)
@@ -101,86 +114,86 @@ export function ClipsView({items,onRefresh,workspaceId,onSelectClip}:{items:Item
     setActiveTags(prev=>prev.includes(tag)?prev.filter(t=>t!==tag):[...prev,tag])
   }
 
+  // Count for a collection
   function collectionCount(c:Collection){return allClips.filter(c.filter).length}
 
-  return <div className="flex h-full bg-bg">
+  return <div style={{display:'flex',height:'100%',background:C.bg,fontFamily:'inherit'}}>
 
     {/* Left sidebar */}
-    <div className="w-[200px] min-w-[200px] border-r border-border bg-surface flex flex-col overflow-hidden flex-shrink-0">
-      <div className="px-3.5 pt-4 pb-2">
+    <div style={{width:200,minWidth:200,borderRight:'1.5px solid '+C.border,background:C.surface,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      <div style={{padding:'16px 14px 8px'}}>
         <STitle size={14} mb={12}>Smart Collections</STitle>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2">
+      <div style={{flex:1,overflowY:'auto',padding:'0 8px'}}>
         {collections.map(c=>{
-          if(c.key.startsWith('_div')) return <div key={c.key} className="h-px bg-border mx-1.5 my-1.5"/>
+          if(c.key.startsWith('_div')) return <div key={c.key} style={{height:1,background:C.border,margin:'6px 6px'}}/>
           const active = activeCollection===c.key
           const count = collectionCount(c)
           return <div key={c.key} onClick={()=>{setActiveCollection(c.key);setActiveTags([])}}
-            className={`flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer text-xs mb-0.5 transition-colors duration-150 ${active?'bg-accent-soft text-accent font-bold':'text-text hover:bg-card-hover font-medium'}`}>
-            <span className="w-[18px] text-center flex-shrink-0">{c.icon}</span>
-            <span className="flex-1">{c.label}</span>
-            <span className={`text-[10px] font-semibold min-w-[18px] text-right ${active?'text-accent':'text-text-muted'}`}>{count}</span>
+            style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:8,cursor:'pointer',background:active?C.accentSoft:'transparent',color:active?C.accent:C.text,fontSize:12,fontWeight:active?700:500,marginBottom:2,transition:'background 0.15s'}}>
+            <span style={{fontSize:13,width:18,textAlign:'center'}}>{c.icon}</span>
+            <span style={{flex:1}}>{c.label}</span>
+            <span style={{fontSize:10,color:active?C.accent:C.muted,fontWeight:600,minWidth:18,textAlign:'right'}}>{count}</span>
           </div>
         })}
 
         {/* Tags section */}
-        <div className="px-1.5 pt-3 pb-1">
+        <div style={{padding:'12px 6px 4px'}}>
           <STitle size={12} mb={8}>Tags</STitle>
         </div>
-        <div className="max-h-60 overflow-y-auto px-0.5">
+        <div style={{maxHeight:240,overflowY:'auto',padding:'0 2px'}}>
           {allTags.map(([tag,count])=>{
             const active = activeTags.includes(tag)
             return <div key={tag} onClick={()=>toggleTag(tag)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md cursor-pointer text-xs mb-0.5 transition-colors duration-150 ${active?'bg-accent-soft text-accent font-semibold':'text-text hover:bg-card-hover'}`}>
-              <span className="flex-1 truncate">{tag.replace(/_/g,' ')}</span>
-              <span className={`text-[9px] font-semibold ${active?'text-accent':'text-text-muted'}`}>({count})</span>
+              style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:6,cursor:'pointer',background:active?C.accentSoft:'transparent',color:active?C.accent:C.text,fontSize:11,fontWeight:active?600:400,marginBottom:1}}>
+              <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tag.replace(/_/g,' ')}</span>
+              <span style={{fontSize:9,color:active?C.accent:C.muted,fontWeight:600}}>({count})</span>
             </div>
           })}
-          {allTags.length===0&&<div className="text-xs text-text-muted px-2.5 py-1 italic">No tags found</div>}
+          {allTags.length===0&&<div style={{fontSize:11,color:C.muted,padding:'4px 10px',fontStyle:'italic'}}>No tags found</div>}
         </div>
       </div>
     </div>
 
     {/* Main content area */}
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
 
       {/* Top bar */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-surface flex-shrink-0">
-        <div className="flex-1 max-w-[320px] relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
-          <input value={search} onChange={(e:any)=>setSearch(e.target.value)} placeholder="Search clips..." className="bg-bg border border-border rounded-md py-2 pl-9 pr-3 text-xs w-full outline-none focus-visible:ring-2 focus-visible:ring-accent/50 text-text transition-all duration-150"/>
+      <div style={{display:'flex',alignItems:'center',gap:12,padding:'12px 20px',borderBottom:'1.5px solid '+C.border,background:C.surface,flexShrink:0}}>
+        <div style={{flex:1,maxWidth:320}}>
+          <Input value={search} onChange={(e:any)=>setSearch(e.target.value)} placeholder="Search clips..." style={{fontSize:12,padding:'7px 12px'}}/>
         </div>
 
         {/* Review mode toggle */}
-        <Btn onClick={()=>setReviewMode(!reviewMode)} className={`px-3.5 py-1.5 text-xs transition-all duration-150 ${reviewMode?'bg-accent text-white border-[1.5px] border-accent':'bg-surface text-text border-[1.5px] border-border hover:border-border-strong'}`}>
+        <Btn onClick={()=>setReviewMode(!reviewMode)} style={{background:reviewMode?C.accent:C.surface,color:reviewMode?'#fff':C.text,border:'1.5px solid '+(reviewMode?C.accent:C.border),padding:'6px 14px',fontSize:11}}>
           {reviewMode?'Exit Review':'Review Mode'}
         </Btn>
 
-        {reviewMode&&<span className="text-xs text-text-muted font-semibold">{reviewedCount} of {allClips.length} reviewed</span>}
+        {reviewMode&&<span style={{fontSize:11,color:C.muted,fontWeight:600}}>{reviewedCount} of {allClips.length} reviewed</span>}
 
         {/* Sort dropdown */}
-        <div className="relative">
-          <button onClick={()=>setSortOpen(!sortOpen)} className="bg-surface border border-border rounded-md px-3 py-1.5 text-xs cursor-pointer text-text font-medium flex items-center gap-1 transition-all duration-150 hover:border-border-strong focus-visible:ring-2 focus-visible:ring-accent/50">
-            Sort: {sort} {sortOpen?<ChevronUp className="w-3 h-3 opacity-50" />:<ChevronDown className="w-3 h-3 opacity-50" />}
+        <div style={{position:'relative'}}>
+          <button onClick={()=>setSortOpen(!sortOpen)} style={{background:C.surface,border:'1px solid '+C.border,borderRadius:8,padding:'6px 12px',fontSize:11,cursor:'pointer',color:C.text,fontWeight:500,display:'flex',alignItems:'center',gap:4,fontFamily:'inherit'}}>
+            Sort: {sort} <span style={{fontSize:8,opacity:0.5}}>{sortOpen?'\u25B2':'\u25BC'}</span>
           </button>
-          {sortOpen&&<div className="absolute top-[calc(100%+4px)] right-0 bg-surface border border-border rounded-md p-1 z-[200] min-w-[130px] shadow-lg">
+          {sortOpen&&<div style={{position:'absolute',top:'calc(100% + 4px)',right:0,background:C.surface,border:'1px solid '+C.border,borderRadius:10,padding:4,zIndex:200,minWidth:130,boxShadow:'0 8px 24px #0003'}}>
             {SORT_OPTIONS.map(opt=><div key={opt} onClick={()=>{setSort(opt);setSortOpen(false)}}
-              className={`px-2.5 py-2 rounded-md cursor-pointer text-xs transition-colors duration-150 ${sort===opt?'text-accent bg-accent-soft font-bold':'text-text hover:bg-card-hover'}`}>{opt}</div>)}
+              style={{padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:sort===opt?C.accent:C.text,background:sort===opt?C.accentSoft:'transparent',fontWeight:sort===opt?700:400}}>{opt}</div>)}
           </div>}
         </div>
       </div>
 
       {/* Grid */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {filteredClips.length===0&&<div className="text-center py-16 text-text-muted">
-          <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <div className="text-sm font-semibold">No clips found</div>
-          <div className="text-xs mt-1">Try adjusting your filters or search</div>
+      <div style={{flex:1,overflowY:'auto',padding:20}}>
+        {filteredClips.length===0&&<div style={{textAlign:'center',padding:'60px 20px',color:C.muted}}>
+          <div style={{fontSize:32,marginBottom:8}}>{"\uD83D\uDD0D"}</div>
+          <div style={{fontSize:14,fontWeight:600}}>No clips found</div>
+          <div style={{fontSize:12,marginTop:4}}>Try adjusting your filters or search</div>
         </div>}
 
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-          {filteredClips.map(clip=><div key={clip.id} className="transition-all duration-300" style={{opacity:animatingOut.has(clip.id)?0:1,transform:animatingOut.has(clip.id)?'scale(0.95)':'scale(1)'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))',gap:16}}>
+          {filteredClips.map(clip=><div key={clip.id} style={{opacity:animatingOut.has(clip.id)?0:1,transform:animatingOut.has(clip.id)?'scale(0.95)':'scale(1)',transition:'opacity 0.3s, transform 0.3s'}}>
             <VideoCard
               item={clip}
               onClick={()=>onSelectClip(clip)}

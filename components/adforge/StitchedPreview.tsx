@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { Play, Pause, ChevronLeft, ChevronRight, Film, Mic, Music, Volume2, Settings } from 'lucide-react'
 import type { Item, CaptionStyle, CaptionSettings } from './types'
 import { C, DEFAULT_CAPTIONS } from './constants'
 import { muxThumb, secColor } from './utils'
@@ -94,10 +93,7 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     setPlaying(false)
   }
 
-  if(clips.length===0)return<div className="bg-card border border-border rounded-lg p-8 text-center text-text-muted">
-    <Film className="w-7 h-7 mx-auto mb-2 opacity-50" />
-    <div className="text-sm">Assign clips to sections to preview the full ad</div>
-  </div>
+  if(clips.length===0)return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:32,textAlign:"center",color:C.muted}}><div style={{fontSize:28,marginBottom:8}}>🎬</div><div style={{fontSize:13}}>Assign clips to sections to preview the full ad</div></div>
 
   const sc=secColor(cur?.label)
   const clipGlobalStart=globalStartTimesRef.current[clipIdx]||0
@@ -105,92 +101,82 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
   const clipElapsedTime=globalTime-clipGlobalStart
   const clipDur=Math.max(1,nextClipStart-clipGlobalStart)
 
-  return<div className="bg-card border border-border rounded-lg overflow-hidden">
-    {voiceoverUrl&&<audio ref={voiceRef} key={voiceoverUrl} src={voiceoverUrl} className="hidden"/>}
-    {musicUrl&&<audio ref={musicRef} src={musicUrl} className="hidden" loop/>}
+  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
+    {voiceoverUrl&&<audio ref={voiceRef} key={voiceoverUrl} src={voiceoverUrl} style={{display:"none"}}/>}
+    {musicUrl&&<audio ref={musicRef} src={musicUrl} style={{display:"none"}} loop/>}
 
-    <div className="px-3.5 py-2.5 border-b border-border flex items-center gap-2 flex-wrap">
-      <div className="font-bold text-sm flex items-center gap-1.5"><Film className="w-4 h-4" /> Preview</div>
-      <span className="text-xs text-text-muted">{clips.length} clips</span>
-      {voiceoverUrl&&<span className="text-[10px] text-success bg-success-soft px-2 py-0.5 rounded-full border border-success/30 flex items-center gap-1"><Mic className="w-3 h-3" /></span>}
-      {musicUrl&&<span className="text-[10px] text-accent bg-accent-soft px-2 py-0.5 rounded-full border border-accent/30 flex items-center gap-1"><Music className="w-3 h-3" /></span>}
-      <div className="flex-1"/>
-      <button onClick={()=>updateCaptions({enabled:!captions.enabled})} className={`rounded-md px-2.5 py-1 cursor-pointer text-xs font-bold transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 ${captions.enabled?"bg-accent text-white border-[1.5px] border-accent":"bg-surface text-text-muted border-[1.5px] border-border hover:border-border-strong"}`}>CC {captions.enabled?"On":"Off"}</button>
-      <button onClick={()=>setShowCaptionPanel(v=>!v)} className={`rounded-md px-2.5 py-1 cursor-pointer text-xs transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 flex items-center gap-1 ${showCaptionPanel?"bg-accent-soft border border-accent text-accent":"bg-surface border border-border text-text-muted hover:border-border-strong"}`}>
-        <Settings className="w-3 h-3" /> Captions
-      </button>
-      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border" style={{background:sc?.bg,color:sc?.color,borderColor:sc?.bd}}>{cur?.label}</span>
+    <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <div style={{fontWeight:700,fontSize:14}}>🎬 Preview</div>
+      <span style={{fontSize:11,color:C.muted}}>{clips.length} clips</span>
+      {voiceoverUrl&&<span style={{fontSize:10,color:C.green,background:"#22c55e11",padding:"2px 7px",borderRadius:99,border:"1px solid #22c55e33"}}>🎙️</span>}
+      {musicUrl&&<span style={{fontSize:10,color:C.accent,background:C.accentSoft,padding:"2px 7px",borderRadius:99,border:"1px solid "+C.accent+"33"}}>🎵</span>}
+      <div style={{flex:1}}/>
+      <button onClick={()=>updateCaptions({enabled:!captions.enabled})} style={{background:captions.enabled?C.accent:C.surface,color:captions.enabled?"#fff":C.muted,border:"1.5px solid "+(captions.enabled?C.accent:C.border),borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>CC {captions.enabled?"On":"Off"}</button>
+      <button onClick={()=>setShowCaptionPanel(v=>!v)} style={{background:showCaptionPanel?C.accentSoft:C.surface,border:"1px solid "+(showCaptionPanel?C.accent:C.border),color:showCaptionPanel?C.accent:C.muted,borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11}}>⚙ Captions</button>
+      <span style={{background:sc?.bg,color:sc?.color,border:"1px solid "+sc?.bd,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5}}>{cur?.label}</span>
     </div>
 
-    {showCaptionPanel&&<div className="bg-bg border-b border-border px-3.5 py-3 flex gap-4 flex-wrap items-center">
+    {showCaptionPanel&&<div style={{background:C.bg,borderBottom:"1px solid "+C.border,padding:"12px 14px",display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
       <div>
-        <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1.5">Style</div>
-        <div className="flex gap-1.5">
+        <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:6}}>Style</div>
+        <div style={{display:"flex",gap:6}}>
           {([["word","Word by word"],["line","Full line"],["karaoke","Karaoke"]] as [CaptionStyle,string][]).map(([v,l])=>
-            <button key={v} onClick={()=>updateCaptions({style:v})} className={`rounded-md px-2.5 py-1.5 cursor-pointer text-xs transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 ${captions.style===v?"bg-accent text-white font-bold border border-accent":"bg-surface text-text-muted border border-border hover:border-border-strong"}`}>{l}</button>
+            <button key={v} onClick={()=>updateCaptions({style:v})} style={{background:captions.style===v?C.accent:C.surface,color:captions.style===v?"#fff":C.muted,border:"1px solid "+(captions.style===v?C.accent:C.border),borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:captions.style===v?700:400}}>{l}</button>
           )}
         </div>
       </div>
       <div>
-        <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1.5">Size</div>
-        <div className="flex gap-1.5">
+        <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:6}}>Size</div>
+        <div style={{display:"flex",gap:6}}>
           {([[18,"S"],[22,"M"],[28,"L"],[34,"XL"]] as [number,string][]).map(([v,l])=>
-            <button key={v} onClick={()=>updateCaptions({fontSize:v})} className={`rounded-md px-2.5 py-1.5 cursor-pointer text-xs transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 ${captions.fontSize===v?"bg-accent text-white font-bold border border-accent":"bg-surface text-text-muted border border-border hover:border-border-strong"}`}>{l}</button>
+            <button key={v} onClick={()=>updateCaptions({fontSize:v})} style={{background:captions.fontSize===v?C.accent:C.surface,color:captions.fontSize===v?"#fff":C.muted,border:"1px solid "+(captions.fontSize===v?C.accent:C.border),borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:captions.fontSize===v?700:400}}>{l}</button>
           )}
         </div>
       </div>
       <div>
-        <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1.5">Accent colour</div>
-        <div className="flex gap-1.5">
+        <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1,marginBottom:6}}>Accent colour</div>
+        <div style={{display:"flex",gap:6}}>
           {[C.accent,"#FFD700","#FF3B5C","#00C4B4","#FF6B35","#fff"].map(col=>
-            <button key={col} onClick={()=>updateCaptions({accentColor:col})} className={`w-6 h-6 rounded-full cursor-pointer transition-all duration-150 ${captions.accentColor===col?"ring-2 ring-accent ring-offset-1 ring-offset-bg":""}`} style={{background:col,border:"2px solid "+(captions.accentColor===col?"#fff":C.border)}}/>
+            <button key={col} onClick={()=>updateCaptions({accentColor:col})} style={{width:24,height:24,borderRadius:"50%",background:col,border:"2px solid "+(captions.accentColor===col?"#fff":C.border),cursor:"pointer",outline:captions.accentColor===col?"2px solid "+C.accent:"none",outlineOffset:"1px"}}/>
           )}
-          <input type="color" value={captions.accentColor} onChange={e=>updateCaptions({accentColor:e.target.value})} className="w-6 h-6 rounded-full border-none cursor-pointer p-0 bg-transparent" title="Custom colour"/>
+          <input type="color" value={captions.accentColor} onChange={e=>updateCaptions({accentColor:e.target.value})} style={{width:24,height:24,borderRadius:"50%",border:"none",cursor:"pointer",padding:0,background:"none"}} title="Custom colour"/>
         </div>
       </div>
     </div>}
 
-    <div className="grid grid-cols-[1fr_260px]">
-      <div className="relative bg-black flex items-center justify-center min-h-[320px]">
-        <video ref={vidRef} playsInline preload="metadata" muted={cur?.muted||false} className="max-h-[480px] max-w-full block cursor-pointer" onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 260px"}}>
+      <div style={{position:"relative",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:320}}>
+        <video ref={vidRef} playsInline preload="metadata" muted={cur?.muted||false} style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
         {captions.enabled&&<CaptionOverlay spoken={cur?.spoken||""} elapsed={clipElapsedTime} clipDur={clipDur} settings={captions} wordTimestamps={cur?.word_timestamps||undefined}/>}
-        {!playing&&<div onClick={toggle} className="absolute inset-0 flex items-center justify-center cursor-pointer z-5">
-          <div className="w-13 h-13 rounded-full bg-black/60 border-2 border-white/30 flex items-center justify-center hover:bg-black/80 transition-all duration-150">
-            <Play className="w-5 h-5 text-white ml-0.5" />
-          </div>
-          {(voiceoverUrl||musicUrl)&&<div className="absolute bottom-4 text-xs text-white bg-black/60 px-2.5 py-1 rounded-full flex items-center gap-1.5">{voiceoverUrl&&<><Mic className="w-3 h-3" /> Voiceover</>}{voiceoverUrl&&musicUrl&&" + "}{musicUrl&&<><Music className="w-3 h-3" /> Music</>} will play</div>}
+        {!playing&&<div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:5}}>
+          <div style={{width:52,height:52,borderRadius:"50%",background:"#000a",border:"2px solid #fff4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>▶</div>
+          {(voiceoverUrl||musicUrl)&&<div style={{position:"absolute",bottom:16,fontSize:11,color:"#fff",background:"#000a",padding:"3px 10px",borderRadius:99}}>{[voiceoverUrl?"🎙️ Voiceover":"",musicUrl?"🎵 Music":""].filter(Boolean).join(" + ")} will play</div>}
         </div>}
       </div>
-      <div className="border-l border-border overflow-y-auto max-h-[480px]">
-        <div className="px-2.5 py-2 border-b border-border text-[10px] font-bold text-text-muted uppercase tracking-wider">Timeline</div>
-        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>seekToClip(i)} className={`flex gap-2 px-2.5 py-2 border-b border-border cursor-pointer transition-colors duration-150 ${active?"bg-accent-soft":"hover:bg-card-hover"}`}>
-          <div className={`w-[34px] relative h-[60px] flex-shrink-0 rounded-md overflow-hidden bg-black border ${active?"border-accent":"border-border"}`}>{clip.item.mux_playback_id&&<img src={muxThumb(clip.item.mux_playback_id,clip.item.thumbnail_time||0)} alt="" className="absolute inset-0 w-full h-full object-cover"/>}</div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[8px] font-extrabold px-1.5 py-0.5 rounded inline-block mb-1" style={{background:sc2.bg,color:sc2.color}}>{clip.label}</div>
-            <div className={`text-[10px] leading-snug overflow-hidden line-clamp-2 ${active?"text-text":"text-text-muted"}`}>{clip.spoken||clip.item.title}</div>
+      <div style={{borderLeft:"1px solid "+C.border,overflowY:"auto",maxHeight:480}}>
+        <div style={{padding:"8px 10px",borderBottom:"1px solid "+C.border,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1}}>Timeline</div>
+        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>seekToClip(i)} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
+          <div style={{width:34,position:"relative",paddingTop:"60px",flexShrink:0,borderRadius:5,overflow:"hidden",background:"#111",border:"1px solid "+(active?C.accent:C.border)}}>{clip.item.mux_playback_id&&<img src={muxThumb(clip.item.mux_playback_id,clip.item.thumbnail_time||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{background:sc2.bg,color:sc2.color,fontSize:8,fontWeight:800,padding:"1px 5px",borderRadius:3,display:"inline-block",marginBottom:3}}>{clip.label}</div>
+            <div style={{fontSize:10,color:active?C.text:C.muted,lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{clip.spoken||clip.item.title}</div>
           </div>
         </div>})}
       </div>
     </div>
 
-    <div className="px-4 py-2.5 border-t border-border">
-      <div className="flex gap-0.5 mb-2">
-        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>seekToClip(i)} title={clip.label} className="flex-1 h-1.5 rounded-sm cursor-pointer transition-all duration-150" style={{background:active?sc2.color:sc2.bg}}/>})}
+    <div style={{padding:"10px 16px",borderTop:"1px solid "+C.border}}>
+      <div style={{display:"flex",gap:2,marginBottom:8}}>
+        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>seekToClip(i)} title={clip.label} style={{flex:1,height:5,borderRadius:3,background:active?sc2.color:sc2.bg,cursor:"pointer",transition:"all 0.15s"}}/>})}
       </div>
-      <div className="flex items-center gap-2">
-        <button onClick={()=>seekToClip(Math.max(0,clipIdx-1))} disabled={clipIdx===0} className="bg-transparent border border-border text-text-muted rounded-md px-2.5 py-1.5 cursor-pointer hover:border-border-strong transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 disabled:opacity-40">
-          <ChevronLeft className="w-3.5 h-3.5" />
-        </button>
-        <button onClick={toggle} className="bg-accent text-white border-none rounded-md px-4.5 py-2 cursor-pointer text-sm font-semibold flex items-center gap-1.5 hover:bg-accent-hover transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50">
-          {playing?<><Pause className="w-4 h-4" /> Pause</>:<><Play className="w-4 h-4" /> Play Full Ad</>}
-        </button>
-        <button onClick={()=>seekToClip(Math.min(clips.length-1,clipIdx+1))} disabled={clipIdx===clips.length-1} className="bg-transparent border border-border text-text-muted rounded-md px-2.5 py-1.5 cursor-pointer hover:border-border-strong transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 disabled:opacity-40">
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
-        <span className="text-xs text-text-muted">{clipIdx+1}/{clips.length}</span>
-        {musicUrl&&<div className="flex items-center gap-1.5 ml-auto">
-          <Music className="w-3 h-3 text-text-muted" />
-          <input type="range" min="0" max="1" step="0.05" defaultValue="0.2" onChange={e=>{if(musicRef.current)musicRef.current.volume=parseFloat(e.target.value)}} className="w-15 accent-accent cursor-pointer"/>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <button onClick={()=>seekToClip(Math.max(0,clipIdx-1))} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
+        <button onClick={toggle} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>{playing?"⏸ Pause":"▶ Play Full Ad"}</button>
+        <button onClick={()=>seekToClip(Math.min(clips.length-1,clipIdx+1))} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
+        <span style={{fontSize:11,color:C.muted}}>{clipIdx+1}/{clips.length}</span>
+        {musicUrl&&<div style={{display:"flex",alignItems:"center",gap:5,marginLeft:"auto"}}>
+          <span style={{fontSize:10,color:C.muted}}>🎵</span>
+          <input type="range" min="0" max="1" step="0.05" defaultValue="0.2" onChange={e=>{if(musicRef.current)musicRef.current.volume=parseFloat(e.target.value)}} style={{width:60,accentColor:C.accent,cursor:"pointer"}}/>
         </div>}
       </div>
     </div>
