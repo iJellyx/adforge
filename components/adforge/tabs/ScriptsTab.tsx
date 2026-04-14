@@ -14,12 +14,12 @@ import { AdWorkspace } from '../AdWorkspace'
 import { AutoMashMode } from '../AutoMashMode'
 import { BRollMode } from '../BRollMode'
 import { CreatorBriefModal } from '../CreatorBriefModal'
+import { ArrowLeft, PenTool, Zap, Film, Brain, BarChart3 } from 'lucide-react'
 
 export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode,editingAd,onEditingAdConsumed,v2SourceAd,onV2Consumed,forgedAds,workspaceId}:any){
   const [view,setView]=useState("list")
   useEffect(()=>{if(startAtChooseMode>0)setView("chooseMode")},[startAtChooseMode])
 
-  // Edit mode — load forged ad back into review flow
   useEffect(()=>{
     if(!editingAd)return
     setSections(editingAd.sections||[])
@@ -33,7 +33,6 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
     onEditingAdConsumed?.()
   },[editingAd])
 
-  // v2 mode — same structure, clear audio, go to script step
   useEffect(()=>{
     if(!v2SourceAd)return
     setSections((v2SourceAd.sections||[]).map((s:any)=>({...s,voiceover_url:null})))
@@ -76,7 +75,6 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
       let ctx=`BRAND:\nName: ${brand.name||"Unknown"}\nDescription: ${brand.description||""}\nVoice & Tone: ${brand.voice||""}\nTarget Customer: ${brand.target_customer||""}\nSocial Proof / Reviews: ${brand.reviews||""}\nAdditional Info: ${brand.additional_info||""}\n\n`
       if(prod)ctx+=`PRODUCT:\nName: ${prod.name}\nDescription: ${prod.description||""}\nKey Benefits: ${prod.benefits||""}\nClaims & Results: ${prod.claims||""}\nDifferentiators (what makes it unique): ${prod.differentiators||""}\nKey Ingredients: ${prod.ingredients||""}\nCustomer Reviews: ${prod.reviews||""}\nPrice: ${prod.price||""}\nScript Notes: ${prod.notes||""}\n\n`
 
-      // Inject brand intelligence learnings if available
       const intel=brand.brand_intelligence
       let intelBlock=""
       if(intel&&(intel.best_hook_types?.length||intel.best_hook_patterns?.length||intel.best_structures?.length)){
@@ -93,7 +91,6 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
         intelBlock+="\n"
       }
 
-      // Performance feedback from logged forged ads
       const adsWithData=(forgedAds||[]).filter((a:ForgedAd)=>a.metadata?.hook_rate||a.metadata?.cpa||a.metadata?.roas||a.star_rating)
       let perfBlock=""
       if(adsWithData.length>=2){
@@ -109,7 +106,6 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
           perfBlock+="\n"
         }
       }
-      // Build a summary of available footage so Claude writes visual directions that match real clips
       let footageBlock=""
       if(items.length>0){
         const clips=items.filter((i:Item)=>i.mux_playback_id)
@@ -146,13 +142,10 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
     const matchPool=clips.length>0?clips:libItems.filter(i=>i.mux_playback_id)
     const usedIds=new Set<string>()
 
-    // Classify clips as b-roll vs talking head to help Claude
     const classifyClip=(item:Item)=>{
       const a=item.analysis||{}
-      // Prefer explicit flags from AI analysis if available
       if(a.is_broll===true)return"BROLL"
       if(a.is_talking_head===true)return"TALKING_HEAD"
-      // Fallback to heuristic classification
       const tags=(a.scene_tags||[]).join(" ").toLowerCase()
       const contentType=(a.content_type||"").toLowerCase()
       const isTalkingHead=tags.includes("talking head")||tags.includes("person speaking")||contentType==="talking head"
@@ -283,7 +276,6 @@ Return ONLY valid JSON:
     const raw=await callClaude([{role:"user",content:prompt}],600)
     const data=JSON.parse(raw.replace(/```json|```/g,"").trim())
     const hooks=data.hooks||[]
-    // Build 3 complete section arrays — each with a different hook, same body
     const bodyBections=sections.filter((s:any)=>s.type!=="HOOK")
     const originalHook=sections.find((s:any)=>s.type==="HOOK")||sections[0]
     const originalVariation=[{...originalHook,hookType:"Original",voiceover_url:null},...bodyBections]
@@ -301,91 +293,106 @@ Return ONLY valid JSON:
   const reviewSteps=[{id:"script",label:"1. Script"},{id:"audio",label:"2. Audio"},{id:"clips",label:"3. Clip Matching"},{id:"forge",label:"4. Forge"}]
 
   // ── Choose Mode ──
-    if(view==="chooseMode")return<div style={{maxWidth:760,margin:"0 auto",padding:60}}>
-    <button onClick={()=>setView("list")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:32,fontSize:14}}>← Back</button>
-    <STitle size={24} mb={8}>Create New Ad</STitle>
-    <div style={{color:C.muted,fontSize:15,marginBottom:40}}>How would you like to start?</div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
-      <div onClick={()=>setView("generate")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor=C.accent;(e.currentTarget as any).style.background=C.accentSoft}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
-        <div style={{fontSize:36,marginBottom:12}}>✍️</div>
-        <div style={{fontWeight:700,fontSize:17,marginBottom:8}}>Create from Script</div>
-        <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>AI writes a direct response script, matches clips from your library, you add voiceover and music.</div>
-      </div>
-      <div onClick={()=>setView("automash")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor="#7C3AED";(e.currentTarget as any).style.background="#7C3AED0a"}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
-        <div style={{fontSize:36,marginBottom:12}}>⚡</div>
-        <div style={{fontWeight:700,fontSize:17,marginBottom:8}}>Auto-Mash from Library</div>
-        <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>AI assembles a complete ad from your existing creator clips — using their real voices to tell a logical story.</div>
-      </div>
-      <div onClick={()=>setView("broll")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor=C.green;(e.currentTarget as any).style.background="#22c55e0a"}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
-        <div style={{fontSize:36,marginBottom:12}}>🎬</div>
-        <div style={{fontWeight:700,fontSize:17,marginBottom:8}}>Add B-Roll</div>
-        <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>Upload a talking head or existing ad. AI keeps the original audio and suggests b-roll clips to overlay.</div>
+  if(view==="chooseMode")return(
+    <div className="max-w-3xl mx-auto px-7 py-16">
+      <button onClick={()=>setView("list")} className="flex items-center gap-1 text-text-muted hover:text-text text-sm cursor-pointer transition-colors bg-transparent border-none mb-8">
+        <ArrowLeft className="w-4 h-4" /> Back
+      </button>
+      <STitle size={24} mb={8}>Create New Ad</STitle>
+      <div className="text-text-muted text-[15px] mb-10">How would you like to start?</div>
+      <div className="grid grid-cols-3 gap-4">
+        <div onClick={()=>setView("generate")} className="bg-card border-2 border-border rounded-xl p-7 cursor-pointer transition-all duration-150 hover:border-accent hover:bg-accent-soft group">
+          <PenTool className="w-9 h-9 mb-3 text-text-muted group-hover:text-accent transition-colors" />
+          <div className="font-bold text-[17px] mb-2">Create from Script</div>
+          <div className="text-sm text-text-muted leading-relaxed">AI writes a direct response script, matches clips from your library, you add voiceover and music.</div>
+        </div>
+        <div onClick={()=>setView("automash")} className="bg-card border-2 border-border rounded-xl p-7 cursor-pointer transition-all duration-150 hover:border-[#7C3AED] hover:bg-[#7C3AED0a] group">
+          <Zap className="w-9 h-9 mb-3 text-text-muted group-hover:text-[#7C3AED] transition-colors" />
+          <div className="font-bold text-[17px] mb-2">Auto-Mash from Library</div>
+          <div className="text-sm text-text-muted leading-relaxed">AI assembles a complete ad from your existing creator clips — using their real voices to tell a logical story.</div>
+        </div>
+        <div onClick={()=>setView("broll")} className="bg-card border-2 border-border rounded-xl p-7 cursor-pointer transition-all duration-150 hover:border-success hover:bg-success-soft group">
+          <Film className="w-9 h-9 mb-3 text-text-muted group-hover:text-success transition-colors" />
+          <div className="font-bold text-[17px] mb-2">Add B-Roll</div>
+          <div className="text-sm text-text-muted leading-relaxed">Upload a talking head or existing ad. AI keeps the original audio and suggests b-roll clips to overlay.</div>
+        </div>
       </div>
     </div>
-  </div>
+  )
 
   if(view==="automash")return<AutoMashMode libraryItems={items} brand={brand} products={products} onSaveForgedAd={onSaveForgedAd} onGoToForged={onGoToForged} onBack={()=>setView("chooseMode")}/>
   if(view==="broll")return<BRollMode libraryItems={items} onSaveForgedAd={onSaveForgedAd} onBack={()=>setView("list")} workspaceId={workspaceId}/>
 
-  if(view==="list")return<div style={{maxWidth:820,margin:"0 auto",padding:28}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-      <div><STitle size={22} mb={4}>Script Generator</STitle><div style={{color:C.muted,fontSize:14}}>AI direct response scripts powered by your brand data</div></div>
-      <Btn onClick={()=>setView("chooseMode")} style={{background:C.accent,color:"#fff"}}>+ Create New Ad</Btn>
+  if(view==="list")return(
+    <div className="max-w-3xl mx-auto p-7">
+      <div className="flex justify-between items-center mb-6">
+        <div><STitle size={22} mb={4}>Script Generator</STitle><div className="text-text-muted text-sm">AI direct response scripts powered by your brand data</div></div>
+        <Btn onClick={()=>setView("chooseMode")} style={{background:"var(--color-accent)",color:"#fff"}}>+ Create New Ad</Btn>
+      </div>
+      {scripts.length===0
+        ?<Card style={{textAlign:"center",padding:60}}>
+          <PenTool className="w-10 h-10 mx-auto mb-3 text-text-muted" />
+          <STitle mb={6}>No scripts yet</STitle>
+          <Btn onClick={()=>setView("chooseMode")} style={{background:"var(--color-accent)",color:"#fff",marginTop:8}}>Create First Ad</Btn>
+        </Card>
+        :<div className="grid gap-3">{[...scripts].reverse().map((script:Script)=>{
+          const m=script.metadata||{},stage=STAGES.find(s=>s.value===m.awarenessStage),sc2=STAGE_COLORS[m.awarenessStage]||C.accent
+          const hook=(script.sections||[]).find((s:any)=>s.type==="HOOK")||(script.sections||[])[0]
+          const assigned=(script.sections||[]).filter((s:any)=>!!s.selectedClipId).length
+          return<Card key={script.id} style={{cursor:"pointer"}} onClick={()=>{setSelected(script);setSections(script.sections||[]);setGenMeta({form:script.metadata,productName:script.product_name});setView("detail")}}>
+            <div className="flex justify-between items-start mb-2.5">
+              <div className="flex gap-[7px] flex-wrap">
+                {script.product_name&&<Chip label={script.product_name} color={{bg:"#6c63ff22",color:"#a5b4fc"}}/>}
+                {m.contentType&&<Chip label={m.contentType} color={{bg:"#0891b222",color:"#38bdf8"}}/>}
+                {stage&&<Chip label={stage.label} color={{bg:sc2+"22",color:sc2}}/>}
+                {m.adLength&&<Chip label={m.adLength} color={{bg:"#92400e22",color:"#fbbf24"}}/>}
+                {script.sections&&<Chip label={`${assigned}/${script.sections.length} clips`} color={{bg:assigned===script.sections.length?"#22c55e22":"#f59e0b22",color:assigned===script.sections.length?"var(--color-success)":"var(--color-warning)"}}/>}
+              </div>
+              <span className="text-[11px] text-text-muted">{script.created_at?new Date(script.created_at).toLocaleDateString():""}</span>
+            </div>
+            {hook&&<div className="text-sm text-text-muted italic overflow-hidden line-clamp-2">"{(hook.spokenWords||"").substring(0,200)}"</div>}
+          </Card>
+        })}</div>}
     </div>
-    {scripts.length===0?<Card style={{textAlign:"center",padding:60}}><div style={{fontSize:40,marginBottom:12}}>✍️</div><STitle mb={6}>No scripts yet</STitle><Btn onClick={()=>setView("chooseMode")} style={{background:C.accent,color:"#fff",marginTop:8}}>Create First Ad</Btn></Card>
-    :<div style={{display:"grid",gap:12}}>{[...scripts].reverse().map((script:Script)=>{
-      const m=script.metadata||{},stage=STAGES.find(s=>s.value===m.awarenessStage),sc2=STAGE_COLORS[m.awarenessStage]||C.accent
-      const hook=(script.sections||[]).find((s:any)=>s.type==="HOOK")||(script.sections||[])[0]
-      const assigned=(script.sections||[]).filter((s:any)=>!!s.selectedClipId).length
-      return<Card key={script.id} style={{cursor:"pointer"}} onClick={()=>{setSelected(script);setSections(script.sections||[]);setGenMeta({form:script.metadata,productName:script.product_name});setView("detail")}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-            {script.product_name&&<Chip label={script.product_name} color={{bg:"#6c63ff22",color:"#a5b4fc"}}/>}
-            {m.contentType&&<Chip label={m.contentType} color={{bg:"#0891b222",color:"#38bdf8"}}/>}
-            {stage&&<Chip label={stage.label} color={{bg:sc2+"22",color:sc2}}/>}
-            {m.adLength&&<Chip label={m.adLength} color={{bg:"#92400e22",color:"#fbbf24"}}/>}
-            {script.sections&&<Chip label={`${assigned}/${script.sections.length} clips`} color={{bg:assigned===script.sections.length?"#22c55e22":"#f59e0b22",color:assigned===script.sections.length?C.green:C.yellow}}/>}
-          </div>
-          <span style={{fontSize:11,color:C.muted}}>{script.created_at?new Date(script.created_at).toLocaleDateString():""}</span>
-        </div>
-        {hook&&<div style={{fontSize:13,color:C.muted,fontStyle:"italic",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>"{(hook.spokenWords||"").substring(0,200)}"</div>}
-      </Card>
-    })}</div>}
-  </div>
+  )
 
-  if(view==="generate")return<div style={{maxWidth:740,margin:"0 auto",padding:28}}>
-    <button onClick={()=>setView("chooseMode")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back</button>
-    <STitle size={22}>New Script</STitle>
-    <Card style={{marginBottom:14}}><STitle size={14} mb={10}>Quick Request (optional)</STitle><Input textarea value={form.request} onChange={(e:any)=>setF("request",e.target.value)} placeholder={'"30s UGC ad for our serum targeting women with dry skin"'} rows={2}/></Card>
-    <Card style={{marginBottom:14}}>
-      <STitle size={14} mb={14}>Parameters</STitle>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
-        <div><Label>Product</Label><select value={form.productId} onChange={e=>setF("productId",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",cursor:"pointer"}}><option value="">General</option>{products.map((x:Product)=><option key={(x as any).id} value={(x as any).id}>{x.name}</option>)}</select></div>
-        <div><Label>Content Type</Label><select value={form.contentType} onChange={e=>setF("contentType",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",cursor:"pointer"}}>{FORM_CTYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
-        <div><Label>Ad Length</Label><select value={form.adLength} onChange={e=>setF("adLength",e.target.value)} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",cursor:"pointer"}}>{AD_LENGTHS.map(l=><option key={l} value={l}>{l}</option>)}</select></div>
-      </div>
-      <Label>Market Awareness Stage</Label>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{STAGES.map(s=>{const active=form.awarenessStage===s.value,sc2=STAGE_COLORS[s.value]||C.accent;return<div key={s.value} onClick={()=>setF("awarenessStage",s.value)} style={{background:active?sc2+"22":C.surface,border:"2px solid "+(active?sc2:C.border),borderRadius:10,padding:"10px 12px",cursor:"pointer"}}><div style={{fontWeight:700,fontSize:13,color:active?sc2:C.text,marginBottom:2}}>{s.label}</div><div style={{fontSize:11,color:C.muted}}>{s.desc}</div></div>})}</div>
-    </Card>
-    <Card style={{marginBottom:14}}>
-      <STitle size={14} mb={6}>Customer Avatar</STitle>
-      {savedAvatars.length>0&&<div style={{marginBottom:12}}><Label>Use a saved avatar</Label><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{savedAvatars.map((av:CustomerAvatar)=><button key={av.id} onClick={()=>{setF("useAvatarId",av.id);setF("customerAvatar",av.description);setF("painPoints",av.pains);setF("desires",av.desires);setF("objections",av.objections)}} style={{background:form.useAvatarId===av.id?C.accentSoft:C.surface,border:"1px solid "+(form.useAvatarId===av.id?C.accent:C.border),borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600,color:form.useAvatarId===av.id?C.accent:C.text}}>{av.name}</button>)}</div></div>}
-      <div style={{marginBottom:12}}><Label>Who is this customer?</Label><Input textarea value={form.customerAvatar} onChange={(e:any)=>setF("customerAvatar",e.target.value)} placeholder="e.g. Sarah, 34, busy mum, tried every moisturiser" rows={2}/></div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:12}}>
-        <div><Label>Pain Points</Label><Input textarea value={form.painPoints} onChange={(e:any)=>setF("painPoints",e.target.value)} rows={3}/></div>
-        <div><Label>Desires</Label><Input textarea value={form.desires} onChange={(e:any)=>setF("desires",e.target.value)} rows={3}/></div>
-      </div>
-      <Label>Objections</Label><Input textarea value={form.objections} onChange={(e:any)=>setF("objections",e.target.value)} rows={2}/>
-    </Card>
-    {error&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.red,marginBottom:12}}>{error}</div>}
-    {(forgedAds||[]).filter((a:ForgedAd)=>a.metadata?.hook_rate||a.metadata?.cpa||a.metadata?.roas||a.star_rating).length>=2&&<div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:10,padding:"8px 14px",fontSize:12,color:"#15803D",marginBottom:12}}>📈 Using performance data from {(forgedAds||[]).filter((a:ForgedAd)=>a.metadata?.hook_rate||a.metadata?.cpa||a.star_rating).length} ads to improve this script</div>}
-    {brand.brand_intelligence?.best_hook_types?.length>0&&<div style={{background:C.accentSoft,border:"1px solid "+C.accent+"33",borderRadius:10,padding:"8px 14px",fontSize:12,color:C.accent,marginBottom:12}}>🧠 Applying brand learnings: best hooks are {brand.brand_intelligence.best_hook_types.slice(0,2).join(", ")}</div>}
-    <Btn onClick={handleGen} disabled={generating} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:16,borderRadius:12}}>{generating?"⏳ Writing script & matching clips…":"✨ Generate Script"}</Btn>
-  </div>
+  if(view==="generate")return(
+    <div className="max-w-[740px] mx-auto p-7">
+      <button onClick={()=>setView("chooseMode")} className="flex items-center gap-1 text-text-muted hover:text-text text-sm cursor-pointer transition-colors bg-transparent border-none mb-5">
+        <ArrowLeft className="w-4 h-4" /> Back
+      </button>
+      <STitle size={22}>New Script</STitle>
+      <Card style={{marginBottom:14}}><STitle size={14} mb={10}>Quick Request (optional)</STitle><Input textarea value={form.request} onChange={(e:any)=>setF("request",e.target.value)} placeholder={'"30s UGC ad for our serum targeting women with dry skin"'} rows={2}/></Card>
+      <Card style={{marginBottom:14}}>
+        <STitle size={14} mb={14}>Parameters</STitle>
+        <div className="grid grid-cols-3 gap-3.5 mb-4">
+          <div><Label>Product</Label><select value={form.productId} onChange={e=>setF("productId",e.target.value)} className="bg-surface border border-border rounded-lg px-3 py-2 text-text text-sm outline-none w-full cursor-pointer"><option value="">General</option>{products.map((x:Product)=><option key={(x as any).id} value={(x as any).id}>{x.name}</option>)}</select></div>
+          <div><Label>Content Type</Label><select value={form.contentType} onChange={e=>setF("contentType",e.target.value)} className="bg-surface border border-border rounded-lg px-3 py-2 text-text text-sm outline-none w-full cursor-pointer">{FORM_CTYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+          <div><Label>Ad Length</Label><select value={form.adLength} onChange={e=>setF("adLength",e.target.value)} className="bg-surface border border-border rounded-lg px-3 py-2 text-text text-sm outline-none w-full cursor-pointer">{AD_LENGTHS.map(l=><option key={l} value={l}>{l}</option>)}</select></div>
+        </div>
+        <Label>Market Awareness Stage</Label>
+        <div className="grid grid-cols-2 gap-2">{STAGES.map(s=>{const active=form.awarenessStage===s.value,sc2=STAGE_COLORS[s.value]||C.accent;return<div key={s.value} onClick={()=>setF("awarenessStage",s.value)} className={`rounded-lg px-3 py-2.5 cursor-pointer border-2 transition-colors ${active?"":"bg-surface border-border hover:border-border-strong"}`} style={active?{background:sc2+"22",borderColor:sc2}:undefined}><div className="font-bold text-sm mb-0.5" style={active?{color:sc2}:undefined}>{s.label}</div><div className="text-[11px] text-text-muted">{s.desc}</div></div>})}</div>
+      </Card>
+      <Card style={{marginBottom:14}}>
+        <STitle size={14} mb={6}>Customer Avatar</STitle>
+        {savedAvatars.length>0&&<div className="mb-3"><Label>Use a saved avatar</Label><div className="flex gap-2 flex-wrap">{savedAvatars.map((av:CustomerAvatar)=><button key={av.id} onClick={()=>{setF("useAvatarId",av.id);setF("customerAvatar",av.description);setF("painPoints",av.pains);setF("desires",av.desires);setF("objections",av.objections)}} className={`rounded-lg px-3 py-1.5 cursor-pointer text-xs font-semibold border transition-colors ${form.useAvatarId===av.id?"bg-accent-soft border-accent text-accent":"bg-surface border-border text-text hover:border-border-strong"}`}>{av.name}</button>)}</div></div>}
+        <div className="mb-3"><Label>Who is this customer?</Label><Input textarea value={form.customerAvatar} onChange={(e:any)=>setF("customerAvatar",e.target.value)} placeholder="e.g. Sarah, 34, busy mum, tried every moisturiser" rows={2}/></div>
+        <div className="grid grid-cols-2 gap-3.5 mb-3">
+          <div><Label>Pain Points</Label><Input textarea value={form.painPoints} onChange={(e:any)=>setF("painPoints",e.target.value)} rows={3}/></div>
+          <div><Label>Desires</Label><Input textarea value={form.desires} onChange={(e:any)=>setF("desires",e.target.value)} rows={3}/></div>
+        </div>
+        <Label>Objections</Label><Input textarea value={form.objections} onChange={(e:any)=>setF("objections",e.target.value)} rows={2}/>
+      </Card>
+      {error&&<div className="bg-danger-soft border border-danger/30 rounded-lg px-3.5 py-2.5 text-sm text-danger mb-3">{error}</div>}
+      {(forgedAds||[]).filter((a:ForgedAd)=>a.metadata?.hook_rate||a.metadata?.cpa||a.metadata?.roas||a.star_rating).length>=2&&<div className="bg-success-soft border border-success/30 rounded-lg px-3.5 py-2 text-xs text-success mb-3 flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" /> Using performance data from {(forgedAds||[]).filter((a:ForgedAd)=>a.metadata?.hook_rate||a.metadata?.cpa||a.star_rating).length} ads to improve this script</div>}
+      {brand.brand_intelligence?.best_hook_types?.length>0&&<div className="bg-accent-soft border border-accent/20 rounded-lg px-3.5 py-2 text-xs text-accent mb-3 flex items-center gap-1.5"><Brain className="w-3.5 h-3.5" /> Applying brand learnings: best hooks are {brand.brand_intelligence.best_hook_types.slice(0,2).join(", ")}</div>}
+      <Btn onClick={handleGen} disabled={generating} style={{background:"var(--color-accent)",color:"#fff",width:"100%",padding:14,fontSize:16,borderRadius:12}}>{generating?"Writing script & matching clips...":"Generate Script"}</Btn>
+    </div>
+  )
 
   if(view==="review"){
     const autoCount=sections.filter(s=>s.autoSelected).length
-    return<div style={{padding:0}}>
+    return<div className="p-0">
       <AdWorkspace
         sections={sections}
         setSections={setSections}
@@ -434,33 +441,37 @@ Return ONLY valid JSON:
     const m=selected.metadata||{},stg=STAGES.find(s=>s.value===m.awarenessStage),stgC=STAGE_COLORS[m.awarenessStage]||C.accent
     const disp=sections.length>0?sections:(selected.sections||[])
     const assigned=disp.filter((s:any)=>!!s.selectedClipId).length
-    return<div style={{padding:28}}>
-      <button onClick={()=>setView("list")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back to Scripts</button>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12}}>
-        <div>
-          <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:8}}>
-            {selected.product_name&&<Chip label={selected.product_name} color={{bg:"#6c63ff22",color:"#a5b4fc"}}/>}
-            {m.contentType&&<Chip label={m.contentType} color={{bg:"#0891b222",color:"#38bdf8"}}/>}
-            {stg&&<Chip label={stg.label} color={{bg:stgC+"22",color:stgC}}/>}
-            <Chip label={`${assigned}/${disp.length} clips`} color={{bg:assigned===disp.length?"#22c55e22":"#f59e0b22",color:assigned===disp.length?C.green:C.yellow}}/>
+    return(
+      <div className="p-7">
+        <button onClick={()=>setView("list")} className="flex items-center gap-1 text-text-muted hover:text-text text-sm cursor-pointer transition-colors bg-transparent border-none mb-5">
+          <ArrowLeft className="w-4 h-4" /> Back to Scripts
+        </button>
+        <div className="flex justify-between items-start mb-5 flex-wrap gap-3">
+          <div>
+            <div className="flex gap-[7px] flex-wrap mb-2">
+              {selected.product_name&&<Chip label={selected.product_name} color={{bg:"#6c63ff22",color:"#a5b4fc"}}/>}
+              {m.contentType&&<Chip label={m.contentType} color={{bg:"#0891b222",color:"#38bdf8"}}/>}
+              {stg&&<Chip label={stg.label} color={{bg:stgC+"22",color:stgC}}/>}
+              <Chip label={`${assigned}/${disp.length} clips`} color={{bg:assigned===disp.length?"#22c55e22":"#f59e0b22",color:assigned===disp.length?"var(--color-success)":"var(--color-warning)"}}/>
+            </div>
+            <div className="text-sm text-text-muted">Saved {selected.created_at?new Date(selected.created_at).toLocaleDateString():""}</div>
           </div>
-          <div style={{fontSize:13,color:C.muted}}>Saved {selected.created_at?new Date(selected.created_at).toLocaleDateString():""}</div>
+          <div className="flex gap-2.5">
+            <Btn onClick={()=>{setSections(disp);setView("review");setStep("script")}} style={{background:"var(--color-accent-soft)",color:"var(--color-accent)",border:"1px solid var(--color-accent-muted)"}}>Edit Script</Btn>
+            <Btn onClick={async()=>{
+              const fresh=disp.map((s:any)=>({...s,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
+              const matched=items.length>0?await matchClips(fresh,items,!!voiceoverUrl):fresh
+              setSections(matched);setView("review");setStep("audio")
+            }} style={{background:"rgba(34,197,94,0.13)",color:"var(--color-success)",border:"1px solid rgba(34,197,94,0.27)"}}>Reuse Script</Btn>
+            <Btn onClick={()=>handleDeleteScript(selected.id!)} style={{background:"rgba(239,68,68,0.13)",color:"var(--color-danger)",border:"1px solid rgba(239,68,68,0.2)"}}>Delete</Btn>
+          </div>
         </div>
-        <div style={{display:"flex",gap:10}}>
-          <Btn onClick={()=>{setSections(disp);setView("review");setStep("script")}} style={{background:"#EDE8FF",color:C.accent,border:"1px solid "+C.accent+"44"}}>Edit Script</Btn>
-          <Btn onClick={async()=>{
-            const fresh=disp.map((s:any)=>({...s,matchedClipIds:[],selectedClipId:null,autoSelected:false}))
-            const matched=items.length>0?await matchClips(fresh,items,!!voiceoverUrl):fresh
-            setSections(matched);setView("review");setStep("audio")
-          }} style={{background:C.green+"22",color:C.green,border:"1px solid "+C.green+"44"}}>↺ Reuse Script</Btn>
-          <Btn onClick={()=>handleDeleteScript(selected.id!)} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444433"}}>Delete</Btn>
-        </div>
+        <Card style={{padding:0,overflow:"hidden",marginBottom:20}}>
+          <ScriptTable sections={disp} onChange={setSections} libraryItems={items} readOnly={false} brandName={brand.name} productName={selected.product_name}/>
+        </Card>
+        <StitchedPreview sections={disp} libraryItems={items}/>
       </div>
-      <Card style={{padding:0,overflow:"hidden",marginBottom:20}}>
-        <ScriptTable sections={disp} onChange={setSections} libraryItems={items} readOnly={false} brandName={brand.name} productName={selected.product_name}/>
-      </Card>
-      <StitchedPreview sections={disp} libraryItems={items}/>
-    </div>
+    )
   }
   return null
 }

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { C, MUSIC_MOODS, FALLBACK_TRACKS } from './constants'
+import { Music, Play, Pause, Check, AlertTriangle, Sparkles, X } from 'lucide-react'
+import { MUSIC_MOODS, FALLBACK_TRACKS } from './constants'
 import { fmt } from './utils'
 import { Btn } from './ui-primitives'
 
@@ -32,24 +33,38 @@ export function MusicPicker({suggestedMood,onSave}:any){
     else{Object.values(audioRefs.current).forEach(a=>a.pause());if(!audioRefs.current[track.id]){const a=new Audio(track.preview_url);audioRefs.current[track.id]=a;a.onended=()=>setPlayingId(null)}audioRefs.current[track.id].play().catch(()=>{});setPlayingId(track.id)}
   }
 
-  return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:20}}>
-    <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>🎵 Background Music</div>
-    <div style={{fontSize:13,color:C.muted,marginBottom:12}}>Optional — choose a royalty-free track.</div>
-    {suggestedMood&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"8px 12px",fontSize:12,color:C.accent,marginBottom:12}}>✨ AI suggested: <strong>{suggestedMood}</strong></div>}
-    {error&&<div style={{background:"#f59e0b11",border:"1px solid #f59e0b33",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#fbbf24",marginBottom:10}}>⚠️ {error}</div>}
-    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-      {MUSIC_MOODS.map(m=><button key={m} onClick={()=>{setMood(m);search(m)}} style={{background:mood===m?C.accent:C.surface,color:mood===m?"#fff":C.muted,border:"1px solid "+(mood===m?C.accent:C.border),borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}>{m}</button>)}
+  return<div className="bg-card border border-border rounded-lg p-5">
+    <div className="flex items-center gap-2 font-bold text-base mb-1">
+      <Music className="w-4 h-4" />
+      Background Music
     </div>
-    <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:240,overflowY:"auto"}}>
-      {tracks.map((track:any)=><div key={track.id} onClick={()=>setSelectedTrack(selectedTrack?.id===track.id?null:track)} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,border:"2px solid "+(selectedTrack?.id===track.id?C.accent:C.border),background:selectedTrack?.id===track.id?C.accentSoft:C.surface,cursor:"pointer"}}>
-        <button onClick={e=>{e.stopPropagation();togglePlay(track)}} style={{width:30,height:30,borderRadius:"50%",background:playingId===track.id?C.accent:C.border,border:"none",color:"#fff",cursor:"pointer",fontSize:11,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{playingId===track.id?"⏸":"▶"}</button>
-        <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{track.name}</div><div style={{fontSize:11,color:C.muted}}>by {track.artist} · {fmt(track.duration)}</div></div>
-        {selectedTrack?.id===track.id&&<span style={{color:C.accent,fontSize:12,fontWeight:700,flexShrink:0}}>✓</span>}
+    <p className="text-sm text-text-muted mb-3">Optional -- choose a royalty-free track.</p>
+    {suggestedMood&&<div className="bg-accent-soft border border-accent/30 rounded-md px-3 py-2 text-xs text-accent mb-3 flex items-center gap-2">
+      <Sparkles className="w-3.5 h-3.5" /> AI suggested: <strong>{suggestedMood}</strong>
+    </div>}
+    {error&&<div className="bg-warning-soft border border-warning/20 rounded-md px-3 py-2 text-xs text-warning mb-2.5 flex items-center gap-2">
+      <AlertTriangle className="w-3.5 h-3.5" /> {error}
+    </div>}
+    <div className="flex gap-1.5 flex-wrap mb-3">
+      {MUSIC_MOODS.map(m=><button key={m} onClick={()=>{setMood(m);search(m)}} className={`rounded-full px-3 py-1 text-xs font-semibold cursor-pointer transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 ${mood===m?"bg-accent text-white":"bg-surface text-text-muted border border-border hover:border-border-strong"}`}>{m}</button>)}
+    </div>
+    <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+      {tracks.map((track:any)=><div key={track.id} onClick={()=>setSelectedTrack(selectedTrack?.id===track.id?null:track)} className={`flex items-center gap-3 p-3 rounded-md border-2 cursor-pointer transition-all duration-150 ${selectedTrack?.id===track.id?"border-accent bg-accent-soft":"border-border hover:border-border-strong"}`}>
+        <button onClick={e=>{e.stopPropagation();togglePlay(track)}} className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 ${playingId===track.id?"bg-accent text-white":"bg-accent-soft hover:bg-accent text-accent hover:text-white"}`}>
+          {playingId===track.id?<Pause className="w-3.5 h-3.5" />:<Play className="w-3.5 h-3.5 ml-0.5" />}
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm truncate">{track.name}</div>
+          <div className="text-xs text-text-muted">by {track.artist} · {fmt(track.duration)}</div>
+        </div>
+        {selectedTrack?.id===track.id&&<Check className="w-4 h-4 text-accent flex-shrink-0" />}
       </div>)}
     </div>
-    <div style={{display:"flex",gap:10,marginTop:12}}>
-      {selectedTrack&&<Btn onClick={()=>onSave(selectedTrack.url,selectedTrack.name)} style={{background:C.green,color:"#000",fontWeight:700,flex:1}}>✓ Use "{selectedTrack.name}"</Btn>}
-      <Btn onClick={()=>onSave(null,null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Skip Music</Btn>
+    <div className="flex gap-2.5 mt-3">
+      {selectedTrack&&<Btn onClick={()=>onSave(selectedTrack.url,selectedTrack.name)} className="bg-success text-black font-bold flex-1 flex items-center justify-center gap-1.5 transition-all duration-150 hover:bg-success/90 focus-visible:ring-2 focus-visible:ring-success/50">
+        <Check className="w-3.5 h-3.5" /> Use "{selectedTrack.name}"
+      </Btn>}
+      <Btn onClick={()=>onSave(null,null)} className="bg-transparent border border-border text-text-muted hover:border-border-strong transition-all duration-150 focus-visible:ring-2 focus-visible:ring-border">Skip Music</Btn>
     </div>
   </div>
 }

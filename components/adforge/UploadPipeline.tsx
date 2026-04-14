@@ -1,12 +1,12 @@
 'use client'
-import { C } from './constants'
 import type { Item } from './types'
+import { Check, Upload, RefreshCw, Search, Scissors, AlertCircle, AlertTriangle } from 'lucide-react'
 
 const STAGES = [
-  { key: 'upload', icon: '⬆️', label: 'Upload' },
-  { key: 'transcode', icon: '🔄', label: 'Transcode' },
-  { key: 'analyse', icon: '🔍', label: 'Analyse' },
-  { key: 'clip', icon: '✂️', label: 'Clip' },
+  { key: 'upload', icon: Upload, label: 'Upload' },
+  { key: 'transcode', icon: RefreshCw, label: 'Transcode' },
+  { key: 'analyse', icon: Search, label: 'Analyse' },
+  { key: 'clip', icon: Scissors, label: 'Clip' },
 ]
 
 function getActiveStageIndex(muxStatus?: string): number {
@@ -19,84 +19,134 @@ function getActiveStageIndex(muxStatus?: string): number {
   return 0
 }
 
-export function UploadPipeline({ item, compact }: { item: Item; compact?: boolean }) {
+export function UploadPipeline({
+  item,
+  compact,
+}: {
+  item: Item
+  compact?: boolean
+}) {
   const stageIdx = getActiveStageIndex(item.mux_status)
   const isError = stageIdx === -1
   const isDuplicate = stageIdx === -2
   const allDone = stageIdx >= 4
-  const fontSize = compact ? 9 : 11
-  const dotSize = compact ? 10 : 14
-  const lineH = compact ? 2 : 3
 
   if (isError) {
     return (
-      <div style={{ padding: compact ? '4px 8px' : '8px 12px', fontSize, color: C.red, fontWeight: 600 }}>
-        ❌ Processing failed
+      <div
+        className={[
+          'text-danger font-semibold flex items-center gap-1.5',
+          compact ? 'px-2 py-1 text-[9px]' : 'px-3 py-2 text-[11px]',
+        ].join(' ')}
+      >
+        <AlertCircle className={compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
+        Processing failed
       </div>
     )
   }
 
   if (isDuplicate) {
     return (
-      <div style={{ padding: compact ? '4px 8px' : '8px 12px', fontSize, color: C.yellow, fontWeight: 600 }}>
-        ⚠️ Duplicate detected
+      <div
+        className={[
+          'text-warning font-semibold flex items-center gap-1.5',
+          compact ? 'px-2 py-1 text-[9px]' : 'px-3 py-2 text-[11px]',
+        ].join(' ')}
+      >
+        <AlertTriangle className={compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
+        Duplicate detected
       </div>
     )
   }
 
   return (
-    <div style={{ padding: compact ? '4px 8px' : '8px 12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+    <div className={compact ? 'px-2 py-1' : 'px-3 py-2'}>
+      <div className="flex items-center">
         {STAGES.map((stage, i) => {
           const completed = allDone || i < stageIdx
           const active = !allDone && i === stageIdx
-          const future = !allDone && i > stageIdx
+          const Icon = stage.icon
+
           return (
-            <div key={stage.key} style={{ display: 'flex', alignItems: 'center', flex: i < STAGES.length - 1 ? 1 : undefined }}>
+            <div
+              key={stage.key}
+              className={[
+                'flex items-center',
+                i < STAGES.length - 1 ? 'flex-1' : '',
+              ].join(' ')}
+            >
               {/* Dot + label */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: compact ? 1 : 3, minWidth: compact ? 28 : 40 }}>
+              <div
+                className={[
+                  'flex flex-col items-center',
+                  compact ? 'gap-px min-w-7' : 'gap-1 min-w-10',
+                ].join(' ')}
+              >
                 <div
-                  style={{
-                    width: dotSize,
-                    height: dotSize,
-                    borderRadius: '50%',
-                    background: completed ? C.green : active ? C.accent : C.border,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: compact ? 6 : 8,
-                    color: '#fff',
-                    fontWeight: 800,
-                    position: 'relative',
-                    ...(active ? { boxShadow: `0 0 0 3px ${C.accent}33`, animation: 'pipelinePulse 1.5s infinite' } : {}),
-                  }}
+                  className={[
+                    'rounded-full flex items-center justify-center text-white font-extrabold',
+                    compact ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5',
+                    completed
+                      ? 'bg-success'
+                      : active
+                        ? 'bg-accent animate-pulse-soft'
+                        : 'bg-card border border-border',
+                  ].join(' ')}
                 >
-                  {completed ? '✓' : ''}
+                  {completed && (
+                    <Check
+                      className={compact ? 'w-1.5 h-1.5' : 'w-2 h-2'}
+                      strokeWidth={4}
+                    />
+                  )}
                 </div>
                 {!compact && (
-                  <div style={{ fontSize: 9, color: completed ? C.green : active ? C.accent : C.muted, fontWeight: active ? 700 : 500, whiteSpace: 'nowrap' }}>
-                    {stage.icon} {stage.label}
+                  <div
+                    className={[
+                      'text-[9px] whitespace-nowrap flex items-center gap-0.5',
+                      completed
+                        ? 'text-success font-medium'
+                        : active
+                          ? 'text-accent font-bold'
+                          : 'text-text-muted font-medium',
+                    ].join(' ')}
+                  >
+                    <Icon className="w-2.5 h-2.5" />
+                    {stage.label}
                   </div>
                 )}
               </div>
+
               {/* Connecting line */}
               {i < STAGES.length - 1 && (
-                <div style={{ flex: 1, height: lineH, background: completed ? C.green : C.border, borderRadius: lineH, margin: compact ? '0 2px' : '0 4px', marginBottom: compact ? 0 : 16 }} />
+                <div
+                  className={[
+                    'flex-1 rounded-full',
+                    compact ? 'h-0.5 mx-0.5' : 'h-0.5 mx-1 mb-4',
+                    completed ? 'bg-success' : 'bg-border',
+                  ].join(' ')}
+                />
               )}
             </div>
           )
         })}
       </div>
+
       {/* Summary line when complete */}
       {allDone && item.clip_ids && item.clip_ids.length > 0 && (
-        <div style={{ fontSize: compact ? 8 : 11, color: C.green, fontWeight: 600, marginTop: compact ? 2 : 6 }}>
-          ✅ Created {item.clip_ids.length} clip{item.clip_ids.length !== 1 ? 's' : ''}
-          {item.analysis?.content_type ? ` · ${item.analysis.content_type}` : ''}
-          {item.analysis?.ad_potential ? ` · ${item.analysis.ad_potential} potential` : ''}
+        <div
+          className={[
+            'text-success font-semibold flex items-center gap-1',
+            compact ? 'text-[8px] mt-0.5' : 'text-[11px] mt-1.5',
+          ].join(' ')}
+        >
+          <Check className={compact ? 'w-2.5 h-2.5' : 'w-3 h-3'} />
+          Created {item.clip_ids.length} clip
+          {item.clip_ids.length !== 1 ? 's' : ''}
+          {item.analysis?.content_type ? ` \u00B7 ${item.analysis.content_type}` : ''}
+          {item.analysis?.ad_potential ? ` \u00B7 ${item.analysis.ad_potential} potential` : ''}
         </div>
       )}
-      {/* Inject pulse animation */}
-      <style>{`@keyframes pipelinePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
     </div>
   )
 }

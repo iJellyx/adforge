@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { ClipboardList, Link2, Copy, Check, ExternalLink, X, Plus, Mic, Video, Anchor, Scissors, Film, MessageSquare } from 'lucide-react'
 import type { BrandProfile } from './types'
 import { C } from './constants'
 import { Btn, Label, STitle, Input } from './ui-primitives'
@@ -34,67 +35,94 @@ export function CreatorBriefModal({brand,sections,onClose}:{brand:BrandProfile,s
     setSaving(false)
   }
   async function copyUrl(){await navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),2000)}
-  const typeColors:Record<string,{bg:string,color:string}>={voiceover:{bg:"#DBEAFE",color:"#1D4ED8"},hook:{bg:"#FEF3C7",color:"#92400E"},"talking head":{bg:"#D1FAE5",color:"#065F46"}}
-  return<div onClick={onClose} style={{position:"fixed",inset:0,background:"#000000dd",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
-    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:28,maxWidth:700,width:"100%",marginTop:20,marginBottom:40}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-        <div><STitle size={20} mb={2}>📋 Creator Brief</STitle><div style={{fontSize:13,color:C.muted}}>Everything a creator needs to record your ad</div></div>
-        <Btn onClick={onClose} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕</Btn>
+
+  return<div onClick={onClose} className="bg-overlay fixed inset-0 z-[400] flex items-start justify-center p-5 overflow-y-auto animate-fade-in">
+    <div onClick={e=>e.stopPropagation()} className="bg-card border border-border rounded-xl p-7 max-w-[700px] w-full mt-5 mb-10 shadow-xl animate-scale-in">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <div className="flex items-center gap-2 font-bold text-xl mb-0.5">
+            <ClipboardList className="w-5 h-5" /> Creator Brief
+          </div>
+          <div className="text-sm text-text-muted">Everything a creator needs to record your ad</div>
+        </div>
+        <button onClick={onClose} className="bg-transparent border border-border text-text-muted rounded-md px-3 py-1.5 cursor-pointer hover:border-border-strong transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50">
+          <X className="w-4 h-4" />
+        </button>
       </div>
       {shareUrl?<>
-        <div style={{background:"#F0FDF4",border:"2px solid #86EFAC",borderRadius:14,padding:24,textAlign:"center",marginBottom:20}}>
-          <div style={{fontSize:32,marginBottom:12}}>🔗</div>
-          <div style={{fontWeight:700,fontSize:16,color:"#15803D",marginBottom:8}}>Brief ready to share!</div>
-          <div style={{background:"#fff",border:"1.5px solid #86EFAC",borderRadius:10,padding:"12px 16px",fontFamily:"monospace",fontSize:13,wordBreak:"break-all" as const,marginBottom:14,color:C.text}}>{shareUrl}</div>
-          <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
-            <Btn onClick={copyUrl} style={{background:copied?"#22c55e":C.accent,color:"#fff",fontWeight:700}}>{copied?"✓ Copied!":"Copy URL"}</Btn>
-            <a href={shareUrl} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}><Btn style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44"}}>Preview →</Btn></a>
-            <Btn onClick={()=>setShareUrl("")} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Edit brief</Btn>
+        <div className="bg-success-soft border-2 border-success/40 rounded-lg p-6 text-center mb-5">
+          <Link2 className="w-8 h-8 mx-auto mb-3 text-success" />
+          <div className="font-bold text-base text-success mb-2">Brief ready to share!</div>
+          <div className="bg-card border-[1.5px] border-success/40 rounded-md px-4 py-3 font-mono text-sm break-all mb-3.5 text-text">{shareUrl}</div>
+          <div className="flex gap-2.5 justify-center flex-wrap">
+            <Btn onClick={copyUrl} className={`font-bold flex items-center gap-1.5 transition-all duration-150 ${copied?"bg-success text-white":"bg-accent text-white hover:bg-accent-hover"} focus-visible:ring-2 focus-visible:ring-accent/50`}>
+              {copied?<><Check className="w-3.5 h-3.5" /> Copied!</>:<><Copy className="w-3.5 h-3.5" /> Copy URL</>}
+            </Btn>
+            <a href={shareUrl} target="_blank" rel="noopener noreferrer" className="no-underline">
+              <Btn className="bg-accent-soft text-accent border border-accent/30 flex items-center gap-1.5 hover:bg-accent hover:text-white transition-all duration-150">
+                Preview <ExternalLink className="w-3.5 h-3.5" />
+              </Btn>
+            </a>
+            <Btn onClick={()=>setShareUrl("")} className="bg-transparent border border-border text-text-muted hover:border-border-strong transition-all duration-150">Edit brief</Btn>
           </div>
         </div>
-        <Btn onClick={onClose} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,width:"100%"}}>Close</Btn>
+        <Btn onClick={onClose} className="bg-surface border border-border text-text-muted w-full hover:border-border-strong transition-all duration-150">Close</Btn>
       </>:<>
-        <div style={{marginBottom:20,display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div><Label>Brand name</Label><Input value={brand.name||""} onChange={()=>{}} style={{background:"#F9FAFB",color:C.muted}}/></div>
+        <div className="mb-5 grid grid-cols-2 gap-3">
+          <div><Label>Brand name</Label><Input value={brand.name||""} onChange={()=>{}} className="bg-surface text-text-muted"/></div>
           <div><Label>Product (optional)</Label><Input value={productName} onChange={(e:any)=>setProductName(e.target.value)} placeholder="e.g. Vitamin C Serum"/></div>
         </div>
-        <div style={{marginBottom:20}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><Label>🎣 Hooks to record</Label><Btn onClick={()=>setHooks(h=>[...h,""])} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:11,padding:"4px 10px"}}>+ Add</Btn></div>
-          {hooks.map((h,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:8}}>
-            <div style={{width:22,height:22,borderRadius:99,background:C.accentSoft,color:C.accent,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:11}}>{i+1}</div>
-            <Input value={h} onChange={(e:any)=>updHook(i,e.target.value)} placeholder={`Hook ${i+1} — exact opening words`} style={{flex:1}}/>
-            {hooks.length>1&&<button onClick={()=>setHooks(h=>h.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:18,flexShrink:0}}>×</button>}
+        <div className="mb-5">
+          <div className="flex justify-between items-center mb-2.5">
+            <Label className="flex items-center gap-1.5"><Anchor className="w-3.5 h-3.5" /> Hooks to record</Label>
+            <Btn onClick={()=>setHooks(h=>[...h,""])} className="bg-accent-soft text-accent border border-accent/30 text-xs px-2.5 py-1 flex items-center gap-1 hover:bg-accent hover:text-white transition-all duration-150"><Plus className="w-3 h-3" /> Add</Btn>
+          </div>
+          {hooks.map((h,i)=><div key={i} className="flex gap-2 mb-2">
+            <div className="w-[22px] h-[22px] rounded-full bg-accent-soft text-accent text-xs font-bold flex items-center justify-center flex-shrink-0 mt-[11px]">{i+1}</div>
+            <Input value={h} onChange={(e:any)=>updHook(i,e.target.value)} placeholder={`Hook ${i+1} -- exact opening words`} className="flex-1"/>
+            {hooks.length>1&&<button onClick={()=>setHooks(h=>h.filter((_,j)=>j!==i))} className="bg-transparent border-none text-text-muted cursor-pointer text-lg flex-shrink-0 hover:text-danger transition-colors duration-150"><X className="w-4 h-4" /></button>}
           </div>)}
         </div>
-        <div style={{marginBottom:20}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><Label>📝 Scripts to record</Label><Btn onClick={()=>setScripts(s=>[...s,{type:"voiceover",label:"",words:""}])} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:11,padding:"4px 10px"}}>+ Add</Btn></div>
-          {scripts.map((s,i)=><div key={i} style={{border:"1.5px solid "+C.border,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
-            <div style={{display:"flex",gap:10,marginBottom:10,alignItems:"center",flexWrap:"wrap"}}>
-              <select value={s.type} onChange={e=>updScript(i,"type",e.target.value)} style={{background:typeColors[s.type]?.bg||C.surface,border:"none",borderRadius:99,padding:"4px 10px",color:typeColors[s.type]?.color||C.text,fontSize:11,fontWeight:700,cursor:"pointer",outline:"none"}}>
-                <option value="voiceover">🎙️ Voiceover</option><option value="talking head">🎥 Talking Head</option><option value="hook">🎣 Hook</option>
+        <div className="mb-5">
+          <div className="flex justify-between items-center mb-2.5">
+            <Label className="flex items-center gap-1.5"><Mic className="w-3.5 h-3.5" /> Scripts to record</Label>
+            <Btn onClick={()=>setScripts(s=>[...s,{type:"voiceover",label:"",words:""}])} className="bg-accent-soft text-accent border border-accent/30 text-xs px-2.5 py-1 flex items-center gap-1 hover:bg-accent hover:text-white transition-all duration-150"><Plus className="w-3 h-3" /> Add</Btn>
+          </div>
+          {scripts.map((s,i)=><div key={i} className="border-[1.5px] border-border rounded-lg p-3.5 mb-2.5">
+            <div className="flex gap-2.5 mb-2.5 items-center flex-wrap">
+              <select value={s.type} onChange={e=>updScript(i,"type",e.target.value)} className="bg-surface border-none rounded-full px-2.5 py-1 text-xs font-bold cursor-pointer outline-none text-text focus-visible:ring-2 focus-visible:ring-accent/50">
+                <option value="voiceover">Voiceover</option><option value="talking head">Talking Head</option><option value="hook">Hook</option>
               </select>
-              <Input value={s.label} onChange={(e:any)=>updScript(i,"label",e.target.value)} placeholder="Label (optional)" style={{flex:1,minWidth:100}}/>
-              {scripts.length>1&&<button onClick={()=>setScripts(s=>s.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:18}}>×</button>}
+              <Input value={s.label} onChange={(e:any)=>updScript(i,"label",e.target.value)} placeholder="Label (optional)" className="flex-1 min-w-[100px]"/>
+              {scripts.length>1&&<button onClick={()=>setScripts(s=>s.filter((_,j)=>j!==i))} className="bg-transparent border-none text-text-muted cursor-pointer text-lg hover:text-danger transition-colors duration-150"><X className="w-4 h-4" /></button>}
             </div>
-            <Input textarea value={s.words} onChange={(e:any)=>updScript(i,"words",e.target.value)} placeholder="Exact words to say…" rows={3}/>
+            <Input textarea value={s.words} onChange={(e:any)=>updScript(i,"words",e.target.value)} placeholder="Exact words to say..." rows={3}/>
           </div>)}
         </div>
-        <div style={{marginBottom:20}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><Label>🎬 B-roll shots</Label><Btn onClick={()=>setBroll(b=>[...b,""])} style={{background:C.accentSoft,color:C.accent,border:"1px solid "+C.accent+"44",fontSize:11,padding:"4px 10px"}}>+ Add</Btn></div>
-          {broll.map((b,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:8}}>
-            <Input value={b} onChange={(e:any)=>updBroll(i,e.target.value)} placeholder={`Shot ${i+1} — describe what to film`} style={{flex:1}}/>
-            {broll.length>1&&<button onClick={()=>setBroll(b=>b.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:18,flexShrink:0}}>×</button>}
+        <div className="mb-5">
+          <div className="flex justify-between items-center mb-2.5">
+            <Label className="flex items-center gap-1.5"><Film className="w-3.5 h-3.5" /> B-roll shots</Label>
+            <Btn onClick={()=>setBroll(b=>[...b,""])} className="bg-accent-soft text-accent border border-accent/30 text-xs px-2.5 py-1 flex items-center gap-1 hover:bg-accent hover:text-white transition-all duration-150"><Plus className="w-3 h-3" /> Add</Btn>
+          </div>
+          {broll.map((b,i)=><div key={i} className="flex gap-2 mb-2">
+            <Input value={b} onChange={(e:any)=>updBroll(i,e.target.value)} placeholder={`Shot ${i+1} -- describe what to film`} className="flex-1"/>
+            {broll.length>1&&<button onClick={()=>setBroll(b=>b.filter((_,j)=>j!==i))} className="bg-transparent border-none text-text-muted cursor-pointer text-lg flex-shrink-0 hover:text-danger transition-colors duration-150"><X className="w-4 h-4" /></button>}
           </div>)}
         </div>
-        <div style={{border:"1px solid "+C.border,borderRadius:12,padding:14,marginBottom:16}}>
-          <Label>✂️ Editing style & references</Label>
-          <div style={{marginBottom:10}}><Input textarea value={editingStyle} onChange={(e:any)=>setEditingStyle(e.target.value)} placeholder="e.g. Fast cuts, bold captions, raw UGC feel…" rows={2}/></div>
-          <div style={{marginBottom:10}}><Input textarea value={editingRefs} onChange={(e:any)=>setEditingRefs(e.target.value)} placeholder={"Reference links (one per line)\nhttps://tiktok.com/..."} rows={3}/></div>
-          <Input textarea value={editingNotes} onChange={(e:any)=>setEditingNotes(e.target.value)} placeholder="Editing notes — captions on every word, product close-up at end…" rows={2}/>
+        <div className="bg-surface border border-border rounded-lg p-3.5 mb-4">
+          <Label className="flex items-center gap-1.5"><Scissors className="w-3.5 h-3.5" /> Editing style & references</Label>
+          <div className="mb-2.5"><Input textarea value={editingStyle} onChange={(e:any)=>setEditingStyle(e.target.value)} placeholder="e.g. Fast cuts, bold captions, raw UGC feel..." rows={2}/></div>
+          <div className="mb-2.5"><Input textarea value={editingRefs} onChange={(e:any)=>setEditingRefs(e.target.value)} placeholder={"Reference links (one per line)\nhttps://tiktok.com/..."} rows={3}/></div>
+          <Input textarea value={editingNotes} onChange={(e:any)=>setEditingNotes(e.target.value)} placeholder="Editing notes -- captions on every word, product close-up at end..." rows={2}/>
         </div>
-        <div style={{marginBottom:24}}><Label>💬 Additional notes</Label><Input textarea value={additionalNotes} onChange={(e:any)=>setAdditionalNotes(e.target.value)} placeholder="Deadlines, deliverables, file format…" rows={3}/></div>
-        {briefError&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,padding:"8px 12px",fontSize:12,color:C.red,marginBottom:12}}>{briefError}</div>}
-        <Btn onClick={generateBrief} disabled={saving} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:15,borderRadius:12,fontWeight:700}}>{saving?"Generating link…":"🔗 Generate Shareable Brief"}</Btn>
+        <div className="mb-6">
+          <Label className="flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5" /> Additional notes</Label>
+          <Input textarea value={additionalNotes} onChange={(e:any)=>setAdditionalNotes(e.target.value)} placeholder="Deadlines, deliverables, file format..." rows={3}/>
+        </div>
+        {briefError&&<div className="bg-danger-soft border border-danger/30 rounded-md px-3 py-2 text-xs text-danger mb-3">{briefError}</div>}
+        <Btn onClick={generateBrief} disabled={saving} className="bg-accent text-white w-full py-3.5 text-[15px] rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-accent-hover active:scale-[0.99] transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50">
+          <Link2 className="w-4 h-4" /> {saving?"Generating link...":"Generate Shareable Brief"}
+        </Btn>
       </>}
     </div>
   </div>

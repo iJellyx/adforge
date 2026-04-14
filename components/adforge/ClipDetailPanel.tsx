@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
+import { X, Check, Circle, XCircle, ChevronDown, ChevronUp, Paperclip, Save, Loader2 } from 'lucide-react'
 import { C, CLIP_ROLES } from './constants'
 import { fmt, secColor } from './utils'
 import { Btn, STitle, Label, Card } from './ui-primitives'
@@ -22,13 +23,12 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
   },[item.parent_id,items])
 
   const qualScore = item.analysis?.quality_score as string|undefined
-  const qualColors:Record<string,{bg:string,color:string,label:string}>={
-    High:{bg:'#22c55e22',color:'#22c55e',label:'High'},
-    Medium:{bg:'#f59e0b22',color:'#f59e0b',label:'Medium'},
-    Low:{bg:'#ef444422',color:'#ef4444',label:'Low'},
+  const qualColors:Record<string,{cls:string,label:string}>={
+    High:{cls:'bg-success-soft text-success',label:'High'},
+    Medium:{cls:'bg-warning-soft text-warning',label:'Medium'},
+    Low:{cls:'bg-danger-soft text-danger',label:'Low'},
   }
 
-  // Approval status update
   async function setStatus(status:'pending'|'approved'|'rejected'){
     setSaving(true)
     await supabase.from('items').update({clip_status:status}).eq('id',item.id)
@@ -36,7 +36,6 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
     onUpdate()
   }
 
-  // Role update
   async function setRole(role:string){
     setSaving(true)
     await supabase.from('items').update({clip_role:role}).eq('id',item.id)
@@ -45,14 +44,12 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
     onUpdate()
   }
 
-  // Tags update
   async function updateTags(newTags:string[]){
     const analysis = {...(item.analysis||{}),scene_tags:newTags}
     await supabase.from('items').update({analysis}).eq('id',item.id)
     onUpdate()
   }
 
-  // Save trim
   async function saveTrim(){
     const start = trimStart ?? item.start_seconds ?? 0
     const end = trimEnd ?? item.end_seconds ?? (item.duration_seconds||0)
@@ -68,40 +65,48 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
     onUpdate()
   }
 
-  const statusButtons:{status:'approved'|'pending'|'rejected',label:string,color:string,icon:string}[] = [
-    {status:'approved',label:'Approve',color:C.green,icon:'\u2713'},
-    {status:'pending',label:'Pending',color:C.yellow,icon:'\u25CB'},
-    {status:'rejected',label:'Reject',color:C.red,icon:'\u2717'},
+  const statusButtons:{status:'approved'|'pending'|'rejected',label:string,color:string,icon:React.ReactNode}[] = [
+    {status:'approved',label:'Approve',color:'success',icon:<Check className="w-3.5 h-3.5" />},
+    {status:'pending',label:'Pending',color:'warning',icon:<Circle className="w-3.5 h-3.5" />},
+    {status:'rejected',label:'Reject',color:'danger',icon:<XCircle className="w-3.5 h-3.5" />},
   ]
 
-  return <div style={{position:'fixed',top:0,right:0,width:370,height:'100vh',background:C.surface,borderLeft:'2px solid '+C.border,zIndex:500,display:'flex',flexDirection:'column',boxShadow:'-4px 0 24px rgba(91,73,255,0.1)',fontFamily:'inherit'}}>
+  return <div className="fixed top-0 right-0 w-[380px] h-screen bg-surface border-l border-border z-[500] flex flex-col shadow-xl animate-slide-in-right">
 
     {/* Header */}
-    <div style={{display:'flex',alignItems:'center',gap:10,padding:'14px 16px',borderBottom:'1.5px solid '+C.border,flexShrink:0}}>
-      <button onClick={onClose} style={{background:'none',border:'none',fontSize:20,cursor:'pointer',color:C.muted,padding:0,lineHeight:1}}>{"\u00D7"}</button>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontWeight:700,fontSize:14,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:C.text}}>{item.title}</div>
-        {parentVideo&&<div style={{fontSize:10,color:C.muted,marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{"\uD83D\uDCCE"} from {parentVideo.title}</div>}
+    <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-border flex-shrink-0">
+      <button onClick={onClose} className="bg-transparent border-none text-xl cursor-pointer text-text-muted p-0 leading-none hover:text-text transition-colors duration-150">
+        <X className="w-5 h-5" />
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="font-bold text-sm truncate text-text">{item.title}</div>
+        {parentVideo&&<div className="text-[10px] text-text-muted mt-0.5 truncate flex items-center gap-1"><Paperclip className="w-3 h-3" /> from {parentVideo.title}</div>}
       </div>
     </div>
 
     {/* Scrollable body */}
-    <div style={{flex:1,overflowY:'auto',padding:16,display:'flex',flexDirection:'column',gap:16}}>
+    <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
 
       {/* Video player */}
-      {item.mux_playback_id&&<div style={{borderRadius:10,overflow:'hidden',background:'#000'}}>
+      {item.mux_playback_id&&<div className="rounded-md overflow-hidden bg-black">
         <ClipSegmentPlayer playbackId={item.mux_playback_id} start={item.start_seconds||0} end={item.end_seconds} muted={false}/>
       </div>}
 
       {/* Approval buttons */}
       <div>
         <Label>Status</Label>
-        <div style={{display:'flex',gap:6}}>
+        <div className="flex gap-1.5">
           {statusButtons.map(b=>{
             const active = item.clip_status===b.status || (!item.clip_status && b.status==='pending')
+            const colorMap:Record<string,{activeCls:string,inactiveCls:string}>={
+              success:{activeCls:'bg-success text-white border-success',inactiveCls:'bg-surface text-success border-success hover:bg-success-soft'},
+              warning:{activeCls:'bg-warning text-black border-warning',inactiveCls:'bg-surface text-warning border-warning hover:bg-warning-soft'},
+              danger:{activeCls:'bg-danger text-white border-danger',inactiveCls:'bg-surface text-danger border-danger hover:bg-danger-soft'},
+            }
+            const cm=colorMap[b.color]||colorMap.warning
             return <Btn key={b.status} onClick={()=>setStatus(b.status)} disabled={saving}
-              style={{flex:1,background:active?b.color:C.surface,color:active?'#fff':b.color,border:'1.5px solid '+b.color,padding:'7px 4px',fontSize:11,borderRadius:8,textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>
-              <span>{b.icon}</span> {b.label}
+              className={`flex-1 py-2 px-1 text-xs rounded-md text-center flex items-center justify-center gap-1 border-[1.5px] transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 ${active?cm.activeCls:cm.inactiveCls}`}>
+              {b.icon} {b.label}
             </Btn>
           })}
         </div>
@@ -110,19 +115,19 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
       {/* Role selector */}
       <div>
         <Label>Clip Role</Label>
-        <div style={{position:'relative'}}>
+        <div className="relative">
           <button onClick={()=>setActiveRoleOpen(!activeRoleOpen)}
-            style={{width:'100%',background:C.surface,border:'1.5px solid '+C.border,borderRadius:8,padding:'8px 12px',fontSize:12,cursor:'pointer',color:C.text,fontWeight:600,display:'flex',alignItems:'center',justifyContent:'space-between',fontFamily:'inherit'}}>
-            {item.clip_role?(()=>{const rc=secColor(item.clip_role.toUpperCase());return<span style={{background:rc.bg,color:rc.color,padding:'2px 8px',borderRadius:99,fontSize:11,fontWeight:700,border:'1px solid '+(rc.bd||rc.color+'22')}}>{item.clip_role.toUpperCase()}</span>})():<span style={{color:C.muted}}>Select role...</span>}
-            <span style={{fontSize:8,opacity:0.5}}>{activeRoleOpen?'\u25B2':'\u25BC'}</span>
+            className="w-full bg-surface border-[1.5px] border-border rounded-md px-3 py-2 text-xs cursor-pointer text-text font-semibold flex items-center justify-between transition-all duration-150 hover:border-border-strong focus-visible:ring-2 focus-visible:ring-accent/50">
+            {item.clip_role?(()=>{const rc=secColor(item.clip_role.toUpperCase());return<span className="text-xs font-bold px-2 py-0.5 rounded-full border" style={{background:rc.bg,color:rc.color,borderColor:rc.bd||rc.color+'22'}}>{item.clip_role.toUpperCase()}</span>})():<span className="text-text-muted">Select role...</span>}
+            {activeRoleOpen?<ChevronUp className="w-3 h-3 opacity-50" />:<ChevronDown className="w-3 h-3 opacity-50" />}
           </button>
-          {activeRoleOpen&&<div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:C.surface,border:'1px solid '+C.border,borderRadius:10,padding:4,zIndex:100,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px #0003'}}>
+          {activeRoleOpen&&<div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-surface border border-border rounded-md p-1 z-[100] max-h-[200px] overflow-y-auto shadow-lg">
             {CLIP_ROLES.map(role=>{
               const rc=secColor(role.toUpperCase())
               const active = item.clip_role===role
               return <div key={role} onClick={()=>setRole(role)}
-                style={{padding:'6px 10px',borderRadius:6,cursor:'pointer',background:active?C.accentSoft:'transparent',display:'flex',alignItems:'center',gap:6,marginBottom:1}}>
-                <span style={{background:rc.bg,color:rc.color,padding:'1px 6px',borderRadius:99,fontSize:10,fontWeight:700,border:'1px solid '+(rc.bd||rc.color+'22')}}>{role.toUpperCase()}</span>
+                className={`px-2.5 py-1.5 rounded-md cursor-pointer flex items-center gap-1.5 mb-0.5 transition-colors duration-150 ${active?'bg-accent-soft':'hover:bg-card-hover'}`}>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border" style={{background:rc.bg,color:rc.color,borderColor:rc.bd||rc.color+'22'}}>{role.toUpperCase()}</span>
               </div>
             })}
           </div>}
@@ -132,9 +137,9 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
       {/* Quality score */}
       {qualScore&&<div>
         <Label>Quality Score</Label>
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span style={{background:qualColors[qualScore]?.bg||C.accentSoft,color:qualColors[qualScore]?.color||C.accent,padding:'4px 12px',borderRadius:99,fontSize:12,fontWeight:700}}>{qualScore}</span>
-          <span style={{fontSize:11,color:C.muted}}>AI-assessed</span>
+        <div className="flex items-center gap-2">
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${qualColors[qualScore]?.cls||'bg-accent-soft text-accent'}`}>{qualScore}</span>
+          <span className="text-xs text-text-muted">AI-assessed</span>
         </div>
       </div>}
 
@@ -147,15 +152,15 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
       {/* Trim controls */}
       {item.mux_playback_id&&<div>
         <Label>Trim</Label>
-        <div style={{display:'flex',gap:12,fontSize:11,color:C.muted,marginBottom:8}}>
-          <span>In: <strong style={{color:C.text}}>{fmt(trimStart??item.start_seconds??0)}</strong></span>
-          <span>Out: <strong style={{color:C.text}}>{fmt(trimEnd??item.end_seconds??item.duration_seconds)}</strong></span>
-          <span>Duration: <strong style={{color:C.text}}>{fmt((trimEnd??item.end_seconds??item.duration_seconds??0)-(trimStart??item.start_seconds??0))}</strong></span>
+        <div className="flex gap-3 text-xs text-text-muted mb-2">
+          <span>In: <strong className="text-text">{fmt(trimStart??item.start_seconds??0)}</strong></span>
+          <span>Out: <strong className="text-text">{fmt(trimEnd??item.end_seconds??item.duration_seconds)}</strong></span>
+          <span>Duration: <strong className="text-text">{fmt((trimEnd??item.end_seconds??item.duration_seconds??0)-(trimStart??item.start_seconds??0))}</strong></span>
         </div>
         <TrimSlider item={item} trimStart={trimStart??item.start_seconds??0} trimEnd={trimEnd??item.end_seconds??item.duration_seconds} onUpdate={(s:number,e:number)=>{setTrimStart(s);setTrimEnd(e)}}/>
-        <div style={{marginTop:8}}>
-          <Btn onClick={saveTrim} disabled={saving} style={{background:C.accent,color:'#fff',width:'100%',textAlign:'center',padding:'8px 0',fontSize:12}}>
-            {saving?'Saving...':'Save Trim'}
+        <div className="mt-2">
+          <Btn onClick={saveTrim} disabled={saving} className="bg-accent text-white w-full text-center py-2 text-xs rounded-md font-bold flex items-center justify-center gap-1.5 hover:bg-accent-hover transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50">
+            {saving?<><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</>:<><Save className="w-3.5 h-3.5" /> Save Trim</>}
           </Btn>
         </div>
       </div>}
@@ -163,18 +168,18 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
       {/* Transcript */}
       {item.transcript&&<div>
         <Label>Transcript</Label>
-        <div style={{background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:12,maxHeight:160,overflowY:'auto',fontSize:12,lineHeight:1.6,color:C.text,whiteSpace:'pre-wrap'}}>{item.transcript}</div>
+        <div className="bg-bg border border-border rounded-md p-3 max-h-40 overflow-y-auto text-xs leading-relaxed text-text whitespace-pre-wrap">{item.transcript}</div>
       </div>}
 
       {/* Metadata */}
       <div>
         <Label>Metadata</Label>
-        <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        <div className="flex flex-col gap-1.5">
           {item.analysis?.content_type&&<MetaRow label="Content Type" value={item.analysis.content_type}/>}
           {item.analysis?.use_case&&<MetaRow label="Use Case" value={item.analysis.use_case}/>}
           {item.analysis?.creative_tags&&item.analysis.creative_tags.length>0&&<MetaRow label="Creative Tags" value={item.analysis.creative_tags.join(', ')}/>}
           {item.analysis?.ad_notes&&<MetaRow label="Ad Notes" value={item.analysis.ad_notes}/>}
-          {item.creator&&<MetaRow label="Creator" value={`${item.creator}${item.creator_age?' \u00B7 '+item.creator_age:''}`}/>}
+          {item.creator&&<MetaRow label="Creator" value={`${item.creator}${item.creator_age?' · '+item.creator_age:''}`}/>}
           {item.duration_seconds!=null&&<MetaRow label="Duration" value={fmt(item.duration_seconds)}/>}
           {item.created_at&&<MetaRow label="Created" value={new Date(item.created_at).toLocaleDateString()}/>}
         </div>
@@ -184,8 +189,8 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
 }
 
 function MetaRow({label,value}:{label:string,value:string}){
-  return <div style={{display:'flex',gap:8,fontSize:11}}>
-    <span style={{color:C.muted,minWidth:90,flexShrink:0}}>{label}</span>
-    <span style={{color:C.text,fontWeight:500}}>{value}</span>
+  return <div className="flex gap-2 text-xs">
+    <span className="text-text-muted min-w-[90px] flex-shrink-0">{label}</span>
+    <span className="text-text font-medium">{value}</span>
   </div>
 }

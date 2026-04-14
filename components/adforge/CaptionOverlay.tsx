@@ -16,7 +16,6 @@ export function buildCaptionChunks(text:string,style:CaptionStyle,totalDur:numbe
   const words=text.trim().split(/\s+/).filter(Boolean)
   if(!words.length)return[]
 
-  // If we have real word timestamps from Deepgram, use them for precise timing
   const hasTimestamps=wordTimestamps&&wordTimestamps.length>0
 
   if(style==="line"){
@@ -28,7 +27,6 @@ export function buildCaptionChunks(text:string,style:CaptionStyle,totalDur:numbe
     return[{words:hasTimestamps?wordTimestamps!.map(w=>w.word):words,start:0,end:totalDur,wordStarts:hasTimestamps?wordTimestamps!.map(w=>w.start):undefined,wordEnds:hasTimestamps?wordTimestamps!.map(w=>w.end):undefined}]
   }
 
-  // Word-by-word: groups of 2
   if(hasTimestamps){
     const chunks:{words:string[],start:number,end:number,wordStarts:number[],wordEnds:number[]}[]=[]
     for(let i=0;i<wordTimestamps!.length;i+=2){
@@ -38,7 +36,6 @@ export function buildCaptionChunks(text:string,style:CaptionStyle,totalDur:numbe
     return chunks
   }
 
-  // Fallback: evenly distributed timing
   const chunks:{words:string[],start:number,end:number}[]=[]
   for(let i=0;i<words.length;i+=2){
     const group=words.slice(i,i+2)
@@ -55,7 +52,6 @@ export function CaptionOverlay({spoken,elapsed,clipDur,settings,wordTimestamps}:
   const allWords=chunks.flatMap(c=>c.words)
   const hasTimestamps=wordTimestamps&&wordTimestamps.length>0
 
-  // With real timestamps, find the active word by checking elapsed against word start/end
   let activeWordIdx=0
   if(hasTimestamps){
     for(let i=0;i<wordTimestamps!.length;i++){
@@ -76,8 +72,8 @@ export function CaptionOverlay({spoken,elapsed,clipDur,settings,wordTimestamps}:
     chunkStart=off
   }
   const {fontSize,accentColor,style}=settings
-  return<div style={{position:"absolute",bottom:"18%",left:"50%",transform:"translateX(-50%)",width:"88%",textAlign:"center",pointerEvents:"none",zIndex:10,filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.9))"}}>
-    <div style={{display:"inline-flex",flexWrap:"wrap",justifyContent:"center",gap:"0 6px",lineHeight:1.25}}>
+  return<div className="absolute bottom-[18%] left-1/2 -translate-x-1/2 w-[88%] text-center pointer-events-none z-10" style={{filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.9))"}}>
+    <div className="inline-flex flex-wrap justify-center gap-x-1.5 leading-tight">
       {displayWords.map((word,i)=>{
         const globalIdx=chunkStart+i
         const isKey=isKeyWord(word,globalIdx,allWords)
