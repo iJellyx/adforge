@@ -10,7 +10,7 @@ import { VoiceoverGenerator } from '../VoiceoverGenerator'
 import { MusicPicker } from '../MusicPicker'
 import { StitchedPreview } from '../StitchedPreview'
 import { ExportVideo } from '../ExportVideo'
-import { AdWorkspace } from '../AdWorkspace'
+import { AdStudio } from '../AdStudio'
 import { AutoMashMode } from '../AutoMashMode'
 import { BRollMode } from '../BRollMode'
 import { CreatorBriefModal } from '../CreatorBriefModal'
@@ -398,7 +398,7 @@ Return ONLY valid JSON:
   if(view==="review"){
     const autoCount=sections.filter(s=>s.autoSelected).length
     return<div style={{padding:0}}>
-      <AdWorkspace
+      <AdStudio
         sections={sections}
         setSections={setSections}
         hookVariations={hookVariations}

@@ -5,7 +5,7 @@ import { C, DEFAULT_CAPTIONS } from './constants'
 import { muxThumb, secColor } from './utils'
 import { CaptionOverlay, buildCaptionChunks } from './CaptionOverlay'
 
-export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSettings,onCaptionChange}:any){
+export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,captionSettings,onCaptionChange,fullWidth,onClipChange}:any){
   const [globalTime,setGlobalTime]=useState(0)
   const [playing,setPlaying]=useState(false)
   const [captions,setCaptions]=useState<CaptionSettings>(captionSettings||DEFAULT_CAPTIONS)
@@ -59,6 +59,7 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     function seek(){if(v)v.currentTime=cur!.start+sectionRelativeTime}
     if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true})
     if(playing)v.play().catch(()=>{})
+    if(onClipChange)onClipChange(clipIdx)
   },[clipIdx,cur?.item.mux_playback_id])
 
   function onTimeUpdate(){
@@ -153,7 +154,7 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
       </div>
     </div>}
 
-    <div style={{display:"grid",gridTemplateColumns:"1fr 260px"}}>
+    <div style={{display:"grid",gridTemplateColumns:fullWidth?"1fr":"1fr 260px"}}>
       <div style={{position:"relative",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:320}}>
         {/* Mute clip audio when voiceover is present to prevent overlapping dialogue (turbine effect) */}
         <video ref={vidRef} playsInline preload="metadata" muted={!!voiceoverUrl || cur?.muted || false} style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
@@ -163,7 +164,7 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
           {(voiceoverUrl||musicUrl)&&<div style={{position:"absolute",bottom:16,fontSize:11,color:"#fff",background:"#000a",padding:"3px 10px",borderRadius:99}}>{[voiceoverUrl?"🎙️ Voiceover":"",musicUrl?"🎵 Music":""].filter(Boolean).join(" + ")} will play</div>}
         </div>}
       </div>
-      <div style={{borderLeft:"1px solid "+C.border,overflowY:"auto",maxHeight:480}}>
+      {!fullWidth&&<div style={{borderLeft:"1px solid "+C.border,overflowY:"auto",maxHeight:480}}>
         <div style={{padding:"8px 10px",borderBottom:"1px solid "+C.border,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1}}>Timeline</div>
         {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>seekToClip(i)} style={{display:"flex",gap:8,padding:"8px 10px",borderBottom:"1px solid "+C.border,cursor:"pointer",background:active?C.accentSoft:"transparent"}}>
           <div style={{width:34,position:"relative",paddingTop:"60px",flexShrink:0,borderRadius:5,overflow:"hidden",background:"#111",border:"1px solid "+(active?C.accent:C.border)}}>{clip.item.mux_playback_id&&<img src={muxThumb(clip.item.mux_playback_id,clip.item.thumbnail_time||0)} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>}</div>
@@ -172,7 +173,7 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
             <div style={{fontSize:10,color:active?C.text:C.muted,lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{clip.spoken||clip.item.title}</div>
           </div>
         </div>})}
-      </div>
+      </div>}
     </div>
 
     <div style={{padding:"10px 16px",borderTop:"1px solid "+C.border}}>
