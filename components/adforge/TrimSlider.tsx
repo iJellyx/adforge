@@ -1,12 +1,12 @@
 'use client'
 import { useState, useRef } from 'react'
 import { C } from './constants'
-import { fmt } from './utils'
+import { fmt, toNum, fx } from './utils'
 
 export function TrimSlider({item,trimStart,trimEnd,onUpdate}:any){
-  const dur=item.duration_seconds||30
-  const start=trimStart??item.start_seconds??0
-  const end=trimEnd??item.end_seconds??dur
+  const dur=toNum(item.duration_seconds,30)
+  const start=toNum(trimStart??item.start_seconds,0)
+  const end=toNum(trimEnd??item.end_seconds,dur)
   const vidRef=useRef<HTMLVideoElement>(null)
   const [scrub,setScrub]=useState(start)
 
@@ -22,9 +22,9 @@ export function TrimSlider({item,trimStart,trimEnd,onUpdate}:any){
     </div>
     <div style={{marginBottom:6}}>
       <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.muted,marginBottom:3}}>
-        <span>In: {start.toFixed(1)}s</span>
-        <span>Out: {end.toFixed(1)}s</span>
-        <span>Dur: {(end-start).toFixed(1)}s</span>
+        <span>In: {fx(start)}s</span>
+        <span>Out: {fx(end)}s</span>
+        <span>Dur: {fx(end-start)}s</span>
       </div>
       <input type="range" min={0} max={dur} step={0.1} value={start} onChange={e=>{const v=parseFloat(e.target.value);preview(v);onUpdate({trimStart:v,trimEnd:Math.max(v+0.5,end)})}} style={{width:"100%",accentColor:C.accent,marginBottom:4}}/>
       <input type="range" min={0} max={dur} step={0.1} value={end} onChange={e=>{const v=parseFloat(e.target.value);preview(v);onUpdate({trimStart:Math.min(start,v-0.5),trimEnd:v})}} style={{width:"100%",accentColor:"#DC2626"}}/>

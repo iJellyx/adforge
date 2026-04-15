@@ -70,7 +70,7 @@ export function ScorePanel({ad,onScored}:{ad:ForgedAd,onScored:(scored:any)=>voi
           return<div key={s.index} style={{background:C.card,border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:s.fix?4:0}}>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{fontWeight:700,fontSize:11,color:secGc.text,background:secGc.bg,padding:"1px 6px",borderRadius:4}}>{avg.toFixed(1)}</span>
+                <span style={{fontWeight:700,fontSize:11,color:secGc.text,background:secGc.bg,padding:"1px 6px",borderRadius:4}}>{Number(avg).toFixed(1)}</span>
                 <span style={{fontWeight:600,fontSize:12}}>{secType}</span>
               </div>
               <div style={{display:"flex",gap:8,fontSize:10,color:C.muted}}>

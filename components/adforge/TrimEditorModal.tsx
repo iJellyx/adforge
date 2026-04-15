@@ -1,15 +1,15 @@
 'use client'
 import React, { useState, useEffect, useRef } from 'react'
 import { C } from './constants'
-import { fmt, muxThumb } from './utils'
+import { fmt, muxThumb, toNum, fx } from './utils'
 import { Btn } from './ui-primitives'
 
 export function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,onClose}:any){
-  const fullDur=originalDuration||item.duration_seconds||30
+  const fullDur=toNum(originalDuration||item.duration_seconds,30)
   // If clip is a sub-clip, the playback ID belongs to the original — use it
   const playbackId=item.mux_playback_id
-  const [inPt,setInPt]=useState(trimStart??item.start_seconds??0)
-  const [outPt,setOutPt]=useState(trimEnd??item.end_seconds??(item.start_seconds||0)+(item.duration_seconds||5))
+  const [inPt,setInPt]=useState(toNum(trimStart??item.start_seconds,0))
+  const [outPt,setOutPt]=useState(toNum(trimEnd??item.end_seconds,toNum(item.start_seconds,0)+toNum(item.duration_seconds,5)))
   const [curTime,setCurTime]=useState(inPt)
   const [playing,setPlaying]=useState(false)
   const vidRef=useRef<HTMLVideoElement>(null)
@@ -85,20 +85,20 @@ export function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,
           <div style={{fontWeight:800,fontSize:15,color:C.text}}>✂️ Trim Clip</div>
           <div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.title}</div>
         </div>
-        <div style={{background:"#EDE8FF",border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:C.accent}}>{selDur.toFixed(1)}s selected</div>
+        <div style={{background:"#EDE8FF",border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:C.accent}}>{fx(selDur)}s selected</div>
         <button onClick={onClose} style={{background:"none",border:"1px solid "+C.border,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,color:C.muted,fontFamily:"inherit"}}>Cancel</button>
         <button onClick={()=>onSave({trimStart:inPt,trimEnd:outPt})} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Save Trim</button>
       </div>
       <div style={{background:"#000",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:340,overflow:"hidden"}}>
         <video ref={vidRef} playsInline preload="auto" muted style={{maxHeight:340,width:"100%",objectFit:"contain",display:"block",cursor:"pointer"}} onClick={togglePlay}/>
         {!playing&&<div onClick={togglePlay} style={{position:"absolute",width:56,height:56,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"2px solid rgba(255,255,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,color:"#fff",cursor:"pointer"}}>▶</div>}
-        <div style={{position:"absolute",bottom:10,right:12,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:5}}>{curTime.toFixed(1)}s / {fullDur.toFixed(1)}s</div>
+        <div style={{position:"absolute",bottom:10,right:12,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:5}}>{fx(curTime)}s / {fx(fullDur)}s</div>
       </div>
       <div style={{padding:"16px 20px 20px"}}>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginBottom:6}}>
-          <span style={{color:C.green,fontWeight:700}}>In: {inPt.toFixed(2)}s</span>
-          <span style={{color:C.accent,fontWeight:700}}>Duration: {selDur.toFixed(2)}s</span>
-          <span style={{color:C.red,fontWeight:700}}>Out: {outPt.toFixed(2)}s</span>
+          <span style={{color:C.green,fontWeight:700}}>In: {fx(inPt,2)}s</span>
+          <span style={{color:C.accent,fontWeight:700}}>Duration: {fx(selDur,2)}s</span>
+          <span style={{color:C.red,fontWeight:700}}>Out: {fx(outPt,2)}s</span>
         </div>
         <div ref={tlRef} onMouseDown={onTlDown} style={{position:"relative",height:60,borderRadius:10,overflow:"hidden",cursor:"crosshair",userSelect:"none",marginBottom:10}}>
           <div style={{position:"absolute",inset:0,display:"flex"}}>
@@ -120,7 +120,7 @@ export function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,
           <div style={{position:"absolute",top:0,left:"calc("+curPct+"% - 1px)",width:2,height:"100%",background:"#fff",pointerEvents:"none",zIndex:20}}/>
         </div>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.muted,marginBottom:14}}>
-          {Array.from({length:6},(_,ti)=><span key={ti}>{((ti/5)*fullDur).toFixed(0)}s</span>)}
+          {Array.from({length:6},(_,ti)=><span key={ti}>{fx((ti/5)*fullDur,0)}s</span>)}
         </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>seekTo(inPt)} style={{background:C.surface,border:"1px solid "+C.border,color:C.muted,borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>⏮ In</button>

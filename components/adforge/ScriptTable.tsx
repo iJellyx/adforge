@@ -149,7 +149,7 @@ export function ScriptTable({sections,onChange,libraryItems,readOnly,brandName,p
         {!readOnly&&<div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
             <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase" as const,letterSpacing:1}}>Section Duration</span>
-            <span style={{fontSize:11,fontWeight:700,color:C.text}}>{activeRow?.targetDuration?activeRow.targetDuration.toFixed(1)+"s":"Auto"}</span>
+            <span style={{fontSize:11,fontWeight:700,color:C.text}}>{activeRow?.targetDuration!=null?Number(activeRow.targetDuration).toFixed(1)+"s":"Auto"}</span>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <input type="range" min="1" max="15" step="0.5" value={activeRow?.targetDuration||0} onChange={e=>{const v=parseFloat(e.target.value);upd(activeIdx,"targetDuration",v>0?v:null)}} style={{flex:1,accentColor:C.accent,cursor:"pointer"}}/>
