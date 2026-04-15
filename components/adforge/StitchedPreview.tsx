@@ -97,11 +97,61 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
 
   function seekToClip(targetClipIdx:number){
     const targetGlobalStart=globalStartTimesRef.current[targetClipIdx]||0
-    setGlobalTime(targetGlobalStart)
-    if(voiceRef.current){voiceRef.current.currentTime=targetGlobalStart;voiceRef.current.pause()}
-    if(musicRef.current){musicRef.current.currentTime=targetGlobalStart;musicRef.current.pause()}
-    setPlaying(false)
+    seekToTime(targetGlobalStart, false)
   }
+
+  // Seek the whole composition to a specific global time. If the global time
+  // falls inside a different clip, switch clips. Keep playback state.
+  function seekToTime(targetGlobalTime:number, keepPlaying:boolean = playing){
+    const clamped=Math.max(0,Math.min(totalDurationRef.current||0, targetGlobalTime))
+    // Find which clip this time falls into
+    let targetIdx=0
+    for(let i=clips.length-1;i>=0;i--){
+      if(clamped >= (globalStartTimesRef.current[i]||0)){ targetIdx=i; break }
+    }
+    const clipStartT=globalStartTimesRef.current[targetIdx]||0
+    const sectionRelativeTime=clamped-clipStartT
+    const targetClip=clips[targetIdx]
+    // If same clip, just seek video element. If different clip, trigger reload via state.
+    const v=vidRef.current
+    setGlobalTime(clamped)
+    if(v && targetClip){
+      const desiredVideoTime = targetClip.start + sectionRelativeTime
+      if(targetIdx===clipIdx){
+        // Same clip — just move currentTime
+        try{ v.currentTime = desiredVideoTime }catch{}
+      } else {
+        // Different clip — src will change via useEffect; seek happens in loadedmetadata
+      }
+    }
+    if(voiceRef.current){ voiceRef.current.currentTime = clamped }
+    if(musicRef.current){ musicRef.current.currentTime = clamped }
+    if(!keepPlaying){
+      vidRef.current?.pause()
+      voiceRef.current?.pause()
+      musicRef.current?.pause()
+      setPlaying(false)
+    }
+  }
+
+  // Scrub-bar drag handling
+  const scrubRef=useRef<HTMLDivElement>(null)
+  function getPctFromScrub(e:MouseEvent|React.MouseEvent):number{
+    const rect=scrubRef.current?.getBoundingClientRect(); if(!rect) return 0
+    return Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))
+  }
+  const [scrubbing,setScrubbing]=useState(false)
+  useEffect(()=>{
+    if(!scrubbing) return
+    function onMove(e:MouseEvent){
+      const p=getPctFromScrub(e)
+      seekToTime(p*(totalDurationRef.current||0), false)
+    }
+    function onUp(){ setScrubbing(false) }
+    window.addEventListener("mousemove",onMove)
+    window.addEventListener("mouseup",onUp)
+    return()=>{window.removeEventListener("mousemove",onMove);window.removeEventListener("mouseup",onUp)}
+  },[scrubbing])
 
   if(clips.length===0)return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:32,textAlign:"center",color:C.muted}}><div style={{fontSize:28,marginBottom:8}}>🎬</div><div style={{fontSize:13}}>Assign clips to sections to preview the full ad</div></div>
 
@@ -176,15 +226,53 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
       </div>}
     </div>
 
-    <div style={{padding:"10px 16px",borderTop:"1px solid "+C.border}}>
-      <div style={{display:"flex",gap:2,marginBottom:8}}>
-        {clips.map((clip:any,i:number)=>{const sc2=secColor(clip.label);const active=i===clipIdx;return<div key={i} onClick={()=>seekToClip(i)} title={clip.label} style={{flex:1,height:5,borderRadius:3,background:active?sc2.color:sc2.bg,cursor:"pointer",transition:"all 0.15s"}}/>})}
-      </div>
+    <div style={{padding:"12px 16px",borderTop:"1px solid "+C.border}}>
+      {/* Scrubbable master timeline — click anywhere or drag the playhead */}
+      {(()=>{
+        const total=totalDurationRef.current||0
+        const globalPct=total>0?(globalTime/total)*100:0
+        return<div
+          ref={scrubRef}
+          onMouseDown={(e)=>{setScrubbing(true); const p=getPctFromScrub(e); seekToTime(p*total,false)}}
+          style={{position:"relative",height:26,borderRadius:6,cursor:"pointer",userSelect:"none",marginBottom:10,background:C.bg,border:"1px solid "+C.border}}
+        >
+          {/* Section-colored background segments */}
+          <div style={{position:"absolute",inset:0,display:"flex",borderRadius:6,overflow:"hidden"}}>
+            {clips.map((clip:any,i:number)=>{
+              const sc2=secColor(clip.label)
+              const start=globalStartTimesRef.current[i]||0
+              const next=i<clips.length-1?(globalStartTimesRef.current[i+1]||total):total
+              const widthPct=total>0?((next-start)/total)*100:0
+              return<div key={i} title={`${clip.label} · ${(next-start).toFixed(1)}s`}
+                onClick={(e)=>{e.stopPropagation();seekToClip(i)}}
+                style={{
+                  width:widthPct+"%",
+                  height:"100%",
+                  background:sc2.bg,
+                  borderRight:i<clips.length-1?"1px solid "+C.card:"none",
+                  position:"relative",
+                  overflow:"hidden"
+                }}>
+                {/* Label overlay (only if segment wide enough) */}
+                {widthPct>8 && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:sc2.color,pointerEvents:"none",letterSpacing:"0.05em"}}>{clip.label}</div>}
+              </div>
+            })}
+          </div>
+          {/* Progress fill */}
+          <div style={{position:"absolute",top:0,left:0,width:globalPct+"%",height:"100%",background:"rgba(139,127,255,0.16)",borderRight:"2px solid "+C.accent,pointerEvents:"none",borderRadius:"6px 0 0 6px"}}/>
+          {/* Playhead */}
+          <div style={{position:"absolute",top:-4,left:`calc(${globalPct}% - 5px)`,width:10,height:34,background:C.accent,borderRadius:3,pointerEvents:"none",boxShadow:"0 2px 6px rgba(0,0,0,0.4)",zIndex:5}}/>
+        </div>
+      })()}
+
+      {/* Controls row */}
       <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <button onClick={()=>seekToClip(Math.max(0,clipIdx-1))} disabled={clipIdx===0} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>‹</button>
-        <button onClick={toggle} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>{playing?"⏸ Pause":"▶ Play Full Ad"}</button>
-        <button onClick={()=>seekToClip(Math.min(clips.length-1,clipIdx+1))} disabled={clipIdx===clips.length-1} style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>›</button>
-        <span style={{fontSize:11,color:C.muted}}>{clipIdx+1}/{clips.length}</span>
+        <button onClick={()=>seekToTime(0,false)} title="Restart" style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>⏮</button>
+        <button onClick={()=>seekToClip(Math.max(0,clipIdx-1))} disabled={clipIdx===0} title="Previous section" style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:clipIdx===0?"not-allowed":"pointer",opacity:clipIdx===0?0.4:1,fontSize:12,fontFamily:"inherit"}}>‹</button>
+        <button onClick={toggle} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"inherit"}}>{playing?"⏸ Pause":"▶ Play"}</button>
+        <button onClick={()=>seekToClip(Math.min(clips.length-1,clipIdx+1))} disabled={clipIdx===clips.length-1} title="Next section" style={{background:"none",border:"1px solid "+C.border,color:C.muted,borderRadius:6,padding:"5px 10px",cursor:clipIdx===clips.length-1?"not-allowed":"pointer",opacity:clipIdx===clips.length-1?0.4:1,fontSize:12,fontFamily:"inherit"}}>›</button>
+        <span style={{fontSize:11,color:C.muted,fontVariantNumeric:"tabular-nums"}}>{globalTime.toFixed(1)}s / {(totalDurationRef.current||0).toFixed(1)}s</span>
+        <span style={{fontSize:10,color:C.muted,marginLeft:8}}>· Section {clipIdx+1}/{clips.length} · <strong style={{color:secColor(cur?.label).color}}>{cur?.label}</strong></span>
         {musicUrl&&<div style={{display:"flex",alignItems:"center",gap:5,marginLeft:"auto"}}>
           <span style={{fontSize:10,color:C.muted}}>🎵</span>
           <input type="range" min="0" max="1" step="0.05" defaultValue="0.2" onChange={e=>{if(musicRef.current)musicRef.current.volume=parseFloat(e.target.value)}} style={{width:60,accentColor:C.accent,cursor:"pointer"}}/>

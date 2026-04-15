@@ -422,7 +422,26 @@ export function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCrea
             <Btn onClick={()=>setPreviewId(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted,padding:"5px 12px"}}>✕</Btn>
           </div>
         </div>
-        {previewAd.sections&&previewAd.sections.length>0&&<div style={{marginBottom:20}}><StitchedPreview sections={previewAd.sections} libraryItems={items} voiceoverUrl={previewAd.voiceover_url} musicUrl={previewAd.music_url}/></div>}
+        {/* Final rendered MP4 preview if available — native video controls (seek/scrub/fullscreen) */}
+        {(previewAd as any).render_url && (
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
+              🎬 Final rendered video
+              <span style={{background:"#22c55e22",color:C.green,border:"1px solid #22c55e44",padding:"1px 7px",borderRadius:99,fontSize:9,fontWeight:700}}>READY</span>
+            </div>
+            <video
+              src={(previewAd as any).render_url}
+              controls
+              playsInline
+              style={{width:"100%",maxHeight:540,borderRadius:12,background:"#000",display:"block"}}
+            />
+          </div>
+        )}
+        {/* Live preview from sections (also scrubbable via new timeline) */}
+        {previewAd.sections&&previewAd.sections.length>0&&<div style={{marginBottom:20}}>
+          {(previewAd as any).render_url && <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>🧩 Live preview (assembled from clips)</div>}
+          <StitchedPreview sections={previewAd.sections} libraryItems={items} voiceoverUrl={previewAd.voiceover_url} musicUrl={previewAd.music_url}/>
+        </div>}
         <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
           {previewAd.voiceover_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎙️ Voiceover · {previewAd.voiceover_voice}</div><audio src={previewAd.voiceover_url} controls style={{width:"100%",height:36}}/></div>}
           {previewAd.music_url&&<div style={{flex:1,minWidth:200}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🎵 Music · {previewAd.music_name}</div><audio src={previewAd.music_url} controls style={{width:"100%",height:36}}/></div>}
