@@ -11,6 +11,7 @@ import { MusicPicker } from '../MusicPicker'
 import { StitchedPreview } from '../StitchedPreview'
 import { ExportVideo } from '../ExportVideo'
 import { AdStudio } from '../AdStudio'
+import { AdPipeline } from '../pipeline/AdPipeline'
 import { AutoMashMode } from '../AutoMashMode'
 import { BRollMode } from '../BRollMode'
 import { CreatorBriefModal } from '../CreatorBriefModal'
@@ -318,10 +319,10 @@ Return ONLY valid JSON:
     <STitle size={24} mb={8}>Create New Ad</STitle>
     <div style={{color:C.muted,fontSize:15,marginBottom:40}}>How would you like to start?</div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
-      <div onClick={()=>setView("generate")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor=C.accent;(e.currentTarget as any).style.background=C.accentSoft}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
-        <div style={{fontSize:36,marginBottom:12}}>✍️</div>
+      <div onClick={()=>setView("pipeline")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor=C.accent;(e.currentTarget as any).style.background=C.accentSoft}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
+        <div style={{fontSize:36,marginBottom:12}}>✨</div>
         <div style={{fontWeight:700,fontSize:17,marginBottom:8}}>Create from Script</div>
-        <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>AI writes a direct response script, matches clips from your library, you add voiceover and music.</div>
+        <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>Guided 5-step flow: brief → script → voiceover → music → clips → export. Duration stays locked to your target length.</div>
       </div>
       <div onClick={()=>setView("automash")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor="#7C3AED";(e.currentTarget as any).style.background="#7C3AED0a"}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
         <div style={{fontSize:36,marginBottom:12}}>⚡</div>
@@ -336,6 +337,16 @@ Return ONLY valid JSON:
     </div>
   </div>
 
+  if(view==="pipeline")return<AdPipeline
+    items={items}
+    brand={brand}
+    products={products}
+    forgedAds={forgedAds}
+    workspaceId={workspaceId}
+    onSaveForgedAd={onSaveForgedAd}
+    onGoToForged={onGoToForged}
+    onBack={()=>setView("list")}
+  />
   if(view==="automash")return<AutoMashMode libraryItems={items} brand={brand} products={products} onSaveForgedAd={onSaveForgedAd} onGoToForged={onGoToForged} onBack={()=>setView("chooseMode")}/>
   if(view==="broll")return<BRollMode libraryItems={items} onSaveForgedAd={onSaveForgedAd} onBack={()=>setView("list")} workspaceId={workspaceId}/>
 

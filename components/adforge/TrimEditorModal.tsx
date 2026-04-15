@@ -4,12 +4,15 @@ import { C } from './constants'
 import { fmt, muxThumb, toNum, fx } from './utils'
 import { Btn } from './ui-primitives'
 
-export function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,onClose}:any){
+export function TrimEditorModal({item,trimStart,trimEnd,originalDuration,lockedDuration,onSave,onClose}:any){
   const fullDur=toNum(originalDuration||item.duration_seconds,30)
   // If clip is a sub-clip, the playback ID belongs to the original — use it
   const playbackId=item.mux_playback_id
-  const [inPt,setInPt]=useState(toNum(trimStart??item.start_seconds,0))
-  const [outPt,setOutPt]=useState(toNum(trimEnd??item.end_seconds,toNum(item.start_seconds,0)+toNum(item.duration_seconds,5)))
+  const lockWidth=typeof lockedDuration==="number"?lockedDuration:null
+  const initIn=toNum(trimStart??item.start_seconds,0)
+  const initOut=lockWidth!=null?initIn+lockWidth:toNum(trimEnd??item.end_seconds,toNum(item.start_seconds,0)+toNum(item.duration_seconds,5))
+  const [inPt,setInPt]=useState(initIn)
+  const [outPt,setOutPt]=useState(initOut)
   const [curTime,setCurTime]=useState(inPt)
   const [playing,setPlaying]=useState(false)
   const vidRef=useRef<HTMLVideoElement>(null)
@@ -64,13 +67,25 @@ export function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,
     function onMove(e:MouseEvent){
       if(!drag)return
       const pct=getPctFromX(e);const t=pct*fullDur
-      if(drag==="in"){const v=Math.min(t,outPt-0.5);const clamped=Math.max(0,v);setInPt(clamped);seekTo(clamped)}
-      else{const v=Math.max(t,inPt+0.5);const clamped=Math.min(fullDur,v);setOutPt(clamped);seekTo(clamped)}
+      if(lockWidth!=null){
+        // Locked duration mode: dragging either handle moves both, keeping window width constant
+        if(drag==="in"){
+          const newIn=Math.max(0,Math.min(t,fullDur-lockWidth))
+          setInPt(newIn);setOutPt(newIn+lockWidth);seekTo(newIn)
+        } else {
+          const newOut=Math.max(lockWidth,Math.min(t,fullDur))
+          setOutPt(newOut);setInPt(newOut-lockWidth);seekTo(newOut-lockWidth)
+        }
+      } else {
+        // Normal free-trim mode
+        if(drag==="in"){const v=Math.min(t,outPt-0.5);const clamped=Math.max(0,v);setInPt(clamped);seekTo(clamped)}
+        else{const v=Math.max(t,inPt+0.5);const clamped=Math.min(fullDur,v);setOutPt(clamped);seekTo(clamped)}
+      }
     }
     function onUp(){setDrag(null)}
     if(drag){window.addEventListener("mousemove",onMove);window.addEventListener("mouseup",onUp)}
     return()=>{window.removeEventListener("mousemove",onMove);window.removeEventListener("mouseup",onUp)}
-  },[drag,inPt,outPt,fullDur])
+  },[drag,inPt,outPt,fullDur,lockWidth])
 
   const inPct=(inPt/fullDur)*100
   const outPct=(outPt/fullDur)*100
@@ -82,10 +97,10 @@ export function TrimEditorModal({item,trimStart,trimEnd,originalDuration,onSave,
     <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:20,width:"100%",maxWidth:780,overflow:"hidden"}}>
       <div style={{padding:"16px 20px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:12}}>
         <div style={{flex:1}}>
-          <div style={{fontWeight:800,fontSize:15,color:C.text}}>✂️ Trim Clip</div>
+          <div style={{fontWeight:800,fontSize:15,color:C.text}}>{lockWidth!=null?"✂️ Pick a "+fx(lockWidth,1)+"s window":"✂️ Trim Clip"}</div>
           <div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.title}</div>
         </div>
-        <div style={{background:"#EDE8FF",border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:C.accent}}>{fx(selDur)}s selected</div>
+        <div style={{background:"#EDE8FF",border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:C.accent}}>{lockWidth!=null?"Locked at "+fx(lockWidth)+"s":fx(selDur)+"s selected"}</div>
         <button onClick={onClose} style={{background:"none",border:"1px solid "+C.border,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,color:C.muted,fontFamily:"inherit"}}>Cancel</button>
         <button onClick={()=>onSave({trimStart:inPt,trimEnd:outPt})} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Save Trim</button>
       </div>
