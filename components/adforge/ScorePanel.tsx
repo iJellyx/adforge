@@ -61,7 +61,11 @@ export function ScorePanel({ad,onScored}:{ad:ForgedAd,onScored:(scored:any)=>voi
       <div style={{display:"flex",flexDirection:"column" as const,gap:6}}>
         {sections.map((s:any)=>{
           const secType=(ad.sections||[])[s.index-1]?.type||"Section"
-          const avg=s.avg||Math.round((s.visual_match+s.narrative_fit+s.role_alignment)/3*10)/10
+          const rawAvg=s.avg
+          const vm=Number(s.visual_match)||0
+          const nf=Number(s.narrative_fit)||0
+          const ra=Number(s.role_alignment)||0
+          const avg=rawAvg!=null&&!isNaN(Number(rawAvg))?Number(rawAvg):Math.round((vm+nf+ra)/3*10)/10
           const secGc=gradeColor(avg>=8?"A":avg>=6.5?"B":avg>=5?"C":"D")
           return<div key={s.index} style={{background:C.card,border:"1px solid "+C.border,borderRadius:8,padding:"8px 12px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:s.fix?4:0}}>
