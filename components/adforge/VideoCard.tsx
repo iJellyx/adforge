@@ -25,9 +25,19 @@ export function VideoCard({item,onClick,selectMode,isSelected,onToggleSelect,com
   }
 
   return<div onClick={handleClick}
-    onMouseOver={e=>{(e.currentTarget as any).style.borderColor=highlight?C.green:C.accent;setHover(true)}}
-    onMouseOut={e=>{(e.currentTarget as any).style.borderColor=isSelected?C.accent:highlight?C.green:C.border;setHover(false)}}
-    style={{background:C.card,border:"2px solid "+(isSelected?C.accent:highlight?C.green:C.border),borderRadius:compact?8:12,overflow:"hidden",cursor:"pointer",display:"flex",flexDirection:"column",position:"relative",transition:"border-color 0.15s"}}>
+    onMouseOver={e=>{
+      (e.currentTarget as any).style.borderColor=highlight?C.green:"var(--af-border-strong)"
+      ;(e.currentTarget as any).style.transform="translateY(-2px)"
+      ;(e.currentTarget as any).style.boxShadow="var(--af-shadow-md)"
+      setHover(true)
+    }}
+    onMouseOut={e=>{
+      (e.currentTarget as any).style.borderColor=isSelected?"var(--af-accent)":highlight?C.green:"var(--af-border)"
+      ;(e.currentTarget as any).style.transform="translateY(0)"
+      ;(e.currentTarget as any).style.boxShadow="none"
+      setHover(false)
+    }}
+    style={{background:"var(--af-card)",border:"1px solid "+(isSelected?"var(--af-accent)":highlight?C.green:"var(--af-border)"),borderRadius:compact?10:12,overflow:"hidden",cursor:"pointer",display:"flex",flexDirection:"column",position:"relative",transition:"all 0.18s ease"}}>
 
     {/* Select mode checkbox */}
     {selectMode&&<div style={{position:"absolute",top:6,right:6,zIndex:10,width:20,height:20,borderRadius:5,background:isSelected?C.accent:"#000a",border:"2px solid "+(isSelected?"#fff":"#fff5"),display:"flex",alignItems:"center",justifyContent:"center"}}>{isSelected&&<span style={{color:"#fff",fontSize:11,fontWeight:800}}>{"\u2713"}</span>}</div>}

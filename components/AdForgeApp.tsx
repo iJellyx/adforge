@@ -110,51 +110,56 @@ export default function AdForgeApp(){
   const navItem=(id:string,label:string)=>{
     const active=tab===id
     const Icon=NAV_ICONS[id]
-    return<button onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",margin:"0 10px",borderRadius:10,border:"none",background:active?"var(--af-sidebar-active)":"transparent",color:active?"var(--af-sidebar-text-active)":"var(--af-sidebar-text)",fontWeight:active?700:500,fontSize:13,cursor:"pointer",width:"calc(100% - 20px)",textAlign:"left",fontFamily:"inherit",borderLeft:active?"3px solid var(--af-accent)":"3px solid transparent",transition:"all 0.15s ease"}}>
-      {Icon&&<Icon size={17} style={{flexShrink:0,opacity:active?1:0.7}}/>}{label}
-      {id==="forged"&&draftCount>0&&<span style={{background:"var(--af-yellow)",color:"#000",borderRadius:99,fontSize:9,padding:"1px 6px",fontWeight:800,marginLeft:"auto"}}>{draftCount}</span>}
+    return<button key={id} onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}} style={{display:"flex",alignItems:"center",gap:11,padding:"8px 12px",margin:"0 10px",borderRadius:8,border:"none",background:active?"var(--af-sidebar-active)":"transparent",color:active?"var(--af-sidebar-text-active)":"var(--af-sidebar-text)",fontWeight:active?600:500,fontSize:13,cursor:"pointer",width:"calc(100% - 20px)",textAlign:"left",fontFamily:"inherit",transition:"all 0.15s ease",letterSpacing:"-0.005em"}} onMouseEnter={e=>{if(!active)(e.currentTarget as any).style.background="var(--af-sidebar-hover)"}} onMouseLeave={e=>{if(!active)(e.currentTarget as any).style.background="transparent"}}>
+      {Icon&&<Icon size={16} strokeWidth={active?2.2:1.8} style={{flexShrink:0,opacity:active?1:0.75}}/>}<span style={{flex:1}}>{label}</span>
+      {id==="forged"&&draftCount>0&&<span style={{background:"var(--af-yellow)",color:"#000",borderRadius:99,fontSize:9.5,padding:"1px 6px",fontWeight:700}}>{draftCount}</span>}
     </button>
   }
+  const navSection=(label:string)=><div style={{padding:"14px 22px 6px",fontSize:10.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--af-sidebar-section-label)"}}>{label}</div>
 
   return<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",color:C.text,display:"flex"}}>
     {/* Sidebar */}
-    <div style={{width:240,background:"var(--af-sidebar)",display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0}}>
+    <div style={{width:232,background:"var(--af-sidebar)",display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0,borderRight:"1px solid rgba(255,255,255,0.04)"}}>
       {/* Brand */}
-      <div style={{padding:"24px 20px 18px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
-        <div style={{fontWeight:800,fontSize:22,color:"#fff",letterSpacing:"-0.03em",marginBottom:10}}>Ad<span style={{color:"var(--af-accent)"}}>Forge</span></div>
+      <div style={{padding:"22px 20px 16px"}}>
+        <div style={{fontWeight:800,fontSize:20,color:"#fff",letterSpacing:"-0.03em",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:7,background:"linear-gradient(135deg,#8B7FFF,#5B49FF)",boxShadow:"0 4px 12px rgba(139,127,255,0.3)"}}><Wand2 size={14} color="#fff" strokeWidth={2.5}/></span>
+          Ad<span style={{color:"var(--af-accent)"}}>Forge</span>
+        </div>
         <WorkspaceSwitcher/>
       </div>
       {/* Nav */}
-      <div style={{padding:"16px 0",flex:1,display:"flex",flexDirection:"column",gap:2}}>
+      <div style={{padding:"4px 0 16px",flex:1,display:"flex",flexDirection:"column",overflowY:"auto"}}>
+        {navSection("Content")}
         {navItem("library","Library")}
+        {navSection("Ads")}
         {navItem("scripts","Create Ad")}
         {navItem("forged","My Ads")}
         {navItem("winning","Inspiration")}
         <div style={{flex:1}}/>
+        {navSection("Settings")}
         {navItem("brand","Brand")}
       </div>
       {/* Footer */}
-      <div style={{padding:"12px 16px 20px",borderTop:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",gap:8}}>
-        {tab==="library"&&libView!=="add"&&<button onClick={()=>setLibView("add")} style={{width:"100%",background:"rgba(255,255,255,0.06)",color:"rgba(255,255,255,0.6)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:50,padding:"9px",fontFamily:"inherit",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"background 0.15s"}}><Plus size={14}/>Add Content</button>}
-        <button onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts")}} style={{width:"100%",background:"var(--af-accent)",color:"#fff",border:"none",borderRadius:50,padding:"11px",fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all 0.15s"}}><Wand2 size={15}/>Create Ad</button>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
-          <button onClick={handleSignOut} style={{background:"none",border:"none",color:"rgba(255,255,255,0.20)",cursor:"pointer",fontSize:11,fontFamily:"inherit",display:"flex",alignItems:"center",gap:4,transition:"color 0.15s"}}><LogOut size={12}/>Sign out</button>
-          <button onClick={toggleTheme} style={{background:"rgba(255,255,255,0.06)",border:"none",color:"rgba(255,255,255,0.40)",cursor:"pointer",borderRadius:8,padding:6,display:"flex",alignItems:"center",transition:"all 0.15s"}}>{theme==="dark"?<Sun size={14}/>:<Moon size={14}/>}</button>
+      <div style={{padding:"12px 14px 18px",borderTop:"1px solid rgba(255,255,255,0.04)",display:"flex",flexDirection:"column",gap:8}}>
+        <button onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts")}} style={{width:"100%",background:"var(--af-accent)",color:"#fff",border:"none",borderRadius:8,padding:"10px 12px",fontFamily:"inherit",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all 0.15s",letterSpacing:"-0.005em"}} onMouseEnter={e=>(e.currentTarget as any).style.background="var(--af-accent-hover)"} onMouseLeave={e=>(e.currentTarget as any).style.background="var(--af-accent)"}><Wand2 size={14} strokeWidth={2.2}/>New ad</button>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:4}}>
+          <button onClick={handleSignOut} style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",fontSize:11.5,fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"color 0.15s",padding:"4px 6px"}} onMouseEnter={e=>(e.currentTarget as any).style.color="rgba(255,255,255,0.6)"} onMouseLeave={e=>(e.currentTarget as any).style.color="rgba(255,255,255,0.3)"}><LogOut size={12}/>Sign out</button>
+          <button onClick={toggleTheme} title={theme==="dark"?"Switch to light":"Switch to dark"} style={{background:"rgba(255,255,255,0.05)",border:"none",color:"rgba(255,255,255,0.5)",cursor:"pointer",borderRadius:7,padding:7,display:"flex",alignItems:"center",transition:"all 0.15s"}} onMouseEnter={e=>{(e.currentTarget as any).style.background="rgba(255,255,255,0.1)";(e.currentTarget as any).style.color="rgba(255,255,255,0.8)"}} onMouseLeave={e=>{(e.currentTarget as any).style.background="rgba(255,255,255,0.05)";(e.currentTarget as any).style.color="rgba(255,255,255,0.5)"}}>{theme==="dark"?<Sun size={14}/>:<Moon size={14}/>}</button>
         </div>
       </div>
     </div>
     {/* Main content */}
-    <div style={{marginLeft:240,flex:1,minHeight:"100vh",background:C.bg}}>
+    <div style={{marginLeft:232,flex:1,minHeight:"100vh",background:C.bg}}>
       {/* Onboarding checklist */}
-      {showOnboarding&&tab==="library"&&<div style={{background:"#fff",borderBottom:"1px solid "+C.border,padding:"16px 28px",display:"flex",alignItems:"center",gap:20,flexWrap:"wrap"}}>
+      {showOnboarding&&tab==="library"&&<div style={{background:"var(--af-card)",borderBottom:"1px solid var(--af-border)",padding:"18px 28px",display:"flex",alignItems:"center",gap:20,flexWrap:"wrap"}}>
         <div style={{flex:1,minWidth:200}}>
-          <div style={{fontWeight:700,fontSize:14,marginBottom:2}}>🚀 Get started — {onboardingDone}/4 complete</div>
-          <div style={{fontSize:12,color:C.muted}}>Complete these steps to generate your first winning ad</div>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:3,letterSpacing:"-0.01em"}}>Get started · <span style={{color:"var(--af-accent)"}}>{onboardingDone}/4 complete</span></div>
+          <div style={{fontSize:12,color:"var(--af-text-secondary)"}}>Complete these steps to generate your first winning ad</div>
         </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          {onboardingSteps.map(step=><button key={step.id} onClick={step.done?undefined:step.action} style={{display:"flex",alignItems:"center",gap:6,background:step.done?"#F0FDF4":C.surface,border:"1px solid "+(step.done?"#86EFAC":C.border),borderRadius:8,padding:"6px 12px",cursor:step.done?"default":"pointer",fontSize:12,color:step.done?"#15803D":C.text,fontWeight:step.done?600:500,whiteSpace:"nowrap" as const}}>
-            <span style={{fontSize:13}}>{step.done?"✅":"○"}</span>
-            {step.done?step.label:step.cta}
+          {onboardingSteps.map(step=><button key={step.id} onClick={step.done?undefined:step.action} style={{display:"flex",alignItems:"center",gap:7,background:step.done?"var(--af-green-soft)":"var(--af-surface)",border:"1px solid "+(step.done?"rgba(74,222,128,0.25)":"var(--af-border)"),borderRadius:8,padding:"7px 12px",cursor:step.done?"default":"pointer",fontSize:12,color:step.done?"var(--af-green)":"var(--af-text)",fontWeight:step.done?600:500,whiteSpace:"nowrap" as const,fontFamily:"inherit",transition:"all 0.15s"}}>
+            {step.done?"✓":"○"} {step.done?step.label:step.cta}
           </button>)}
         </div>
       </div>}
