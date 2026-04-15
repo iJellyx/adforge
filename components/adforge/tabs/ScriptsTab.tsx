@@ -143,8 +143,6 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
 
   async function matchClips(secs:any[],libItems:Item[],hasVoiceover?:boolean){
     const clips=libItems.filter(i=>i.mux_playback_id)
-    const matchPool=clips.length>0?clips:libItems.filter(i=>i.mux_playback_id)
-    const usedIds=new Set<string>()
 
     // Classify clips as b-roll vs talking head to help Claude
     const classifyClip=(item:Item)=>{
@@ -159,6 +157,20 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
       const isBroll=tags.includes("product")||tags.includes("close-up")||tags.includes("demo")||tags.includes("lifestyle")||tags.includes("b-roll")||contentType.includes("product demo")||contentType.includes("demo")
       return isBroll?"BROLL":isTalkingHead?"TALKING_HEAD":"MIXED"
     }
+
+    // When voiceover is present, hard-filter to exclude talking heads from the
+    // candidate pool. This prevents the "two people talking at once" effect.
+    // Fallback: if there are fewer than 4 non-talking-head clips, fall back
+    // to the full library so Claude can still produce a matchable ad.
+    let matchPool: Item[]
+    if (hasVoiceover) {
+      const nonTH = clips.filter(i => classifyClip(i) !== 'TALKING_HEAD')
+      matchPool = nonTH.length >= 4 ? nonTH : clips
+    } else {
+      matchPool = clips
+    }
+
+    const usedIds=new Set<string>()
 
     const libSummary=matchPool.map(item=>{
       const a=item.analysis||{}

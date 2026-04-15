@@ -71,15 +71,41 @@ export function AdWorkspace({
   const [audioOpen,setAudioOpen]=useState(!voiceoverUrl)
   const [settingsOpen,setSettingsOpen]=useState(false)
 
-  return<div style={{display:"flex",gap:0,minHeight:"100vh"}}>
+  const assignedCount = sections.filter((s:any)=>s.selectedClipId||(s.clipSegments||[]).some((seg:any)=>seg.clipId)).length
+  const totalSections = sections.length
+
+  return<div style={{minHeight:"100vh",background:"var(--af-bg)"}}>
+    {/* STICKY TOP ACTION BAR — always visible */}
+    <div style={{position:"sticky",top:0,zIndex:20,background:"var(--af-surface)",borderBottom:"1px solid "+C.border,padding:"12px 24px",display:"flex",alignItems:"center",gap:16,backdropFilter:"blur(8px)"}}>
+      <button onClick={onBack} style={{background:"none",border:"none",color:"var(--af-text-secondary)",cursor:"pointer",fontSize:13,fontWeight:500,display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:7,fontFamily:"inherit",transition:"background 0.15s"}} onMouseEnter={e=>(e.currentTarget as any).style.background="var(--af-card)"} onMouseLeave={e=>(e.currentTarget as any).style.background="transparent"}>&larr; Back</button>
+      <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:10}}>
+        <input
+          value={adTitle}
+          onChange={e=>setAdTitle(e.target.value)}
+          placeholder={`${genMeta?.productName||"Untitled ad"} — ${genMeta?.form?.contentType||""} ${(genMeta?.form?.adLength||"30s").replace(" seconds","s")}`}
+          style={{flex:1,minWidth:0,maxWidth:420,background:"transparent",border:"1px solid transparent",borderRadius:8,padding:"6px 10px",color:"var(--af-text)",fontSize:15,fontWeight:600,outline:"none",fontFamily:"inherit",transition:"border-color 0.15s, background 0.15s"}}
+          onFocus={e=>{e.currentTarget.style.borderColor="var(--af-border-strong)";e.currentTarget.style.background="var(--af-card)"}}
+          onBlur={e=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.background="transparent"}}
+        />
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,fontSize:11,color:"var(--af-text-secondary)",flexWrap:"nowrap"}}>
+        <span title="Clips assigned" style={{background:assignedCount===totalSections?"var(--af-green-soft)":"var(--af-card)",color:assignedCount===totalSections?"var(--af-green)":"var(--af-text-secondary)",padding:"4px 9px",borderRadius:99,fontWeight:600,border:"1px solid "+(assignedCount===totalSections?"rgba(74,222,128,0.25)":"var(--af-border)")}}>{assignedCount}/{totalSections} clips</span>
+        <span title="Voiceover" style={{background:voiceoverUrl?"var(--af-green-soft)":"var(--af-card)",color:voiceoverUrl?"var(--af-green)":"var(--af-text-secondary)",padding:"4px 9px",borderRadius:99,fontWeight:600,border:"1px solid "+(voiceoverUrl?"rgba(74,222,128,0.25)":"var(--af-border)")}}>{voiceoverUrl?"✓ VO":"VO"}</span>
+        <span title="Music" style={{background:musicUrl?"var(--af-accent-soft)":"var(--af-card)",color:musicUrl?"var(--af-accent)":"var(--af-text-secondary)",padding:"4px 9px",borderRadius:99,fontWeight:600,border:"1px solid "+(musicUrl?"rgba(139,127,255,0.25)":"var(--af-border)")}}>{musicUrl?"✓ Music":"Music"}</span>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <Btn onClick={()=>onSave("draft")} style={{background:"var(--af-card)",color:"var(--af-text)",border:"1px solid var(--af-border)",padding:"8px 14px",fontSize:13,borderRadius:8}}>Save draft</Btn>
+        <Btn onClick={()=>onSave("complete")} style={{background:"var(--af-accent)",color:"#fff",padding:"8px 16px",fontSize:13,borderRadius:8,fontWeight:700}}>{selectedHooks.length>1?`Save ${selectedHooks.length} variations`:"Complete"}</Btn>
+      </div>
+    </div>
+
+    <div style={{display:"flex",gap:0,minHeight:"calc(100vh - 60px)"}}>
     {/* LEFT COLUMN */}
     <div style={{flex:3,padding:24,overflowY:"auto",borderRight:"1px solid "+C.border}}>
-      {/* Header */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
-        <button onClick={onBack} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>&larr; Back</button>
-        <div style={{fontSize:13,color:C.muted}}>{genMeta?.productName} &middot; {genMeta?.form?.contentType}</div>
-        {autoCount>0&&<span style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:99,padding:"3px 10px",fontSize:11,color:"#15803D",fontWeight:600}}>&#10022; {autoCount} auto-matched</span>}
-      </div>
+      {/* Context row */}
+      {autoCount>0&&<div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
+        <span style={{background:"var(--af-green-soft)",border:"1px solid rgba(74,222,128,0.25)",borderRadius:99,padding:"3px 10px",fontSize:11,color:"var(--af-green)",fontWeight:600}}>&#10022; {autoCount} auto-matched</span>
+      </div>}
 
       {/* Hook Variations */}
       {hookVariations.length>0?<div style={{marginBottom:20}}>
@@ -173,12 +199,6 @@ export function AdWorkspace({
           <span style={{fontSize:12,color:C.muted}}>{settingsOpen?"\u25B2":"\u25BC"}</span>
         </button>
         {settingsOpen&&<div style={{padding:16,background:C.card}}>
-          {/* Ad Title */}
-          <div style={{marginBottom:16}}>
-            <Label>Ad Name (optional)</Label>
-            <input value={adTitle} onChange={e=>setAdTitle(e.target.value)} placeholder={`e.g. ProblemAware_${form?.contentType||"UGC"}_${(form?.adLength||"30s").replace(" seconds","s")}_v1`} style={{background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:"8px 11px",color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box" as const}}/>
-          </div>
-
           {/* Aspect Ratio */}
           <div style={{marginBottom:16}}>
             <Label>Aspect Ratio</Label>
@@ -212,13 +232,9 @@ export function AdWorkspace({
           return null
         })()}
 
-        <div style={{display:"flex",gap:10,marginBottom:16}}>
-          <Btn onClick={()=>onSave("draft")} style={{flex:1,background:C.surface,color:C.text,border:"1px solid "+C.border,padding:14,fontSize:14,borderRadius:12}}>&#128190; Save Draft</Btn>
-          <Btn onClick={()=>onSave("complete")} style={{flex:1,background:C.green,color:"#000",fontWeight:700,padding:14,fontSize:14,borderRadius:12}}>&check; Save {selectedHooks.length>1?`${selectedHooks.length} Hook Variations`:"& Complete"}</Btn>
-        </div>
-
         <ExportVideo sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl} onSave={onSave}/>
       </div>
+    </div>
     </div>
   </div>
 }

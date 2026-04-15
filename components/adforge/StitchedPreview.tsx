@@ -146,7 +146,8 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
 
     <div style={{display:"grid",gridTemplateColumns:"1fr 260px"}}>
       <div style={{position:"relative",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:320}}>
-        <video ref={vidRef} playsInline preload="metadata" muted={cur?.muted||false} style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
+        {/* Mute clip audio when voiceover is present to prevent overlapping dialogue (turbine effect) */}
+        <video ref={vidRef} playsInline preload="metadata" muted={!!voiceoverUrl || cur?.muted || false} style={{maxHeight:480,maxWidth:"100%",display:"block",cursor:"pointer"}} onTimeUpdate={onTimeUpdate} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onClick={toggle}/>
         {captions.enabled&&<CaptionOverlay spoken={cur?.spoken||""} elapsed={clipElapsedTime} clipDur={clipDur} settings={captions} wordTimestamps={cur?.word_timestamps||undefined}/>}
         {!playing&&<div onClick={toggle} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:5}}>
           <div style={{width:52,height:52,borderRadius:"50%",background:"#000a",border:"2px solid #fff4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>▶</div>

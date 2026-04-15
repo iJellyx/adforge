@@ -11,6 +11,7 @@ import { TagEditor } from '../TagEditor'
 import { TrimSlider } from '../TrimSlider'
 import { ClipsView } from '../ClipsView'
 import { ClipDetailPanel } from '../ClipDetailPanel'
+import { ClipReviewModal } from '../ClipReviewModal'
 import { UploadPipeline } from '../UploadPipeline'
 
 export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand,workspaceId}:{items:Item[],onRefresh:()=>void,view:string,setView:(v:string)=>void,brand:BrandProfile,products:Product[],onGoToBrand:()=>void,workspaceId:string}){
@@ -505,8 +506,13 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
       {/* Clips view */}
       <div style={{display:"flex"}}>
         <div style={{flex:1}}><ClipsView items={items} onRefresh={onRefresh} workspaceId={workspaceId} onSelectClip={(item:Item)=>setClipDetailItem(item)}/></div>
-        {clipDetailItem&&<ClipDetailPanel item={clipDetailItem} items={items} onClose={()=>setClipDetailItem(null)} onUpdate={()=>{onRefresh();const updated=items.find(i=>i.id===clipDetailItem.id);if(updated)setClipDetailItem(updated)}} workspaceId={workspaceId}/>}
       </div>
+      {/* Fullscreen review modal — replaces small side panel */}
+      {clipDetailItem&&(()=>{
+        const allClips=items.filter(i=>i.type==="clip")
+        const idx=Math.max(0,allClips.findIndex(c=>c.id===clipDetailItem.id))
+        return <ClipReviewModal clips={allClips} startIndex={idx} onClose={()=>setClipDetailItem(null)} onRefresh={onRefresh}/>
+      })()}
     </div>
   }
 
