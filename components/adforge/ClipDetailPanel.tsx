@@ -15,6 +15,13 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
   const [trimStart,setTrimStart]=useState<number|null>(null)
   const [trimEnd,setTrimEnd]=useState<number|null>(null)
   const [activeRoleOpen,setActiveRoleOpen]=useState(false)
+  const [errorMsg,setErrorMsg]=useState<string|null>(null)
+  const [successMsg,setSuccessMsg]=useState<string|null>(null)
+
+  function showMsg(type:'success'|'error', msg:string){
+    if(type==='success'){setSuccessMsg(msg);setErrorMsg(null);setTimeout(()=>setSuccessMsg(null),2500)}
+    else{setErrorMsg(msg);setSuccessMsg(null)}
+  }
 
   const parentVideo = useMemo(()=>{
     if(!item.parent_id) return null
@@ -31,40 +38,74 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
   // Approval status update
   async function setStatus(status:'pending'|'approved'|'rejected'){
     setSaving(true)
-    await supabase.from('items').update({clip_status:status}).eq('id',item.id)
+    const { error } = await supabase.from('items').update({clip_status:status}).eq('id',item.id)
     setSaving(false)
+    if(error){
+      console.error('[ClipDetailPanel] setStatus error:',error)
+      if(error.message?.toLowerCase().includes('column') && error.message?.toLowerCase().includes('clip_status')){
+        showMsg('error','Missing DB column — run the SQL migration (ALTER TABLE items ADD COLUMN clip_status text DEFAULT \'pending\')')
+      } else {
+        showMsg('error','Update failed: '+error.message)
+      }
+      return
+    }
+    showMsg('success','Status updated to '+status)
     onUpdate()
   }
 
   // Role update
   async function setRole(role:string){
     setSaving(true)
-    await supabase.from('items').update({clip_role:role}).eq('id',item.id)
+    const { error } = await supabase.from('items').update({clip_role:role}).eq('id',item.id)
     setActiveRoleOpen(false)
     setSaving(false)
+    if(error){
+      console.error('[ClipDetailPanel] setRole error:',error)
+      showMsg('error','Role update failed: '+error.message)
+      return
+    }
+    showMsg('success','Role updated')
     onUpdate()
   }
 
   // Tags update
   async function updateTags(newTags:string[]){
     const analysis = {...(item.analysis||{}),scene_tags:newTags}
-    await supabase.from('items').update({analysis}).eq('id',item.id)
+    const { error } = await supabase.from('items').update({analysis}).eq('id',item.id)
+    if(error){
+      console.error('[ClipDetailPanel] updateTags error:',error)
+      showMsg('error','Tag update failed: '+error.message)
+      return
+    }
     onUpdate()
   }
 
   // Save trim
   async function saveTrim(){
-    const start = trimStart ?? item.start_seconds ?? 0
-    const end = trimEnd ?? item.end_seconds ?? (item.duration_seconds||0)
+    // Coerce all values to numbers (Supabase may return numeric columns as strings)
+    const start = Number(trimStart ?? item.start_seconds ?? 0) || 0
+    const end = Number(trimEnd ?? item.end_seconds ?? item.duration_seconds ?? 0) || 0
     const duration = Math.max(0, end - start)
+    if(duration <= 0){
+      showMsg('error','Invalid trim range (duration must be > 0)')
+      return
+    }
     setSaving(true)
-    await supabase.from('items').update({
+    const { error } = await supabase.from('items').update({
       start_seconds: start,
       end_seconds: end,
       duration_seconds: duration,
       thumbnail_time: start,
     }).eq('id',item.id)
     setSaving(false)
+    if(error){
+      console.error('[ClipDetailPanel] saveTrim error:',error,'values:',{start,end,duration})
+      showMsg('error','Trim save failed: '+error.message)
+      return
+    }
+    showMsg('success','Trim saved ('+duration.toFixed(1)+'s)')
+    setTrimStart(null)
+    setTrimEnd(null)
     onUpdate()
   }
 
@@ -84,6 +125,12 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
         {parentVideo&&<div style={{fontSize:10,color:C.muted,marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{"\uD83D\uDCCE"} from {parentVideo.title}</div>}
       </div>
     </div>
+
+    {/* Feedback banner */}
+    {(errorMsg||successMsg)&&<div style={{padding:'10px 14px',borderBottom:'1px solid '+C.border,fontSize:12,fontWeight:600,background:errorMsg?'var(--af-red-soft)':'var(--af-green-soft)',color:errorMsg?'var(--af-red)':'var(--af-green)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+      <span>{errorMsg||successMsg}</span>
+      <button onClick={()=>{setErrorMsg(null);setSuccessMsg(null)}} style={{background:'none',border:'none',color:'inherit',cursor:'pointer',opacity:0.6,fontSize:14,padding:0,lineHeight:1}}>×</button>
+    </div>}
 
     {/* Scrollable body */}
     <div style={{flex:1,overflowY:'auto',padding:16,display:'flex',flexDirection:'column',gap:16}}>
@@ -152,7 +199,7 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
           <span>Out: <strong style={{color:C.text}}>{fmt(trimEnd??item.end_seconds??item.duration_seconds)}</strong></span>
           <span>Duration: <strong style={{color:C.text}}>{fmt((trimEnd??item.end_seconds??item.duration_seconds??0)-(trimStart??item.start_seconds??0))}</strong></span>
         </div>
-        <TrimSlider item={item} trimStart={trimStart??item.start_seconds??0} trimEnd={trimEnd??item.end_seconds??item.duration_seconds} onUpdate={(s:number,e:number)=>{setTrimStart(s);setTrimEnd(e)}}/>
+        <TrimSlider item={item} trimStart={trimStart??item.start_seconds??0} trimEnd={trimEnd??item.end_seconds??item.duration_seconds} onUpdate={(v:{trimStart:number,trimEnd:number})=>{setTrimStart(v.trimStart);setTrimEnd(v.trimEnd)}}/>
         <div style={{marginTop:8}}>
           <Btn onClick={saveTrim} disabled={saving} style={{background:C.accent,color:'#fff',width:'100%',textAlign:'center',padding:'8px 0',fontSize:12}}>
             {saving?'Saving...':'Save Trim'}

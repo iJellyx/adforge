@@ -100,13 +100,25 @@ export function ClipsView({items,onRefresh,workspaceId,onSelectClip}:{items:Item
   // Approval handlers
   const handleApprove = useCallback(async(clip:Item)=>{
     setAnimatingOut(prev=>new Set(prev).add(clip.id))
-    await supabase.from('items').update({clip_status:'approved'}).eq('id',clip.id)
+    const { error } = await supabase.from('items').update({clip_status:'approved'}).eq('id',clip.id)
+    if(error){
+      console.error('[ClipsView] approve error:',error)
+      alert('Approve failed: '+error.message+(error.message?.toLowerCase().includes('column')?'\n\nTip: The clip_status column may be missing. Run this SQL in Supabase:\nALTER TABLE items ADD COLUMN IF NOT EXISTS clip_status text DEFAULT \'pending\';':''))
+      setAnimatingOut(prev=>{const n=new Set(prev);n.delete(clip.id);return n})
+      return
+    }
     setTimeout(()=>{setAnimatingOut(prev=>{const n=new Set(prev);n.delete(clip.id);return n});onRefresh()},300)
   },[supabase,onRefresh])
 
   const handleReject = useCallback(async(clip:Item)=>{
     setAnimatingOut(prev=>new Set(prev).add(clip.id))
-    await supabase.from('items').update({clip_status:'rejected'}).eq('id',clip.id)
+    const { error } = await supabase.from('items').update({clip_status:'rejected'}).eq('id',clip.id)
+    if(error){
+      console.error('[ClipsView] reject error:',error)
+      alert('Reject failed: '+error.message)
+      setAnimatingOut(prev=>{const n=new Set(prev);n.delete(clip.id);return n})
+      return
+    }
     setTimeout(()=>{setAnimatingOut(prev=>{const n=new Set(prev);n.delete(clip.id);return n});onRefresh()},300)
   },[supabase,onRefresh])
 
