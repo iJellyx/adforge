@@ -68,9 +68,6 @@ export function AdWorkspace({
   autoCount:number
   form:any
 }){
-  const [audioOpen,setAudioOpen]=useState(!voiceoverUrl)
-  const [settingsOpen,setSettingsOpen]=useState(false)
-
   const assignedCount = sections.filter((s:any)=>s.selectedClipId||(s.clipSegments||[]).some((seg:any)=>seg.clipId)).length
   const totalSections = sections.length
 
@@ -140,79 +137,88 @@ export function AdWorkspace({
       <Btn onClick={onMatchClips} disabled={matching||items.length===0} style={{background:matching?C.border:C.accentSoft,color:matching?C.muted:C.accent,border:"1px solid "+C.accent+"44"}}>{matching?"\uD83D\uDD0D Matching\u2026":"\uD83D\uDD04 Re-match Clips"}</Btn>
     </div>
 
-    {/* RIGHT COLUMN */}
-    <div style={{flex:2,padding:24,position:"sticky",top:0,height:"100vh",overflowY:"auto"}}>
+    {/* RIGHT COLUMN — everything visible in one view, no collapsibles */}
+    <div style={{flex:2,padding:"20px 24px",overflowY:"auto",maxHeight:"calc(100vh - 60px)",display:"flex",flexDirection:"column",gap:16}}>
       {/* Live Preview */}
-      <div style={{marginBottom:20}}>
+      <div>
+        <div style={{fontSize:10,fontWeight:700,color:"var(--af-muted)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Preview</div>
         <StitchedPreview sections={sections} libraryItems={items} voiceoverUrl={voiceoverUrl} musicUrl={musicUrl} captionSettings={captionSettings} onCaptionChange={setCaptionSettings}/>
       </div>
 
-      {/* Audio Panel */}
-      <div style={{marginBottom:16,border:"1px solid "+C.border,borderRadius:12,overflow:"hidden"}}>
-        <button onClick={()=>setAudioOpen(!audioOpen)} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",background:C.surface,border:"none",cursor:"pointer",fontSize:14,fontWeight:600,color:C.text}}>
-          <span>&#127908; Audio</span>
-          <span style={{fontSize:12,color:C.muted}}>{audioOpen?"\u25B2":"\u25BC"}</span>
-        </button>
-        {audioOpen&&<div style={{padding:16,background:C.card}}>
-          {/* Voiceover status */}
-          {voiceoverUrl&&<div style={{background:"#22c55e11",border:"1px solid #22c55e44",borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
-            <span style={{color:C.green,fontSize:16}}>&check;</span>
-            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.green}}>Voiceover ready &mdash; {voiceoverVoice}</div><audio src={voiceoverUrl} controls style={{width:"100%",height:28,marginTop:4}}/></div>
-            <button onClick={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,textDecoration:"underline"}}>Remove</button>
-          </div>}
-
-          {/* Music status */}
-          {musicUrl&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff44",borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
-            <span style={{color:C.accent,fontSize:16}}>&check;</span>
-            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.accent}}>Music selected &mdash; {musicName}</div><audio src={musicUrl} controls style={{width:"100%",height:28,marginTop:4}}/></div>
-            <button onClick={()=>{setMusicUrl(null);setMusicName(null)}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,textDecoration:"underline"}}>Remove</button>
-          </div>}
-
-          {/* Voiceover Generator */}
-          <VoiceoverGenerator
-            sections={sections}
-            allHookSections={selectedHooks.length>1?selectedHooks.map(hi=>hookVariations[hi]||sections):null}
-            onSave={(updatedSections:any[],voice:string,combinedUrl:string,allUpdatedHooks?:any[][])=>{
-              setSections(updatedSections)
-              setVoiceoverVoice(voice)
-              setVoiceoverUrl(combinedUrl)
-              if(allUpdatedHooks){
-                const newHS:Record<number,any[]>={}
-                selectedHooks.forEach((hi,i)=>{newHS[i]=allUpdatedHooks[i]||updatedSections})
-                setHookSections(prev=>({...prev,...newHS}))
-              }
-            }}
-            onSkip={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}}
-          />
-
-          {/* Music Picker */}
-          <div style={{marginTop:16}}>
-            <MusicPicker suggestedMood={suggestedMood} onSave={(url:string|null,name:string|null)=>{setMusicUrl(url);setMusicName(name)}}/>
+      {/* Voiceover — compact when ready, full UI when not */}
+      <div style={{background:"var(--af-card)",border:"1px solid "+C.border,borderRadius:12,overflow:"hidden"}}>
+        <div style={{padding:"12px 14px",borderBottom:voiceoverUrl?"1px solid var(--af-border)":"none",display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:13,fontWeight:700,color:"var(--af-text)",display:"flex",alignItems:"center",gap:6}}>🎙️ Voiceover</span>
+          {voiceoverUrl ? (
+            <>
+              <span style={{fontSize:11,color:"var(--af-green)",fontWeight:600,background:"var(--af-green-soft)",padding:"2px 8px",borderRadius:99,border:"1px solid rgba(74,222,128,0.25)"}}>✓ {voiceoverVoice}</span>
+              <audio src={voiceoverUrl} controls style={{flex:1,height:28,minWidth:0}}/>
+              <button onClick={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}} style={{background:"none",border:"none",color:"var(--af-text-secondary)",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>Regenerate</button>
+            </>
+          ) : (
+            <span style={{fontSize:11,color:"var(--af-text-secondary)"}}>Choose a voice below and generate per-section voiceover.</span>
+          )}
+        </div>
+        {!voiceoverUrl && (
+          <div style={{padding:14}}>
+            <VoiceoverGenerator
+              sections={sections}
+              allHookSections={selectedHooks.length>1?selectedHooks.map(hi=>hookVariations[hi]||sections):null}
+              onSave={(updatedSections:any[],voice:string,combinedUrl:string,allUpdatedHooks?:any[][])=>{
+                setSections(updatedSections)
+                setVoiceoverVoice(voice)
+                setVoiceoverUrl(combinedUrl)
+                if(allUpdatedHooks){
+                  const newHS:Record<number,any[]>={}
+                  selectedHooks.forEach((hi,i)=>{newHS[i]=allUpdatedHooks[i]||updatedSections})
+                  setHookSections(prev=>({...prev,...newHS}))
+                }
+              }}
+              onSkip={()=>{setVoiceoverUrl(null);setVoiceoverVoice(null)}}
+            />
           </div>
-        </div>}
+        )}
       </div>
 
-      {/* Settings Panel */}
-      <div style={{marginBottom:16,border:"1px solid "+C.border,borderRadius:12,overflow:"hidden"}}>
-        <button onClick={()=>setSettingsOpen(!settingsOpen)} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",background:C.surface,border:"none",cursor:"pointer",fontSize:14,fontWeight:600,color:C.text}}>
-          <span>&#9881;&#65039; Settings</span>
-          <span style={{fontSize:12,color:C.muted}}>{settingsOpen?"\u25B2":"\u25BC"}</span>
-        </button>
-        {settingsOpen&&<div style={{padding:16,background:C.card}}>
-          {/* Aspect Ratio */}
-          <div style={{marginBottom:16}}>
-            <Label>Aspect Ratio</Label>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {[{ratio:"9:16",label:"9:16 Portrait",platform:"TikTok/Reels/Stories"},{ratio:"1:1",label:"1:1 Square",platform:"Instagram/Facebook Feed"},{ratio:"4:5",label:"4:5 Vertical",platform:"Facebook/Instagram Feed"},{ratio:"16:9",label:"16:9 Landscape",platform:"YouTube/Website"}].map(opt=><button key={opt.ratio} onClick={()=>setAspectRatio(opt.ratio)} style={{background:aspectRatio===opt.ratio?C.accent:C.surface,color:aspectRatio===opt.ratio?"#000":C.text,border:"1px solid "+(aspectRatio===opt.ratio?C.accent:C.border),borderRadius:8,padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:aspectRatio===opt.ratio?700:400,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><div>{opt.label}</div><div style={{fontSize:10,opacity:0.7}}>{opt.platform}</div></button>)}
-            </div>
+      {/* Music — compact when ready */}
+      <div style={{background:"var(--af-card)",border:"1px solid "+C.border,borderRadius:12,overflow:"hidden"}}>
+        <div style={{padding:"12px 14px",borderBottom:musicUrl?"1px solid var(--af-border)":"none",display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:13,fontWeight:700,color:"var(--af-text)",display:"flex",alignItems:"center",gap:6}}>🎵 Music</span>
+          {musicUrl ? (
+            <>
+              <span style={{fontSize:11,color:"var(--af-accent)",fontWeight:600,background:"var(--af-accent-soft)",padding:"2px 8px",borderRadius:99,border:"1px solid rgba(139,127,255,0.25)"}}>✓ {musicName}</span>
+              <audio src={musicUrl} controls style={{flex:1,height:28,minWidth:0}}/>
+              <button onClick={()=>{setMusicUrl(null);setMusicName(null)}} style={{background:"none",border:"none",color:"var(--af-text-secondary)",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>Change</button>
+            </>
+          ) : (
+            <span style={{fontSize:11,color:"var(--af-text-secondary)"}}>Pick a track below (optional).</span>
+          )}
+        </div>
+        {!musicUrl && (
+          <div style={{padding:14}}>
+            <MusicPicker suggestedMood={suggestedMood} onSave={(url:string|null,name:string|null)=>{setMusicUrl(url);setMusicName(name)}}/>
           </div>
+        )}
+      </div>
 
-          {/* Caption toggle */}
-          <div>
-            <Label>Captions</Label>
-            <button onClick={()=>setCaptionSettings({...captionSettings,enabled:!captionSettings.enabled})} style={{background:captionSettings.enabled?C.accent:C.surface,color:captionSettings.enabled?"#fff":C.text,border:"1px solid "+(captionSettings.enabled?C.accent:C.border),borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>{captionSettings.enabled?"Captions ON":"Captions OFF"}</button>
+      {/* Settings — always visible, compact grid */}
+      <div style={{background:"var(--af-card)",border:"1px solid "+C.border,borderRadius:12,padding:14,display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--af-text)",display:"flex",alignItems:"center",gap:6}}>⚙️ Output</div>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:"var(--af-muted)",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Aspect ratio</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+            {[{ratio:"9:16",label:"9:16",sub:"Reels"},{ratio:"1:1",label:"1:1",sub:"Feed"},{ratio:"4:5",label:"4:5",sub:"Feed"},{ratio:"16:9",label:"16:9",sub:"YT"}].map(opt=>(
+              <button key={opt.ratio} onClick={()=>setAspectRatio(opt.ratio)} style={{background:aspectRatio===opt.ratio?"var(--af-accent)":"var(--af-surface)",color:aspectRatio===opt.ratio?"#fff":"var(--af-text)",border:"1px solid "+(aspectRatio===opt.ratio?"var(--af-accent)":"var(--af-border)"),borderRadius:8,padding:"8px 4px",cursor:"pointer",fontSize:11,fontWeight:aspectRatio===opt.ratio?700:500,display:"flex",flexDirection:"column",alignItems:"center",gap:2,fontFamily:"inherit",transition:"all 0.12s"}}>
+                <div style={{fontSize:12,fontWeight:700}}>{opt.label}</div>
+                <div style={{fontSize:9,opacity:0.7}}>{opt.sub}</div>
+              </button>
+            ))}
           </div>
-        </div>}
+        </div>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:"var(--af-muted)",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Captions</div>
+          <button onClick={()=>setCaptionSettings({...captionSettings,enabled:!captionSettings.enabled})} style={{background:captionSettings.enabled?"var(--af-accent)":"var(--af-surface)",color:captionSettings.enabled?"#fff":"var(--af-text)",border:"1px solid "+(captionSettings.enabled?"var(--af-accent)":"var(--af-border)"),borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"inherit"}}>{captionSettings.enabled?"Captions on":"Captions off"}</button>
+        </div>
       </div>
 
       {/* Save/Export */}

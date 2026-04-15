@@ -67,8 +67,17 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     const sectionRelativeTime=v.currentTime-cur.start
     const newGlobalTime=clipGlobalStart+sectionRelativeTime
     setGlobalTime(newGlobalTime)
-    if(voiceRef.current&&voiceoverUrl){voiceRef.current.currentTime=newGlobalTime}
-    if(musicRef.current&&musicUrl){musicRef.current.currentTime=newGlobalTime}
+    // Only re-seek audio if there's significant drift (>250ms). Constantly
+    // setting currentTime on every timeupdate caused the voiceover to
+    // stutter/reverb because the audio engine was re-decoding on each set.
+    if(voiceRef.current&&voiceoverUrl&&!voiceRef.current.paused){
+      const drift=Math.abs(voiceRef.current.currentTime-newGlobalTime)
+      if(drift>0.25)voiceRef.current.currentTime=newGlobalTime
+    }
+    if(musicRef.current&&musicUrl&&!musicRef.current.paused){
+      const drift=Math.abs(musicRef.current.currentTime-newGlobalTime)
+      if(drift>0.25)musicRef.current.currentTime=newGlobalTime
+    }
     if(newGlobalTime>=totalDurationRef.current){
       v.pause();setPlaying(false);setGlobalTime(0);voiceRef.current?.pause();musicRef.current?.pause()
     }

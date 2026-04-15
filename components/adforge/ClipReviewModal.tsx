@@ -32,13 +32,21 @@ export function ClipReviewModal({
   const clip = clips[index]
   const total = clips.length
 
-  // Trim state — tracked per-clip so switching clips resets appropriately
-  const fullDur = useMemo(() => toNum(clip?.duration_seconds, 30), [clip?.id])
-  const initialIn = useMemo(() => toNum(clip?.start_seconds, 0), [clip?.id])
-  const initialOut = useMemo(() => toNum(clip?.end_seconds ?? (initialIn + fullDur), initialIn + fullDur), [clip?.id])
-  const [inPt, setInPt] = useState(initialIn)
-  const [outPt, setOutPt] = useState(initialOut)
-  const [curTime, setCurTime] = useState(initialIn)
+  // Trim state — timeline is zoomed to the clip's actual range.
+  // tlStart..tlEnd = the visible span on the timeline (with small buffer at edges).
+  // inPt..outPt = the user's selected trim within that span (starts at clip bounds).
+  const clipStart = useMemo(() => toNum(clip?.start_seconds, 0), [clip?.id])
+  const clipEnd = useMemo(() => toNum(clip?.end_seconds, clipStart + toNum(clip?.duration_seconds, 5)), [clip?.id])
+  const clipDur = Math.max(0.1, clipEnd - clipStart)
+  // Visible timeline: the clip's range plus 10% padding on each side (or 1s min, whichever larger)
+  const pad = Math.max(1, clipDur * 0.1)
+  const tlStart = useMemo(() => Math.max(0, clipStart - pad), [clip?.id])
+  const tlEnd = useMemo(() => clipEnd + pad, [clip?.id])
+  const tlDur = Math.max(0.1, tlEnd - tlStart)
+
+  const [inPt, setInPt] = useState(clipStart)
+  const [outPt, setOutPt] = useState(clipEnd)
+  const [curTime, setCurTime] = useState(clipStart)
   const [playing, setPlaying] = useState(false)
   const [drag, setDrag] = useState<'in'|'out'|null>(null)
   const [trimDirty, setTrimDirty] = useState(false)
@@ -47,12 +55,12 @@ export function ClipReviewModal({
 
   // Reset trim when switching clips
   useEffect(() => {
-    setInPt(initialIn)
-    setOutPt(initialOut)
-    setCurTime(initialIn)
+    setInPt(clipStart)
+    setOutPt(clipEnd)
+    setCurTime(clipStart)
     setPlaying(false)
     setTrimDirty(false)
-  }, [clip?.id, initialIn, initialOut])
+  }, [clip?.id, clipStart, clipEnd])
 
   // Load video source + seek to in-point
   useEffect(() => {
@@ -78,7 +86,7 @@ export function ClipReviewModal({
 
   function seekTo(t:number) {
     const v = vidRef.current; if (!v) return
-    const clamped = Math.max(0, Math.min(fullDur, t))
+    const clamped = Math.max(tlStart, Math.min(tlEnd, t))
     v.currentTime = clamped
     setCurTime(clamped)
   }
@@ -174,15 +182,20 @@ export function ClipReviewModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [index, total, inPt, outPt, curTime, playing])
 
-  // Timeline scrub + drag handles
+  // Timeline is zoomed to [tlStart, tlEnd]. Helpers convert between time and %.
+  const timeToPct = (t:number) => ((t - tlStart) / tlDur) * 100
+  const pctToTime = (p:number) => tlStart + p * tlDur
+
   function getPctFromX(e:MouseEvent|React.MouseEvent):number {
     const rect = tlRef.current?.getBoundingClientRect(); if (!rect) return 0
     return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
   }
   function onTlDown(e:React.MouseEvent) {
-    const pct = getPctFromX(e); const t = pct * fullDur
-    const inDist = Math.abs(pct - (inPt / fullDur))
-    const outDist = Math.abs(pct - (outPt / fullDur))
+    const pct = getPctFromX(e); const t = pctToTime(pct)
+    const inPctVal = timeToPct(inPt) / 100
+    const outPctVal = timeToPct(outPt) / 100
+    const inDist = Math.abs(pct - inPctVal)
+    const outDist = Math.abs(pct - outPctVal)
     if (inDist < 0.04 && inDist <= outDist) setDrag('in')
     else if (outDist < 0.04) setDrag('out')
     else seekTo(t)
@@ -190,22 +203,22 @@ export function ClipReviewModal({
   useEffect(() => {
     function onMove(e:MouseEvent) {
       if (!drag) return
-      const pct = getPctFromX(e); const t = pct * fullDur
-      if (drag === 'in') { const v=Math.min(t, outPt-0.5); const c=Math.max(0, v); setInPt(c); setTrimDirty(true); seekTo(c) }
-      else { const v=Math.max(t, inPt+0.5); const c=Math.min(fullDur, v); setOutPt(c); setTrimDirty(true); seekTo(c) }
+      const pct = getPctFromX(e); const t = pctToTime(pct)
+      if (drag === 'in') { const v=Math.min(t, outPt-0.3); const c=Math.max(tlStart, v); setInPt(c); setTrimDirty(true); seekTo(c) }
+      else { const v=Math.max(t, inPt+0.3); const c=Math.min(tlEnd, v); setOutPt(c); setTrimDirty(true); seekTo(c) }
     }
     function onUp(){ setDrag(null) }
     if (drag) { window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp) }
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
-  }, [drag, inPt, outPt, fullDur])
+  }, [drag, inPt, outPt, tlStart, tlEnd, tlDur])
 
   if (!clip) return null
 
-  const inPct = (inPt / fullDur) * 100
-  const outPct = (outPt / fullDur) * 100
-  const curPct = (curTime / fullDur) * 100
+  const inPct = timeToPct(inPt)
+  const outPct = timeToPct(outPt)
+  const curPct = timeToPct(curTime)
   const selDur = outPt - inPt
-  const thumbCount = 16
+  const thumbCount = 12
 
   const qualScore = clip.analysis?.quality_score as string | undefined
   const qualColor = qualScore === 'High' ? '#22c55e' : qualScore === 'Medium' ? '#f59e0b' : qualScore === 'Low' ? '#ef4444' : null
@@ -260,16 +273,16 @@ export function ClipReviewModal({
                   </div>
                 </div>
               )}
-              <div style={{position:'absolute',bottom:12,right:14,background:'rgba(0,0,0,0.7)',color:'#fff',fontSize:11,fontWeight:700,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(4px)'}}>{fx(curTime)}s / {fx(fullDur)}s</div>
+              <div style={{position:'absolute',bottom:12,right:14,background:'rgba(0,0,0,0.7)',color:'#fff',fontSize:11,fontWeight:700,padding:'4px 10px',borderRadius:6,backdropFilter:'blur(4px)'}}>{fx(curTime-inPt>=0?curTime-inPt:0)}s / {fx(selDur)}s</div>
             </div>
 
             {/* Trim timeline */}
             <div>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,fontSize:11}}>
                 <div style={{display:'flex',gap:12}}>
-                  <span style={{color:'var(--af-green)',fontWeight:700}}>In: {fx(inPt,2)}s</span>
+                  <span style={{color:'var(--af-green)',fontWeight:700}}>Start: {fx(inPt,2)}s</span>
                   <span style={{color:'var(--af-accent)',fontWeight:700}}>Duration: {fx(selDur,2)}s</span>
-                  <span style={{color:'var(--af-red)',fontWeight:700}}>Out: {fx(outPt,2)}s</span>
+                  <span style={{color:'var(--af-red)',fontWeight:700}}>End: {fx(outPt,2)}s</span>
                 </div>
                 <div style={{display:'flex',gap:8,alignItems:'center'}}>
                   <button onClick={togglePlay} title="Play/pause (Space)" style={{background:'var(--af-surface)',border:'1px solid var(--af-border)',color:'var(--af-text)',cursor:'pointer',padding:'6px 10px',borderRadius:7,display:'flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,fontFamily:'inherit'}}>{playing?<Pause size={12}/>:<Play size={12}/>}{playing?'Pause':'Play'}</button>
@@ -282,7 +295,7 @@ export function ClipReviewModal({
               <div ref={tlRef} onMouseDown={onTlDown} style={{position:'relative',height:72,borderRadius:10,overflow:'hidden',cursor:'crosshair',userSelect:'none',background:'#000'}}>
                 <div style={{position:'absolute',inset:0,display:'flex'}}>
                   {Array.from({length:thumbCount},(_,ti)=>{
-                    const tt=(ti/thumbCount)*fullDur
+                    const tt=tlStart+(ti/thumbCount)*tlDur
                     return <div key={ti} style={{flex:1,backgroundImage:`url(${muxThumb(clip.mux_playback_id || '', tt)})`,backgroundSize:'cover',backgroundPosition:'center'}}/>
                   })}
                 </div>
@@ -298,7 +311,7 @@ export function ClipReviewModal({
                 <div style={{position:'absolute',top:0,left:`calc(${curPct}% - 1px)`,width:2,height:'100%',background:'#fff',pointerEvents:'none',zIndex:20,boxShadow:'0 0 6px rgba(255,255,255,0.5)'}}/>
               </div>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'var(--af-text-secondary)',marginTop:6}}>
-                {Array.from({length:6},(_,ti)=><span key={ti}>{fx((ti/5)*fullDur,0)}s</span>)}
+                {Array.from({length:6},(_,ti)=><span key={ti}>{fx(tlStart+(ti/5)*tlDur,1)}s</span>)}
               </div>
             </div>
 
