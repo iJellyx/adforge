@@ -17,8 +17,9 @@ export async function POST(req: NextRequest) {
   const duration = item.duration_seconds || 30
   const autoTranscript = item.transcript || ''
 
-  await supabase.from('items').update({ mux_status: 'analysing' }).eq('id', itemId)
-
+  // Video is already 'ready' from the webhook. We don't touch mux_status here —
+  // clip presence (clip_ids) indicates analysis completion. If this function dies
+  // mid-execution, the item remains 'ready' and the user can retry via UI.
   try {
     // Step 1: Gemini visual analysis
     let geminiAnalysis = ''

@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Mux from '@mux/mux-node'
-import Anthropic from '@anthropic-ai/sdk'
 import { createServiceClient } from '@/lib/supabase/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-// Allow up to 5 minutes for the full processing pipeline
-export const maxDuration = 300
+// Webhook must respond quickly. All slow AI work is deferred to /api/items/reanalyse.
+export const maxDuration = 60
 
-// Fetch with timeout helper
-function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 30000): Promise<Response> {
+function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
   return fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) })
+}
+
+function triggerReanalyse(itemId: string, baseUrl: string) {
+  // Fire-and-forget. Returns immediately; the reanalyse route does the heavy lifting.
+  const url = new URL('/api/items/reanalyse', baseUrl).toString()
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ itemId }),
+  }).catch(e => console.error(`[${itemId}] Failed to trigger reanalyse:`, e.message))
 }
 
 export async function POST(req: NextRequest) {
@@ -17,7 +25,6 @@ export async function POST(req: NextRequest) {
     tokenId: process.env.MUX_TOKEN_ID!,
     tokenSecret: process.env.MUX_TOKEN_SECRET!,
   })
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   const body = await req.text()
   const headers: Record<string, string> = {}
@@ -47,463 +54,92 @@ export async function POST(req: NextRequest) {
   const playbackId = asset.playback_ids?.[0]?.id
   const duration = asset.duration || 30
 
-  // ── IMMEDIATELY set status to analysing so client knows processing started ──
+  // ── FAST PATH: Set playback_id and mark as 'ready' so video is immediately usable ──
   await supabase.from('items').update({
     mux_asset_id: asset.id,
     mux_playback_id: playbackId,
-    mux_status: 'analysing',
+    mux_status: 'ready',
     duration_seconds: duration,
   }).eq('id', itemId)
-  console.log(`[${itemId}] Asset ready — status set to analysing, starting pipeline`)
+  console.log(`[${itemId}] Video ready — playback_id set, triggering background analysis`)
 
-  // ── Step 1: Deepgram transcription ────────────────────────────────────────
-  let autoTranscript = ''
-  let wordTimestamps: any[] = []
-  if (playbackId && process.env.DEEPGRAM_API_KEY) {
-    try {
-      const mp4Url = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`
-      let audioFetch: Response | null = null
-      for (let attempt = 0; attempt < 10; attempt++) {
-        const tryFetch = await fetchWithTimeout(mp4Url, {}, 15000)
-        if (tryFetch.ok) { audioFetch = tryFetch; break }
-        console.log(`[${itemId}] MP4 not ready yet (attempt ${attempt + 1}/10), waiting 5s…`)
-        await new Promise(r => setTimeout(r, 5000))
-      }
-      if (audioFetch) {
-        const audioBuffer = await audioFetch.arrayBuffer()
-        const tRes = await fetchWithTimeout('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true&utterances=true&words=true', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
-            'Content-Type': 'video/mp4',
-            'Content-Length': audioBuffer.byteLength.toString(),
-          },
-          body: audioBuffer,
-        }, 60000)
-        if (tRes.ok) {
-          const tData = await tRes.json()
-          autoTranscript = tData.results?.channels?.[0]?.alternatives?.[0]?.transcript || ''
-          wordTimestamps = tData.results?.channels?.[0]?.alternatives?.[0]?.words || []
-          console.log('Deepgram transcript length:', autoTranscript.length, 'words:', wordTimestamps.length)
-        }
-      }
-    } catch (e: any) {
-      console.log('Transcription failed:', e.message)
-    }
-  }
+  // Fetch the item to check for auto_clip flag and get workspace info
+  const { data: item } = await supabase.from('items').select('workspace_id, auto_clip').eq('id', itemId).single()
+  if (!item) return NextResponse.json({ ok: true })
 
-  // ── Step 2: Duplicate detection ───────────────────────────────────────────
-  // Get the item's workspace_id for scoping duplicate check
-  const { data: currentItem } = await supabase.from('items').select('workspace_id').eq('id', itemId).single()
-  const itemWorkspaceId = currentItem?.workspace_id
-
+  // ── Quick duplicate check (max 3 candidates, thumbnail-only, fast) ──
   if (playbackId) {
     try {
-      // Find existing items with similar duration (±1.5 seconds) in the same workspace
       let dupQuery = supabase
         .from('items')
-        .select('id, title, mux_playback_id, duration_seconds, transcript')
+        .select('id, title, mux_playback_id, duration_seconds')
         .eq('type', 'original')
         .neq('id', itemId)
         .neq('mux_status', 'errored')
         .neq('mux_status', 'duplicate')
         .gte('duration_seconds', duration - 1.5)
         .lte('duration_seconds', duration + 1.5)
-      if (itemWorkspaceId) dupQuery = dupQuery.eq('workspace_id', itemWorkspaceId)
+        .limit(3)
+      if (item.workspace_id) dupQuery = dupQuery.eq('workspace_id', item.workspace_id)
       const { data: candidates } = await dupQuery
 
-      if (candidates && candidates.length > 0) {
-        // Limit to 3 candidates max to prevent long serial Gemini loops
-        const limitedCandidates = candidates.slice(0, 3)
-        console.log(`Found ${candidates.length} duration-match candidates, checking top ${limitedCandidates.length}`)
-
-        // Check thumbnail similarity using Gemini for each candidate
+      if (candidates && candidates.length > 0 && process.env.GOOGLE_AI_API_KEY) {
+        const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
         const newThumbUrl = `https://image.mux.com/${playbackId}/thumbnail.jpg?time=0&width=320`
 
-        for (const candidate of limitedCandidates) {
+        for (const candidate of candidates) {
           if (!candidate.mux_playback_id) continue
-
           const candidateThumbUrl = `https://image.mux.com/${candidate.mux_playback_id}/thumbnail.jpg?time=0&width=320`
 
-          // Fetch both thumbnails (with timeout)
-          const [newThumbRes, candThumbRes] = await Promise.all([
-            fetchWithTimeout(newThumbUrl, {}, 10000),
-            fetchWithTimeout(candidateThumbUrl, {}, 10000),
-          ])
+          try {
+            const [newThumbRes, candThumbRes] = await Promise.all([
+              fetchWithTimeout(newThumbUrl, {}, 8000),
+              fetchWithTimeout(candidateThumbUrl, {}, 8000),
+            ])
+            if (!newThumbRes.ok || !candThumbRes.ok) continue
 
-          if (!newThumbRes.ok || !candThumbRes.ok) continue
+            const [newThumbBuf, candThumbBuf] = await Promise.all([
+              newThumbRes.arrayBuffer(),
+              candThumbRes.arrayBuffer(),
+            ])
+            const newThumbB64 = Buffer.from(newThumbBuf).toString('base64')
+            const candThumbB64 = Buffer.from(candThumbBuf).toString('base64')
 
-          const [newThumbBuf, candThumbBuf] = await Promise.all([
-            newThumbRes.arrayBuffer(),
-            candThumbRes.arrayBuffer(),
-          ])
-
-          const newThumbB64 = Buffer.from(newThumbBuf).toString('base64')
-          const candThumbB64 = Buffer.from(candThumbBuf).toString('base64')
-
-          // Also compare transcripts if available
-          const transcriptMatch = autoTranscript && candidate.transcript &&
-            autoTranscript.substring(0, 80).toLowerCase().trim() ===
-            candidate.transcript.substring(0, 80).toLowerCase().trim()
-
-          let isDuplicate = false
-
-          if (transcriptMatch) {
-            // Transcripts match — very likely duplicate
-            isDuplicate = true
-            console.log(`Duplicate detected via transcript match: ${candidate.title}`)
-          } else if (process.env.GOOGLE_AI_API_KEY) {
-            // Use Gemini to compare thumbnails
-            try {
-              const { GoogleGenerativeAI } = await import('@google/generative-ai')
-              const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
-              const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
-              const result = await model.generateContent([
-                {
-                  inlineData: { mimeType: 'image/jpeg', data: newThumbB64 }
-                },
-                {
-                  inlineData: { mimeType: 'image/jpeg', data: candThumbB64 }
-                },
-                'Are these two video thumbnails from the same video? Answer only YES or NO.'
-              ])
-
-              const answer = result.response.text().trim().toUpperCase()
-              isDuplicate = answer.startsWith('YES')
-              console.log(`Gemini thumbnail comparison: ${answer} (vs "${candidate.title}")`)
-            } catch (geminiErr: any) {
-              console.log('Gemini thumbnail comparison failed:', geminiErr.message)
+            const result = await model.generateContent([
+              { inlineData: { mimeType: 'image/jpeg', data: newThumbB64 } },
+              { inlineData: { mimeType: 'image/jpeg', data: candThumbB64 } },
+              'Are these two video thumbnails from the same video? Answer only YES or NO.'
+            ])
+            const answer = result.response.text().trim().toUpperCase()
+            if (answer.startsWith('YES')) {
+              await supabase.from('items').update({
+                mux_status: 'duplicate',
+                description: `Duplicate of: ${candidate.title} (${candidate.id})`,
+              }).eq('id', itemId)
+              try { await mux.video.assets.delete(asset.id) } catch {}
+              console.log(`[${itemId}] Blocked as duplicate of "${candidate.title}"`)
+              return NextResponse.json({ ok: true, duplicate: true })
             }
-          }
-
-          if (isDuplicate) {
-            // Block this upload — mark as duplicate and delete Mux asset
-            await supabase.from('items').update({
-              mux_status: 'duplicate',
-              mux_asset_id: asset.id,
-              description: `Duplicate of: ${candidate.title} (${candidate.id})`,
-            }).eq('id', itemId)
-
-            // Delete the Mux asset to save storage
-            try {
-              await mux.video.assets.delete(asset.id)
-            } catch (e) {
-              console.log('Could not delete duplicate Mux asset:', asset.id)
-            }
-
-            console.log(`Blocked duplicate upload: itemId ${itemId} is a duplicate of "${candidate.title}"`)
-
-            return NextResponse.json({ ok: true, duplicate: true })
+          } catch (e: any) {
+            console.log(`[${itemId}] Dup check failed for candidate, continuing:`, e.message)
           }
         }
       }
     } catch (dupErr: any) {
-      console.log('Duplicate check failed, continuing:', dupErr.message)
+      console.log(`[${itemId}] Duplicate check error, continuing:`, dupErr.message)
     }
   }
 
-  // Update transcript data (status already set to 'analysing' above)
-  const { data: item } = await supabase
-    .from('items')
-    .update({
-      ...(autoTranscript ? { transcript: autoTranscript } : {}),
-      ...(wordTimestamps.length > 0 ? { word_timestamps: wordTimestamps } : {}),
-    })
-    .eq('id', itemId)
-    .select()
-    .single()
-
-  if (!item) return NextResponse.json({ ok: true })
-      // If brand opted out of auto-clipping, do analysis only — no clip creation
-  if (item.auto_clip === false) {
-    console.log('Auto-clip disabled for this item — running analysis only')
-    try {
-      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-      const msg = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', max_tokens: 800,
-        messages: [{ role: 'user', content: `Analyse this video. Return ONLY valid JSON:
-{"content_type":"UGC|Tutorial|Testimonial|Other","confidence":"High|Medium|Low","summary":"2-3 sentences","tone":"string","topics":["string"],"scene_tags":["string"],"hook":"string","key_quotes":["string"],"ad_potential":"High|Medium|Low","ad_notes":"string"}
-Title: ${item.title}, Duration: ${duration}s, Transcript: ${autoTranscript||'not provided'}` }]
-      })
-      const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
-      const analysis = JSON.parse(text.replace(/```json|```/g, '').trim())
-      await supabase.from('items').update({ analysis, mux_status: 'ready' }).eq('id', itemId)
-    } catch (e: any) {
-      console.error('Analysis-only failed:', e.message)
-      await supabase.from('items').update({ mux_status: 'ready' }).eq('id', itemId)
-    }
-    return NextResponse.json({ ok: true })
-  }
-
-  // ── Step 3: Gemini video analysis ─────────────────────────────────────────
-  let geminiAnalysis = ''
-  if (playbackId && process.env.GOOGLE_AI_API_KEY) {
-    try {
-      const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-      const mp4Url = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`
-      
-      // Fetch video as base64 for Gemini (60s timeout for large files)
-      const videoRes = await fetchWithTimeout(mp4Url, {}, 60000)
-      if (videoRes.ok) {
-        const videoBuffer = await videoRes.arrayBuffer()
-        const base64Video = Buffer.from(videoBuffer).toString('base64')
-        
-        const geminiPrompt = `You are an expert direct response video analyst for DTC brands. Watch this video carefully and provide a detailed analysis.
-
-Video duration: ${duration} seconds
-Title: ${item.title}
-
-Analyse the video and return a JSON object with these fields:
-{
-  "visual_summary": "detailed description of exactly what is shown visually throughout the video",
-  "scene_changes": [{"time_seconds": 0, "description": "what changes at this moment visually"}],
-  "visual_elements": ["specific visual elements present e.g. 'close-up of yellow teeth', 'product bottle being held', 'before/after split screen'"],
-  "creator_description": "describe the person on screen if any - age range, gender, setting",
-  "product_shots": ["timestamps and descriptions of any product appearances"],
-  "emotional_moments": ["timestamps of high-emotion or reaction moments"],
-  "scene_segments": [
-    {
-      "start_seconds": 0,
-      "end_seconds": 5,
-      "visual_description": "exactly what is shown on screen",
-      "visual_tags": ["specific searchable visual tags"],
-      "scene_type": "talking_head|product_shot|before_after|reaction|demonstration|lifestyle|text_overlay|unboxing|ingredient_shot|result_shot|testimonial|founder|tutorial|behind_the_scenes",
-      "ad_value": "High|Medium|Low",
-      "cut_reason": "why this is a natural cut point"
-    }
-  ]
-}
-
-Be extremely specific about visual content. If you see teeth, describe their colour. If you see a product, name what it looks like. Do not generalise.`
-
-        const result = await model.generateContent([
-          { inlineData: { mimeType: 'video/mp4', data: base64Video } },
-          geminiPrompt
-        ])
-        geminiAnalysis = result.response.text()
-        console.log('Gemini analysis length:', geminiAnalysis.length)
-      }
-    } catch (e: any) {
-      console.log('Gemini analysis failed:', e.message)
-    }
-  }
-
-  // ── Step 4: Claude combines transcript + visual analysis ──────────────────
-  try {
-    let geminiData: any = {}
-    try {
-      const cleanGemini = geminiAnalysis.replace(/```json|```/g, '').trim()
-      if (cleanGemini) geminiData = JSON.parse(cleanGemini)
-    } catch (e) {
-      console.log('Could not parse Gemini JSON, using raw text')
-    }
-
-    const wordTimingContext = wordTimestamps.length > 0
-      ? `\nWORD-LEVEL TIMESTAMPS:\n${wordTimestamps.slice(0, 100).map((w: any) => `${w.start.toFixed(1)}s: "${w.word}"`).join(', ')}`
-      : ''
-
-    const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: `You are an expert direct response video editor for DTC brands. Combine the transcript, word timestamps, and visual analysis to create highly accurate clip segments.
-
-TITLE: ${item.title}
-DURATION: ${duration}s
-CREATOR: ${item.creator || 'unknown'}
-TRANSCRIPT: ${item.transcript || autoTranscript || 'not provided'}
-${wordTimingContext}
-
-GEMINI VISUAL ANALYSIS:
-${JSON.stringify(geminiData, null, 2) || geminiAnalysis || 'not available'}
-
-Return ONLY valid JSON:
-{
-  "content_type": "UGC|Founder Clip|Tutorial|Behind the Scenes|High Production|Testimonial|Product Demo|Talking Head|Unboxing|Before & After|Lifestyle|Reaction|Other",
-  "creative_tags": ["talking_head", "founder", "demonstration", "product_closeup", "before_after", "testimonial", "unboxing", "lifestyle", "reaction", "tutorial", "ingredient_shot", "result_shot", "ugc", "studio", "outdoor", "kitchen", "bathroom", "gym"],
-  "visual_style": "professional|casual|raw_ugc|polished_ugc|studio|outdoor|indoor",
-  "has_face": "true ONLY if a human face is clearly visible on screen, false otherwise",
-  "is_talking_head": "true ONLY if a person is speaking directly to camera as the primary visual, false otherwise — product demos with voiceover are NOT talking head",
-  "is_broll": "true if this is supplementary footage like product shots, demos, lifestyle, close-ups, scenery — with NO person speaking to camera as the focus",
-  "product_visible": "true ONLY if a physical product is clearly visible on screen, false otherwise",
-  "confidence": "High|Medium|Low",
-  "summary": "2-3 sentences combining what was said AND shown — be specific about products, claims, visuals",
-  "tone": "emotional tone description (e.g. excited, calm, urgent, empathetic, authoritative)",
-  "topics": ["specific topics from transcript AND visuals — product names, ingredients, problems, solutions"],
-  "scene_tags": ["extremely specific visual tags from Gemini analysis — e.g. 'woman applying serum', 'yellow teeth close-up'"],
-  "hook": "most attention-grabbing moment or line",
-  "key_quotes": ["powerful direct quotes from transcript"],
-  "ad_potential": "High|Medium|Low",
-  "ad_notes": "specific advice on ad usage based on both transcript and visuals",
-  "clip_segments": [
-    {
-      "label": "HOOK|PROBLEM|AGITATE|SOLUTION|SOCIAL PROOF|CTA|BODY|PRODUCT|REACTION|BEFORE|AFTER|TESTIMONIAL|DEMONSTRATION",
-      "clip_role": "hook|problem|solution|social_proof|cta|b_roll|product_demo|reaction|before_after|testimonial|demonstration|lifestyle|unboxing",
-      "start_seconds": 0,
-      "end_seconds": 4,
-      "description": "combine exact transcript words with visual description — be specific",
-      "scene_tags": ["specific visual tags for THIS segment from Gemini — be extremely detailed"],
-      "creative_tags": ["talking_head|broll|product_shot|demonstration|reaction|lifestyle|closeup|wide_shot|text_overlay"],
-      "is_talking_head": "true ONLY if person is speaking to camera in THIS segment",
-      "is_broll": "true if this segment shows product/demo/lifestyle/scenery without someone talking to camera",
-      "use_case": "specific ad use case — e.g. 'perfect opening hook for problem-aware audience'",
-      "quality_score": "High|Medium|Low",
-      "avoid_reason": null
-    }
-  ]
-}
-
-CRITICAL RULES:
-1. Use WORD TIMESTAMPS to cut at exact sentence endings — never mid-word or mid-sentence
-2. Use Gemini scene_segments to cut at visual scene changes
-3. Minimum 1.5s per clip, maximum 8s
-4. scene_tags must come from actual Gemini visual analysis — no guessing
-5. Mark quality_score Low if: mid-sentence cut, visually unclear, duplicate of adjacent clip
-6. Prefer cuts where BOTH a sentence ends AND a visual scene changes
-7. Create up to 12 segments for longer videos — more is better than fewer if quality is High`
-      }],
-    })
-
-    const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
-    const analysis = JSON.parse(text.replace(/```json|```/g, '').trim())
-
-    // Snap segment boundaries to nearest sentence endings using word timestamps
-    function snapToSentence(targetTime: number, words: any[], mode: 'start'|'end', windowSecs = 1.5): number {
-      if(!words||words.length===0)return targetTime
-      const window=words.filter(w=>Math.abs((mode==='end'?w.end:w.start)-targetTime)<windowSecs)
-      if(mode==='end'){
-        // Find the last word in window that ends a sentence
-        const sentenceEnds=window.filter(w=>/[.!?]$/.test(w.punctuated_word||w.word||""))
-        if(sentenceEnds.length>0)return sentenceEnds[sentenceEnds.length-1].end+0.05
-        // No sentence end found — use the nearest word end
-        const nearest=window.sort((a:any,b:any)=>Math.abs(a.end-targetTime)-Math.abs(b.end-targetTime))[0]
-        return nearest?nearest.end+0.05:targetTime
-      } else {
-        // For start — snap to just after a sentence end, or nearest word start
-        const sentenceStarts=window.filter(w=>{
-          const wIdx=words.indexOf(w);if(wIdx===0)return true
-          const prev=words[wIdx-1];return /[.!?]$/.test(prev.punctuated_word||prev.word||"")
-        })
-        if(sentenceStarts.length>0){
-          const closest=sentenceStarts.sort((a:any,b:any)=>Math.abs(a.start-targetTime)-Math.abs(b.start-targetTime))[0]
-          return closest.start
-        }
-        const nearest=window.sort((a:any,b:any)=>Math.abs(a.start-targetTime)-Math.abs(b.start-targetTime))[0]
-        return nearest?nearest.start:targetTime
-      }
-    }
-
-    const rawSegments = (analysis.clip_segments || []).filter(
-      (s: any) => typeof s.start_seconds === 'number' &&
-                  typeof s.end_seconds === 'number' &&
-                  (s.end_seconds - s.start_seconds) >= 1
-    )
-
-    // Snap to sentence boundaries if we have word timestamps
-    const validSegments = wordTimestamps.length > 0
-      ? rawSegments.map((s: any) => ({
-          ...s,
-          start_seconds: snapToSentence(s.start_seconds, wordTimestamps, 'start'),
-          end_seconds: snapToSentence(s.end_seconds, wordTimestamps, 'end'),
-        })).filter((s:any) => s.end_seconds - s.start_seconds >= 1)
-      : rawSegments
-
-    const goodSegments = validSegments.filter((seg: any) => seg.quality_score !== 'Low')
-    console.log(`Created ${goodSegments.length} good clips from ${validSegments.length} total segments`)
-
-    const clipInserts = goodSegments.map((seg: any) => ({
-      type: 'clip',
-      parent_id: itemId,
-      title: `${item.title} — ${seg.label}`,
-      creator: item.creator,
-      creator_age: item.creator_age,
-      creator_gender: item.creator_gender,
-      mux_playback_id: playbackId,
-      mux_status: 'ready',
-      start_seconds: seg.start_seconds,
-      end_seconds: seg.end_seconds,
-      thumbnail_time: seg.start_seconds + (seg.end_seconds - seg.start_seconds) / 2,
-      duration_seconds: seg.end_seconds - seg.start_seconds,
-      description: seg.description,
-      clip_role: seg.clip_role || null,
-      ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
-      analysis: {
-        content_type: analysis.content_type,
-        creative_tags: seg.creative_tags || analysis.creative_tags || [],
-        is_talking_head: seg.is_talking_head ?? analysis.is_talking_head ?? false,
-        is_broll: seg.is_broll ?? analysis.is_broll ?? false,
-        visual_style: analysis.visual_style || null,
-        summary: seg.description,
-        scene_tags: seg.scene_tags || [],
-        use_case: seg.use_case,
-        ad_potential: seg.quality_score === 'High' ? 'High' : analysis.ad_potential,
-        tone: analysis.tone,
-        hook: seg.label === 'HOOK' ? analysis.hook : null,
-        key_quotes: (analysis.key_quotes || []).filter((q: string) =>
-          (autoTranscript || item.transcript || '').toLowerCase().includes(q.toLowerCase().substring(0, 20))
-        ),
-        label: seg.label,
-        clip_role: seg.clip_role || null,
-        quality_score: seg.quality_score || 'Medium',
-        parent_title: item.title,
-        creator_context: item.creator ? `${item.creator}${item.creator_age ? ', ' + item.creator_age : ''}` : null,
-      },
-    }))
-
-    const { data: clips } = await supabase.from('items').insert(clipInserts).select()
-    const clipIds = (clips || []).map((c: any) => c.id)
-
-    await supabase.from('items').update({
-      analysis,
-      clip_ids: clipIds,
-      mux_status: 'ready',
-    }).eq('id', itemId)
-
-  } catch (err: any) {
-    console.error('Analysis failed:', err.message)
-    // Create basic clips from word timestamps if we have them, even without Claude
-    try {
-      if (wordTimestamps.length > 0 && playbackId) {
-        const dur = asset.duration || 30
-        // Split into ~5 second segments at sentence boundaries
-        const segments: any[] = []
-        let segStart = 0
-        for (let i = 0; i < wordTimestamps.length; i++) {
-          const w = wordTimestamps[i]
-          const isPunct = /[.!?]$/.test(w.punctuated_word || w.word || "")
-          const segDur = (w.end || 0) - segStart
-          if ((isPunct && segDur >= 3) || segDur >= 8) {
-            segments.push({ start: segStart, end: w.end || segStart + 5, label: segments.length === 0 ? 'HOOK' : 'BODY' })
-            segStart = w.end || segStart + 5
-          }
-        }
-        if (segStart < dur - 1) segments.push({ start: segStart, end: dur, label: 'CTA' })
-        if (segments.length > 0) {
-          const clipInserts = segments.map((seg: any, i: number) => ({
-            type: 'clip', parent_id: itemId,
-            title: `${item?.title || 'Clip'} — ${seg.label} ${i + 1}`,
-            creator: item?.creator, creator_age: item?.creator_age, creator_gender: item?.creator_gender,
-            mux_playback_id: playbackId, mux_status: 'ready',
-            start_seconds: seg.start, end_seconds: seg.end,
-            thumbnail_time: seg.start + (seg.end - seg.start) / 2,
-            duration_seconds: seg.end - seg.start,
-            ...(item?.workspace_id ? { workspace_id: item.workspace_id } : {}),
-            analysis: { label: seg.label, quality_score: 'Medium', scene_tags: [], summary: 'Auto-generated clip (basic)' },
-          }))
-          const { data: fallbackClips } = await supabase.from('items').insert(clipInserts).select()
-          const clipIds = (fallbackClips || []).map((c: any) => c.id)
-          await supabase.from('items').update({ mux_status: 'ready', clip_ids: clipIds }).eq('id', itemId)
-          console.log(`Created ${clipIds.length} fallback clips without Claude`)
-          return NextResponse.json({ ok: true })
-        }
-      }
-    } catch (fallbackErr: any) {
-      console.error('Fallback clip creation failed:', fallbackErr.message)
-    }
-    await supabase.from('items').update({ mux_status: 'ready' }).eq('id', itemId)
+  // ── BACKGROUND: Trigger AI analysis (transcription + clipping) asynchronously ──
+  // This runs independently and can take up to 5 minutes. Video is already 'ready'
+  // and usable. If this fails, user can click "Generate Clips" to retry.
+  if (item.auto_clip !== false) {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ||
+                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+    // Don't await — fire and forget
+    triggerReanalyse(itemId, baseUrl)
+    console.log(`[${itemId}] Reanalyse triggered at ${baseUrl}`)
   }
 
   return NextResponse.json({ ok: true })
