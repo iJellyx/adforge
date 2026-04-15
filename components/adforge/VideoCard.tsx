@@ -65,10 +65,18 @@ export function VideoCard({item,onClick,selectMode,isSelected,onToggleSelect,com
       {/* Approval status badge - bottom-left of thumbnail */}
       {isClip&&clipStatus&&statusConfig[clipStatus]&&<div style={{position:"absolute",bottom:compact?4:8,left:compact?4:8,background:statusConfig[clipStatus].bg,color:statusConfig[clipStatus].color,fontSize:compact?7:9,fontWeight:800,padding:"1px 5px",borderRadius:4,display:"flex",alignItems:"center",gap:2,boxShadow:"0 1px 3px #0004"}}>{statusConfig[clipStatus].icon}</div>}
 
-      {/* Review mode overlay buttons */}
-      {showApprovalButtons&&hover&&<div onClick={e=>e.stopPropagation()} style={{position:"absolute",inset:0,background:"#000000aa",display:"flex",alignItems:"center",justifyContent:"center",gap:12,zIndex:15}}>
-        <button onClick={e=>{e.stopPropagation();onApprove&&onApprove()}} style={{width:44,height:44,borderRadius:"50%",border:"2px solid #22c55e",background:clipStatus==="approved"?"#22c55e":"#22c55e33",color:"#fff",fontSize:20,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{"\u2713"}</button>
-        <button onClick={e=>{e.stopPropagation();onReject&&onReject()}} style={{width:44,height:44,borderRadius:"50%",border:"2px solid #ef4444",background:clipStatus==="rejected"?"#ef4444":"#ef444433",color:"#fff",fontSize:20,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{"\u2717"}</button>
+      {/* Review mode: corner approve/reject buttons (thumbnail stays visible, card still clickable) */}
+      {showApprovalButtons&&<div style={{position:"absolute",top:compact?4:8,left:"50%",transform:"translateX(-50%)",display:"flex",gap:6,zIndex:15,opacity:hover?1:0.85,transition:"opacity 0.15s"}}>
+        <button
+          onClick={e=>{e.stopPropagation();onApprove&&onApprove()}}
+          title="Approve"
+          style={{width:32,height:32,borderRadius:"50%",border:"none",background:clipStatus==="approved"?"#22c55e":"rgba(34,197,94,0.92)",color:"#fff",fontSize:15,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.4)",backdropFilter:"blur(4px)"}}
+        >{"\u2713"}</button>
+        <button
+          onClick={e=>{e.stopPropagation();onReject&&onReject()}}
+          title="Reject"
+          style={{width:32,height:32,borderRadius:"50%",border:"none",background:clipStatus==="rejected"?"#ef4444":"rgba(239,68,68,0.92)",color:"#fff",fontSize:14,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.4)",backdropFilter:"blur(4px)"}}
+        >{"\u2717"}</button>
       </div>}
     </div>
 

@@ -135,9 +135,14 @@ export function ClipDetailPanel({item,items,onClose,onUpdate,workspaceId}:{item:
     {/* Scrollable body */}
     <div style={{flex:1,overflowY:'auto',padding:16,display:'flex',flexDirection:'column',gap:16}}>
 
-      {/* Video player */}
-      {item.mux_playback_id&&<div style={{borderRadius:10,overflow:'hidden',background:'#000'}}>
-        <ClipSegmentPlayer playbackId={item.mux_playback_id} start={item.start_seconds||0} end={item.end_seconds} muted={false}/>
+      {/* Video player — reflects live trim selection as user drags sliders */}
+      {item.mux_playback_id&&<div style={{borderRadius:10,overflow:'hidden',background:'#000',aspectRatio:'9/16',maxHeight:280}}>
+        <ClipSegmentPlayer
+          playbackId={item.mux_playback_id}
+          start={Number(trimStart ?? item.start_seconds ?? 0) || 0}
+          end={Number(trimEnd ?? item.end_seconds ?? item.duration_seconds) || undefined}
+          muted={false}
+        />
       </div>}
 
       {/* Approval buttons */}
