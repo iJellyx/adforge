@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { Item, CaptionStyle, CaptionSettings } from './types'
 import { C, DEFAULT_CAPTIONS } from './constants'
 import { muxThumb, secColor } from './utils'
@@ -15,6 +15,9 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
   const musicRef=useRef<HTMLAudioElement>(null)
   const globalStartTimesRef=useRef<number[]>([])
   const totalDurationRef=useRef(0)
+  // Ad length cap: derived from voiceover duration OR sum of trimmed clip durations.
+  // Whichever we compute first. Music is always bounded by this cap.
+  const adDurationRef = useRef(0)
 
   useEffect(()=>{if(captionSettings)setCaptions(captionSettings)},[captionSettings])
   function updateCaptions(patch:Partial<CaptionSettings>){const next={...captions,...patch};setCaptions(next);onCaptionChange?.(next)}
@@ -35,11 +38,21 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     }).filter(Boolean)
   }).filter(Boolean)
 
+  // Recompute on EVERY change to clips (including trim values). Using a hash
+  // that captures the trim state so React re-runs when trims change even if
+  // clip count is unchanged.
+  const clipsHash = clips.map((c:any)=>`${c.item?.id||'_'}-${c.start||0}-${c.end||0}`).join('|')
   useEffect(()=>{
     let acc=0
-    globalStartTimesRef.current=clips.map((c:any)=>{const t=acc;const dur=(c.end!=null&&c.start!=null&&c.end>c.start)?(c.end-c.start):3;acc+=dur;return t})
+    globalStartTimesRef.current=clips.map((c:any)=>{
+      const t=acc
+      const dur=(c.end!=null&&c.start!=null&&c.end>c.start)?(c.end-c.start):3
+      acc+=dur
+      return t
+    })
     totalDurationRef.current=acc
-  },[clips.length])
+    adDurationRef.current=acc
+  },[clipsHash])
 
   const getCurrentClipIdx=()=>{
     for(let i=clips.length-1;i>=0;i--){
@@ -78,6 +91,12 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     if(musicRef.current&&musicUrl&&!musicRef.current.paused){
       const drift=Math.abs(musicRef.current.currentTime-newGlobalTime)
       if(drift>0.25)musicRef.current.currentTime=newGlobalTime
+      // Hard-stop music if it somehow exceeds ad duration (e.g. music track is
+      // longer than the composition — which is usually the case for 3-min tracks
+      // with a 30-sec ad). This enforces the ad length cap.
+      if(musicRef.current.currentTime>=totalDurationRef.current){
+        musicRef.current.pause()
+      }
     }
     if(newGlobalTime>=totalDurationRef.current){
       v.pause();setPlaying(false);setGlobalTime(0);voiceRef.current?.pause();musicRef.current?.pause()
@@ -163,7 +182,8 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
 
   return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
     {voiceoverUrl&&<audio ref={voiceRef} key={voiceoverUrl} src={voiceoverUrl} style={{display:"none"}}/>}
-    {musicUrl&&<audio ref={musicRef} src={musicUrl} style={{display:"none"}} loop/>}
+    {/* No `loop` — music is bounded by ad duration and paused when it reaches the end. */}
+    {musicUrl&&<audio ref={musicRef} src={musicUrl} style={{display:"none"}}/>}
 
     <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
       <div style={{fontWeight:700,fontSize:14}}>🎬 Preview</div>

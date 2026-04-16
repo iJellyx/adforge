@@ -118,14 +118,21 @@ export function Step5Review({
           {voiceoverUrl && <audio src={voiceoverUrl} controls style={{ width: '100%', height: 24, marginTop: 6 }} />}
         </Card>
 
-        {/* Music summary */}
+        {/* Music summary — explicitly shows that music is capped at ad duration */}
         <Card style={{ padding: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             <Music size={14} color="var(--af-accent)" />
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--af-text)' }}>Music</span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--af-text-secondary)' }}>
-            {state.music.decision === 'yes' ? (state.music.name || 'Selected') : 'No music'}
+            {state.music.decision === 'yes' ? (
+              <>
+                {state.music.name || 'Selected'}
+                <div style={{ fontSize: 10, color: 'var(--af-muted)', marginTop: 2 }}>
+                  Capped at {fmtDur(totalDur)} (ad length) at 20% volume
+                </div>
+              </>
+            ) : 'No music'}
           </div>
         </Card>
 
