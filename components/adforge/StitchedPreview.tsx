@@ -79,32 +79,55 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
   const cur=clips[getCurrentClipIdx()]
   const clipIdx=getCurrentClipIdx()
 
+  // Prevents onTimeUpdate from reading currentTime during the transient
+  // "just-changed-src" window where v.currentTime is 0 before seek lands.
+  const transitioningRef = useRef(false)
+
   useEffect(()=>{
     const v=vidRef.current;if(!v||!cur)return
     const newSrc=`https://stream.mux.com/${cur.item.mux_playback_id}/capped-1080p.mp4`
     const clipGlobalStart=globalStartTimesRef.current[clipIdx]||0
-    const sectionRelativeTime=globalTime-clipGlobalStart
+    const sectionRelativeTime=Math.max(0,globalTime-clipGlobalStart)
     const targetVideoTime=cur.start+sectionRelativeTime
-    // Only reload src if it actually changed (sibling clips from the same parent
-    // share the same playback_id). This eliminates the reload-stall that was
-    // causing audio to desync at each clip boundary.
+
     if(v.src!==newSrc){
+      // Mark transitioning so stray timeupdate events during reload don't
+      // derail clipIdx with a negative globalTime computation.
+      transitioningRef.current=true
       v.src=newSrc
-      function seek(){if(v)v.currentTime=targetVideoTime}
-      if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true})
+      const seek=()=>{
+        if(!v)return
+        try{v.currentTime=targetVideoTime}catch{}
+        transitioningRef.current=false
+        if(playing)v.play().catch(()=>{})
+      }
+      if(v.readyState>=1){seek()}
+      else{v.addEventListener("loadedmetadata",seek,{once:true})}
     } else {
-      // Same source — seek directly without reload.
+      // Same source — seek directly without reload, no transition gap.
       try{v.currentTime=targetVideoTime}catch{}
+      if(playing)v.play().catch(()=>{})
     }
-    if(playing)v.play().catch(()=>{})
     if(onClipChange)onClipChange(clipIdx)
   },[clipIdx,cur?.item.mux_playback_id])
 
   function onTimeUpdate(){
     const v=vidRef.current;if(!v||!cur)return
+    // Ignore timeupdate events fired while src is changing — v.currentTime
+    // briefly snaps to 0 before the seek lands, which would compute a
+    // negative globalTime and cause clipIdx to flip back to 0 (infinite
+    // reload loop / visual glitch when transitioning between clips from
+    // different source videos).
+    if(transitioningRef.current)return
+    // Also ignore if v.currentTime falls outside this clip's expected range
+    // (means the video hasn't seeked yet after a source reload).
+    if(v.currentTime<cur.start-0.5||v.currentTime>cur.end+0.5)return
     const clipGlobalStart=globalStartTimesRef.current[clipIdx]||0
     const sectionRelativeTime=v.currentTime-cur.start
     const newGlobalTime=clipGlobalStart+sectionRelativeTime
+    // Never go backwards unless the user explicitly seeked (handled by
+    // seekToTime directly setting globalTime).
+    if(newGlobalTime<clipGlobalStart-0.1)return
     setGlobalTime(newGlobalTime)
     // Audio drift correction is asymmetric:
     // - If audio is BEHIND video (audio lagging): seek audio forward to catch up.
@@ -126,6 +149,15 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     }
     if(newGlobalTime>=totalDurationRef.current){
       v.pause();setPlaying(false);setGlobalTime(0);voiceRef.current?.pause();musicRef.current?.pause()
+      return
+    }
+    // Advance to next clip when we reach this clip's trim end. Without this
+    // the video would play PAST the trim into the next part of the source
+    // file (if same source) or just stall (if different source) until
+    // getCurrentClipIdx picked up the change.
+    if(v.currentTime>=cur.end-0.02 && clipIdx<clips.length-1){
+      const nextStart=globalStartTimesRef.current[clipIdx+1]||newGlobalTime
+      setGlobalTime(nextStart)
     }
   }
 
