@@ -34,15 +34,12 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
     onEditingAdConsumed?.()
   },[editingAd])
 
-  // v2 mode — same structure, clear audio, go to script step
+  // v2 mode — route into the new pipeline. The pipeline consumes v2SourceAd
+  // directly via its own prop (see <AdPipeline v2SourceAd=... />) and calls
+  // onV2Consumed itself once it has initialized state.
   useEffect(()=>{
     if(!v2SourceAd)return
-    setSections((v2SourceAd.sections||[]).map((s:any)=>({...s,voiceover_url:null})))
-    setVoiceoverUrl(null);setVoiceoverVoice(null);setMusicUrl(null);setMusicName(null)
-    setAdTitle(v2SourceAd.title.replace(/_v\d+$/,"")+"_v2")
-    setGenMeta({form:{contentType:v2SourceAd.metadata?.contentType,adLength:v2SourceAd.metadata?.adLength,awarenessStage:v2SourceAd.metadata?.awarenessStage},productName:v2SourceAd.metadata?.productName,isV2:true,sourceTitle:v2SourceAd.title})
-    setHookVariations([]);setView("review");setStep("script")
-    onV2Consumed?.()
+    setView("pipeline")
   },[v2SourceAd])
   const [selected,setSelected]=useState<Script|null>(null)
   const [sections,setSections]=useState<any[]>([])
@@ -346,6 +343,8 @@ Return ONLY valid JSON:
     onSaveForgedAd={onSaveForgedAd}
     onGoToForged={onGoToForged}
     onBack={()=>setView("list")}
+    v2SourceAd={v2SourceAd}
+    onV2Consumed={onV2Consumed}
   />
   if(view==="automash")return<AutoMashMode libraryItems={items} brand={brand} products={products} onSaveForgedAd={onSaveForgedAd} onGoToForged={onGoToForged} onBack={()=>setView("chooseMode")}/>
   if(view==="broll")return<BRollMode libraryItems={items} onSaveForgedAd={onSaveForgedAd} onBack={()=>setView("list")} workspaceId={workspaceId}/>

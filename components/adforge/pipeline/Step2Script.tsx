@@ -1,15 +1,17 @@
 'use client'
-import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Wand2, AlertTriangle, Check, Loader2, Scissors } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { ChevronLeft, ChevronRight, Wand2, AlertTriangle, Check, Loader2, Scissors, Sparkles, Save } from 'lucide-react'
 import { C } from '../constants'
 import { callClaude, secColor } from '../utils'
 import { Btn, Card, Label, STitle, Chip } from '../ui-primitives'
-import type { BrandProfile } from '../types'
+import type { BrandProfile, Product } from '../types'
 import {
   type Brief, type ScriptSection,
   countWords, estimateSectionDuration, estimateScriptDuration,
   isWithinTolerance, fmtDur, wordBudgetFor, WORDS_PER_SECOND,
 } from './pipeline-types'
+
+type HookVariation = { type: string; text: string }
 
 export function Step2Script({
   brief,
@@ -19,7 +21,9 @@ export function Step2Script({
   onUpdate,
   onApprove,
   onBack,
+  onSaveAndExit,
   brand,
+  products,
 }: {
   brief: Brief
   sections: ScriptSection[]
@@ -28,10 +32,81 @@ export function Step2Script({
   onUpdate: (sections: ScriptSection[]) => void
   onApprove: (sections: ScriptSection[]) => void
   onBack: () => void
+  onSaveAndExit?: () => void
   brand: BrandProfile
+  products?: Product[]
 }) {
   const [rewritingIdx, setRewritingIdx] = useState<number | null>(null)
   const [trimming, setTrimming] = useState(false)
+  const [hookVariations, setHookVariations] = useState<HookVariation[]>([])
+  const [selectedHookIdx, setSelectedHookIdx] = useState(0)  // 0 = original
+  const [generatingHooks, setGeneratingHooks] = useState(false)
+  const [hookError, setHookError] = useState('')
+
+  // Identify the HOOK section
+  const hookIdx = useMemo(() => sections.findIndex(s => s.type === 'HOOK'), [sections])
+  const hookSection = hookIdx >= 0 ? sections[hookIdx] : null
+  const originalHook = hookSection?.spokenWords || ''
+
+  async function generateHookVariations() {
+    if (!hookSection) { setHookError('No HOOK section found in script.'); return }
+    setGeneratingHooks(true); setHookError('')
+    try {
+      const prod = products?.find((x: any) => String(x.id) === String(brief.productId)) || null
+      const hookWordBudget = Math.max(countWords(originalHook), 8)
+      const contextAfterHook = sections
+        .filter((_, i) => i !== hookIdx)
+        .map(s => `[${s.type}]: ${s.spokenWords}`)
+        .join('\n')
+
+      const prompt = `You are writing hooks for a direct response video ad.
+Product: ${brand.name || 'the brand'} — ${prod?.description || prod?.name || brief.productName || ''}
+Script context (what comes after the hook):
+${contextAfterHook}
+
+Original hook (for reference): "${originalHook}"
+
+Generate THREE alternative hooks, each under ${hookWordBudget} words:
+1. QUESTION hook — opens with an unexpected question
+2. BOLD STATEMENT hook — makes a strong, specific claim
+3. PAIN POINT hook — names the customer's frustration directly
+
+Return ONLY valid JSON: { "variations": [{"type":"Question","text":"..."},{"type":"Bold Statement","text":"..."},{"type":"Pain Point","text":"..."}] }`
+
+      const raw = await callClaude([{ role: 'user', content: prompt }], 600)
+      const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
+      const variations: HookVariation[] = (data.variations || []).map((v: any) => ({
+        type: v.type || 'Alt',
+        text: (v.text || '').replace(/^["']|["']$/g, '').trim(),
+      })).filter((v: HookVariation) => v.text)
+      if (variations.length === 0) throw new Error('Claude returned no variations')
+      setHookVariations(variations)
+      setSelectedHookIdx(0)
+    } catch (e: any) {
+      console.error('Hook variations failed:', e)
+      setHookError('Failed to generate hook variations — try again.')
+    }
+    setGeneratingHooks(false)
+  }
+
+  function applyHook(idx: number) {
+    setSelectedHookIdx(idx)
+    if (hookIdx < 0) return
+    const newText = idx === 0 ? originalHook : hookVariations[idx - 1]?.text
+    if (newText == null) return
+    const next = sections.map((sec, i) => i === hookIdx ? { ...sec, spokenWords: newText } : sec)
+    onUpdate(next)
+  }
+
+  // Track the baseline (original) hook text so "Original" card always reflects
+  // what the user had before they generated variations. Re-captured when the
+  // user generates a fresh set.
+  const [originalHookSnapshot, setOriginalHookSnapshot] = useState<string | null>(null)
+  async function handleGenerateHooks() {
+    // Snapshot the current hook as "Original" option
+    setOriginalHookSnapshot(originalHook)
+    await generateHookVariations()
+  }
 
   const diff = estimatedDurationSec - brief.targetLengthSec
   const overUnder = diff > 0 ? 'over' : 'under'
@@ -104,9 +179,72 @@ export function Step2Script({
       {/* Left column -- editor */}
       <div style={{ flex: 2, minWidth: 0 }}>
         <STitle size={22}>Review your script</STitle>
-        <div style={{ fontSize: 13, color: 'var(--af-text-secondary)', marginBottom: 24 }}>
+        <div style={{ fontSize: 13, color: 'var(--af-text-secondary)', marginBottom: 20 }}>
           Edit each section. The script must be within 10% of {brief.targetLengthSec}s to continue.
         </div>
+
+        {/* Hook variations */}
+        {hookSection && (
+          <Card style={{ marginBottom: 16, background: 'var(--af-accent-soft)', border: '1px solid rgba(139,127,255,0.25)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: hookVariations.length > 0 ? 12 : 0 }}>
+              <Sparkles size={16} color="var(--af-accent)" />
+              <div style={{ flex: 1, fontSize: 13, color: 'var(--af-text)' }}>
+                <strong>Try different hooks.</strong> Generate 3 variations (Question / Bold Statement / Pain Point).
+              </div>
+              <button
+                onClick={handleGenerateHooks}
+                disabled={generatingHooks}
+                style={{
+                  background: 'var(--af-accent)', border: 'none', color: '#fff',
+                  borderRadius: 8, padding: '7px 14px', cursor: generatingHooks ? 'default' : 'pointer',
+                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: 6, opacity: generatingHooks ? 0.6 : 1,
+                }}
+              >
+                {generatingHooks
+                  ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                  : <Sparkles size={12} />}
+                {hookVariations.length > 0 ? 'Regenerate' : 'Generate 3 hook variations'}
+              </button>
+            </div>
+            {hookError && (
+              <div style={{ fontSize: 12, color: 'var(--af-red)', marginTop: 8 }}>{hookError}</div>
+            )}
+            {hookVariations.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+                {[{ type: 'Original', text: originalHookSnapshot ?? originalHook }, ...hookVariations].map((v, i) => {
+                  const active = selectedHookIdx === i
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => applyHook(i)}
+                      style={{
+                        textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+                        background: active ? 'var(--af-accent)' : 'var(--af-card)',
+                        color: active ? '#fff' : 'var(--af-text)',
+                        border: '1.5px solid ' + (active ? 'var(--af-accent)' : 'var(--af-border)'),
+                        borderRadius: 10, padding: '10px 12px',
+                        display: 'flex', flexDirection: 'column', gap: 6,
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: active ? 'rgba(255,255,255,0.85)' : 'var(--af-muted)' }}>{v.type}</span>
+                        {active && <Check size={11} color="#fff" />}
+                      </div>
+                      <div style={{ fontSize: 12, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as any }}>
+                        "{v.text}"
+                      </div>
+                      <div style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.75)' : 'var(--af-muted)', marginTop: 2 }}>
+                        {active ? 'Using this hook' : 'Click to use'}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+        )}
 
         {sections.map((s, i) => {
           const sc = secColor(s.type)
@@ -169,11 +307,19 @@ export function Step2Script({
         )}
 
         {/* Action bar */}
-        <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 12, marginTop: 8, alignItems: 'center' }}>
           <Btn onClick={onBack} style={{ background: 'none', border: '1px solid var(--af-border)', color: 'var(--af-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
             <ChevronLeft size={14} /> Back
           </Btn>
           <div style={{ flex: 1 }} />
+          {onSaveAndExit && (
+            <Btn
+              onClick={onSaveAndExit}
+              style={{ background: 'none', border: '1px solid var(--af-border)', color: 'var(--af-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Save size={14} /> Save script and exit
+            </Btn>
+          )}
           <Btn
             onClick={() => onApprove(sections)}
             disabled={!withinTolerance}
