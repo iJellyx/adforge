@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
 const SHOTSTACK_API_KEY = process.env.SHOTSTACK_API_KEY!
-// Accept either convention: SHOTSTACK_ENV='production' OR 'v1' OR anything else
-// defaults to stage. Always produces the correct /edit/... path.
-const SHOTSTACK_ENV = (process.env.SHOTSTACK_ENV || 'stage').toLowerCase()
-const SHOTSTACK_BASE = SHOTSTACK_ENV === 'production' || SHOTSTACK_ENV === 'v1' || SHOTSTACK_ENV === 'prod'
-  ? 'https://api.shotstack.io/edit/v1'
-  : 'https://api.shotstack.io/edit/stage'
+// URL format matches whatever the user's API key was configured for.
+// Preserves the original working convention: api.shotstack.io/{SHOTSTACK_ENV}
+// where SHOTSTACK_ENV is typically 'stage' or 'v1'. If SHOTSTACK_BASE_URL is
+// set explicitly that overrides everything.
+const SHOTSTACK_ENV = process.env.SHOTSTACK_ENV || 'stage'
+const SHOTSTACK_BASE = process.env.SHOTSTACK_BASE_URL || `https://api.shotstack.io/${SHOTSTACK_ENV}`
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
       },
     }
 
-    console.log(`[export] submitting render: ${built.length} clips, total ${totalDuration.toFixed(1)}s, ${ar}`)
+    console.log(`[export] submitting to ${SHOTSTACK_BASE}/render: ${built.length} clips, total ${totalDuration.toFixed(1)}s, ${ar}`)
 
     const renderRes = await fetch(`${SHOTSTACK_BASE}/render`, {
       method: 'POST',
@@ -142,11 +142,19 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(payload),
     })
 
-    const renderData = await renderRes.json()
+    const rawBody = await renderRes.text()
+    let renderData: any
+    try { renderData = JSON.parse(rawBody) } catch { renderData = { raw: rawBody } }
+
     if (!renderRes.ok || !renderData.response?.id) {
-      console.error('[export] Shotstack submit failed:', renderData)
+      console.error('[export] Shotstack submit failed:', renderRes.status, renderData)
+      const hint = renderRes.status === 403 || renderRes.status === 401
+        ? ` — check SHOTSTACK_API_KEY matches SHOTSTACK_ENV (${SHOTSTACK_ENV}). URL used: ${SHOTSTACK_BASE}/render`
+        : ''
       return NextResponse.json({
-        error: renderData.response?.message || renderData.message || `Shotstack error (${renderRes.status})`,
+        error: (renderData.response?.message || renderData.message || `Shotstack error ${renderRes.status}`) + hint,
+        status: renderRes.status,
+        url: `${SHOTSTACK_BASE}/render`,
         details: renderData,
       }, { status: 500 })
     }
