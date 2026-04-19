@@ -66,11 +66,21 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
 
   useEffect(()=>{
     const v=vidRef.current;if(!v||!cur)return
-    v.src=`https://stream.mux.com/${cur.item.mux_playback_id}/capped-1080p.mp4`
+    const newSrc=`https://stream.mux.com/${cur.item.mux_playback_id}/capped-1080p.mp4`
     const clipGlobalStart=globalStartTimesRef.current[clipIdx]||0
     const sectionRelativeTime=globalTime-clipGlobalStart
-    function seek(){if(v)v.currentTime=cur!.start+sectionRelativeTime}
-    if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true})
+    const targetVideoTime=cur.start+sectionRelativeTime
+    // Only reload src if it actually changed (sibling clips from the same parent
+    // share the same playback_id). This eliminates the reload-stall that was
+    // causing audio to desync at each clip boundary.
+    if(v.src!==newSrc){
+      v.src=newSrc
+      function seek(){if(v)v.currentTime=targetVideoTime}
+      if(v.readyState>=1)seek();else v.addEventListener("loadedmetadata",seek,{once:true})
+    } else {
+      // Same source — seek directly without reload.
+      try{v.currentTime=targetVideoTime}catch{}
+    }
     if(playing)v.play().catch(()=>{})
     if(onClipChange)onClipChange(clipIdx)
   },[clipIdx,cur?.item.mux_playback_id])
@@ -81,19 +91,20 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     const sectionRelativeTime=v.currentTime-cur.start
     const newGlobalTime=clipGlobalStart+sectionRelativeTime
     setGlobalTime(newGlobalTime)
-    // Only re-seek audio if there's significant drift (>250ms). Constantly
-    // setting currentTime on every timeupdate caused the voiceover to
-    // stutter/reverb because the audio engine was re-decoding on each set.
+    // Audio drift correction is asymmetric:
+    // - If audio is BEHIND video (audio lagging): seek audio forward to catch up.
+    // - If audio is AHEAD of video (common during clip-boundary video stalls):
+    //   DO NOT jump audio back — that was the audible skip bug. Let audio keep
+    //   playing; video will catch up naturally once the new clip loads.
+    // Threshold raised to 1.0s so only real desyncs trigger correction.
     if(voiceRef.current&&voiceoverUrl&&!voiceRef.current.paused){
-      const drift=Math.abs(voiceRef.current.currentTime-newGlobalTime)
-      if(drift>0.25)voiceRef.current.currentTime=newGlobalTime
+      const drift=voiceRef.current.currentTime-newGlobalTime
+      if(drift<-1.0)voiceRef.current.currentTime=newGlobalTime  // audio way behind video → catch up
     }
     if(musicRef.current&&musicUrl&&!musicRef.current.paused){
-      const drift=Math.abs(musicRef.current.currentTime-newGlobalTime)
-      if(drift>0.25)musicRef.current.currentTime=newGlobalTime
-      // Hard-stop music if it somehow exceeds ad duration (e.g. music track is
-      // longer than the composition — which is usually the case for 3-min tracks
-      // with a 30-sec ad). This enforces the ad length cap.
+      const drift=musicRef.current.currentTime-newGlobalTime
+      if(drift<-1.0)musicRef.current.currentTime=newGlobalTime
+      // Hard-stop music if it exceeds ad duration (the whole point of the cap).
       if(musicRef.current.currentTime>=totalDurationRef.current){
         musicRef.current.pause()
       }
@@ -164,6 +175,7 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     if(!scrubbing) return
     function onMove(e:MouseEvent){
       const p=getPctFromScrub(e)
+      // Pause while actively dragging so the scrub feels tight.
       seekToTime(p*(totalDurationRef.current||0), false)
     }
     function onUp(){ setScrubbing(false) }
@@ -247,24 +259,25 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     </div>
 
     <div style={{padding:"12px 16px",borderTop:"1px solid "+C.border}}>
-      {/* Scrubbable master timeline — click anywhere or drag the playhead */}
+      {/* Scrubbable master timeline — click anywhere or drag the playhead.
+          Section segments are pure visual — no click handlers so the whole
+          bar behaves as one seekable surface. */}
       {(()=>{
         const total=totalDurationRef.current||0
         const globalPct=total>0?(globalTime/total)*100:0
         return<div
           ref={scrubRef}
-          onMouseDown={(e)=>{setScrubbing(true); const p=getPctFromScrub(e); seekToTime(p*total,false)}}
-          style={{position:"relative",height:26,borderRadius:6,cursor:"pointer",userSelect:"none",marginBottom:10,background:C.bg,border:"1px solid "+C.border}}
+          onMouseDown={(e)=>{setScrubbing(true); const p=getPctFromScrub(e); seekToTime(p*total, playing)}}
+          style={{position:"relative",height:32,borderRadius:6,cursor:"pointer",userSelect:"none",marginBottom:10,background:C.bg,border:"1px solid "+C.border}}
         >
-          {/* Section-colored background segments */}
-          <div style={{position:"absolute",inset:0,display:"flex",borderRadius:6,overflow:"hidden"}}>
+          {/* Section-colored background segments — non-interactive */}
+          <div style={{position:"absolute",inset:0,display:"flex",borderRadius:6,overflow:"hidden",pointerEvents:"none"}}>
             {clips.map((clip:any,i:number)=>{
               const sc2=secColor(clip.label)
               const start=globalStartTimesRef.current[i]||0
               const next=i<clips.length-1?(globalStartTimesRef.current[i+1]||total):total
               const widthPct=total>0?((next-start)/total)*100:0
               return<div key={i} title={`${clip.label} · ${(next-start).toFixed(1)}s`}
-                onClick={(e)=>{e.stopPropagation();seekToClip(i)}}
                 style={{
                   width:widthPct+"%",
                   height:"100%",
@@ -274,7 +287,7 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
                   overflow:"hidden"
                 }}>
                 {/* Label overlay (only if segment wide enough) */}
-                {widthPct>8 && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:sc2.color,pointerEvents:"none",letterSpacing:"0.05em"}}>{clip.label}</div>}
+                {widthPct>8 && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:sc2.color,letterSpacing:"0.05em"}}>{clip.label}</div>}
               </div>
             })}
           </div>
