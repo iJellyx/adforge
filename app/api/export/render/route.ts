@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
 const SHOTSTACK_API_KEY = process.env.SHOTSTACK_API_KEY!
-const SHOTSTACK_BASE = process.env.SHOTSTACK_ENV === 'production'
-  ? 'https://api.shotstack.io/edit/v1'
-  : 'https://api.shotstack.io/edit/stage'
+// Mirror /api/export so both endpoints use the same URL format.
+// SHOTSTACK_BASE_URL overrides; otherwise default to api.shotstack.io/{SHOTSTACK_ENV}.
+const SHOTSTACK_ENV = process.env.SHOTSTACK_ENV || 'stage'
+const SHOTSTACK_BASE = process.env.SHOTSTACK_BASE_URL || `https://api.shotstack.io/${SHOTSTACK_ENV}`
 
 // ── Caption helpers ────────────────────────────────────────────────────────
 
