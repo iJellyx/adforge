@@ -39,35 +39,70 @@ export async function GET() {
         ...(env !== 'stage' && env !== 'production' ? [{ label: 'edit /stage', base: 'https://api.shotstack.io/edit/stage' }] : []),
       ]
 
+  // Minimal valid render payload for POST test
+  const minimalPayload = {
+    timeline: {
+      tracks: [{
+        clips: [{
+          asset: { type: 'title', text: 'Test', style: 'minimal' },
+          start: 0,
+          length: 2,
+        }],
+      }],
+    },
+    output: { format: 'mp4', resolution: 'sd', aspectRatio: '16:9', fps: 25 },
+  }
+
   const results: any[] = []
   for (const { label, base } of candidates) {
     const url = `${base}/render`
     try {
-      // GET on /render usually returns 405 (method not allowed) if URL is valid and auth passes.
-      // 401/403 → auth problem. 404 → wrong URL. Anything else → URL is reachable.
-      const res = await fetch(url, { method: 'GET', headers: { 'x-api-key': key } })
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key },
+        body: JSON.stringify(minimalPayload),
+      })
       const body = await res.text().catch(() => '')
+      let parsed: any = null
+      try { parsed = JSON.parse(body) } catch {}
+
+      const shotstackMessage = parsed?.message || parsed?.response?.message || ''
+      const shotstackDetail = parsed?.response?.error || parsed?.error || ''
+
+      let verdict = ''
+      if (res.status === 200 || res.status === 201) {
+        verdict = '✅ SUCCESS — URL + key work end-to-end'
+        // Cancel the test render immediately so it doesn't consume credits
+        if (parsed?.response?.id) {
+          verdict += ` (test render id: ${parsed.response.id}, safe to ignore — <2s cost)`
+        }
+      } else if (res.status === 401) {
+        verdict = '❌ 401 Unauthorized — API key is wrong/missing/revoked for this URL'
+      } else if (res.status === 403) {
+        verdict = `❌ 403 Forbidden — key recognised but not allowed to render. Reason: ${shotstackMessage || shotstackDetail || 'unknown'}. Common causes: free tier lacking render, quota exhausted, wrong environment (stage key on prod URL).`
+      } else if (res.status === 404) {
+        verdict = '❌ 404 — wrong URL path'
+      } else if (res.status === 400) {
+        verdict = `⚠️ 400 Bad Request — URL + key work but payload rejected: ${shotstackMessage || shotstackDetail}. (This diagnostic payload is minimal, so a 400 probably still means your key is fine.)`
+      } else {
+        verdict = `HTTP ${res.status}: ${shotstackMessage || shotstackDetail || body.slice(0, 200)}`
+      }
+
       results.push({
         label,
         url,
         status: res.status,
         statusText: res.statusText,
-        snippet: body.slice(0, 200),
-        verdict: res.status === 401 || res.status === 403
-          ? 'AUTH FAILED — key rejected by this URL'
-          : res.status === 404
-          ? 'URL NOT FOUND — this endpoint path is wrong'
-          : res.status === 405
-          ? 'URL VALID & KEY ACCEPTED (GET not allowed but that is expected)'
-          : `HTTP ${res.status} — url reachable`,
+        body: body.slice(0, 500),
+        verdict,
       })
     } catch (e: any) {
       results.push({ label, url, error: e.message })
     }
   }
 
-  // Pick the most-likely-working URL
-  const working = results.find(r => r.status === 405 || r.status === 200)
+  // Pick the most-likely-working URL (success or payload-rejected 400 both imply key works)
+  const working = results.find(r => r.status === 200 || r.status === 201 || r.status === 400)
 
   return NextResponse.json({
     ok: !!working,
