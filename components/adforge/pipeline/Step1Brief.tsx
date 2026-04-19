@@ -94,16 +94,44 @@ export function Step1Brief({
         footageBlock += `IMPORTANT: Write visual directions that reference footage types you KNOW exist above.\n\n`
       }
 
-      const prompt = ctx + intelBlock + footageBlock + `SCRIPT REQ:\nContent type: ${contentType}\nTarget duration: ${targetLengthSec} seconds\nWord budget: approximately ${wordBudget} words (target +/-10% -- this is CRITICAL)\nStage: ${stage.label} -- ${stage.desc}\nCustomer: ${customerAvatar || brand.target_customer || ''}\nPains: ${painPoints}\nDesires: ${desires}\nObjections: ${objections}\nRequest: ${request || ''}\n\nWrite a direct response video ad script of approximately ${wordBudget} words (target +/-10%) for this product. The total spoken words across all sections MUST be between ${Math.round(wordBudget * 0.9)} and ${Math.round(wordBudget * 1.1)} words. Use specific brand/product details -- names, claims, real numbers, differentiators. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","hookType":"Question"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
+      // Target range is ±8% — slightly tighter than the ±10% display gate so
+      // we converge cleanly before hitting the user.
+      const minWords = Math.round(wordBudget * 0.92)
+      const maxWords = Math.round(wordBudget * 1.08)
 
-      const raw = await callClaude([{ role: 'user', content: prompt }], 2000)
-      const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
-      const sections: ScriptSection[] = (data.sections || []).map((s: any, i: number) => ({
-        ...s,
-        id: String(Date.now() + i),
-        matchedClipIds: [],
-        selectedClipId: null,
-      }))
+      const basePrompt = ctx + intelBlock + footageBlock + `SCRIPT REQ:\nContent type: ${contentType}\nTarget duration: ${targetLengthSec} seconds\nSTRICT WORD COUNT: ${wordBudget} words total (must be between ${minWords} and ${maxWords})\nStage: ${stage.label} -- ${stage.desc}\nCustomer: ${customerAvatar || brand.target_customer || ''}\nPains: ${painPoints}\nDesires: ${desires}\nObjections: ${objections}\nRequest: ${request || ''}\n\nWrite a direct response video ad script. The TOTAL SPOKEN WORDS across all sections combined MUST land between ${minWords} and ${maxWords} words (target: ${wordBudget}). Aim for the upper end of that range — shorter is worse than longer. Use specific brand/product details: real names, claims, numbers, differentiators. Do NOT return fewer than ${minWords} words. Return ONLY valid JSON:\n{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","hookType":"Question"}],"suggested_music_mood":"Uplifting"}\nSection types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
+
+      // Generation + convergence loop. Up to 3 attempts; each tells Claude
+      // exactly what went wrong with the previous draft.
+      let sections: ScriptSection[] = []
+      let attempts = 0
+      let lastWords = 0
+      const maxAttempts = 3
+      while (attempts < maxAttempts) {
+        attempts++
+        setStatusMsg(attempts === 1 ? 'Writing your script...' : `Adjusting length (attempt ${attempts})...`)
+
+        let prompt = basePrompt
+        if (attempts > 1 && sections.length > 0) {
+          const diff = lastWords - wordBudget
+          const direction = diff < 0 ? `TOO SHORT by ${Math.abs(diff)} words` : `TOO LONG by ${diff} words`
+          prompt = basePrompt + `\n\nIMPORTANT: Your previous draft was ${lastWords} words (${direction}). Rewrite to hit exactly ${wordBudget} words, within the range ${minWords}-${maxWords}.${diff < 0 ? ' EXPAND each section with more detail, social proof, or specific claims. Do not add new sections — make existing sections longer.' : ' TIGHTEN each section — remove filler words, combine short sentences, keep only the most punchy lines.'}`
+        }
+
+        const raw = await callClaude([{ role: 'user', content: prompt }], 2000)
+        const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
+        sections = (data.sections || []).map((s: any, i: number) => ({
+          ...s,
+          id: String(Date.now() + i),
+          matchedClipIds: [],
+          selectedClipId: null,
+        }))
+
+        lastWords = sections.reduce((sum, s) => sum + (s.spokenWords || '').trim().split(/\s+/).filter(Boolean).length, 0)
+
+        if (lastWords >= minWords && lastWords <= maxWords) break  // converged
+        console.log(`[Step1Brief] Attempt ${attempts}: ${lastWords} words (target ${wordBudget}, range ${minWords}-${maxWords}). ${attempts < maxAttempts ? 'Retrying.' : 'Giving up — user can edit.'}`)
+      }
 
       setStatusMsg('Done!')
       const brief: Brief = {

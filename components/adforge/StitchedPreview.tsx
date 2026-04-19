@@ -26,13 +26,28 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     const segments=s.clipSegments&&s.clipSegments.length>0?s.clipSegments:[{clipId:s.selectedClipId}]
     const validSegs=segments.filter((seg:any)=>seg.clipId&&libraryItems.find((i:Item)=>i.id===seg.clipId))
     const segCount=validSegs.length
-    const naturalDurs=validSegs.map((seg:any)=>{const item=libraryItems.find((i:Item)=>i.id===seg.clipId);const start=seg.trimStart??item?.start_seconds??0;const end=seg.trimEnd??item?.end_seconds??(start+(item?.duration_seconds||5));return Math.max(0.5,end-start)})
+    // Trim-value precedence (most specific -> least): segment -> section -> item defaults.
+    // This was the source of the length mismatch — sections stored trim but
+    // clipSegments didn't, so we were falling back to the full item duration
+    // and inflating total by ~40%.
+    const resolveTrim=(seg:any,item:any)=>{
+      const rawEnd = seg.trimEnd ?? s.trimEnd ?? item?.end_seconds ?? ((seg.trimStart ?? s.trimStart ?? item?.start_seconds ?? 0) + (item?.duration_seconds ?? 5))
+      const rawStart = seg.trimStart ?? s.trimStart ?? item?.start_seconds ?? 0
+      // Guarantee end > start and at least 0.5s duration
+      const start = Math.max(0, rawStart)
+      const end = Math.max(start + 0.5, rawEnd)
+      return { start, end }
+    }
+    const naturalDurs=validSegs.map((seg:any)=>{
+      const item=libraryItems.find((i:Item)=>i.id===seg.clipId)
+      const {start,end}=resolveTrim(seg,item)
+      return Math.max(0.5,end-start)
+    })
     const totalNatural=naturalDurs.reduce((a:number,b:number)=>a+b,0)||1
     return validSegs.map((seg:any,segIdx:number)=>{
       const item=libraryItems.find((i:Item)=>i.id===seg.clipId)
       if(!item?.mux_playback_id)return null
-      const trimStart=seg.trimStart??item.start_seconds??0
-      const trimEnd=seg.trimEnd??item.end_seconds??(trimStart+(item.duration_seconds||5))
+      const {start:trimStart,end:trimEnd}=resolveTrim(seg,item)
       const naturalDur=naturalDurs[segIdx]
       return{item,start:trimStart,end:trimEnd,naturalDur,naturalFraction:naturalDur/totalNatural,sectionIdx,label:s.type,spoken:segIdx===0?s.spokenWords||"":"",muted:s.muted||false,voiceover_url:s.voiceover_url||null,sectionVoUrl:s.voiceover_url||null,isFirstInSection:segIdx===0,isLastInSection:segIdx===segCount-1,segCount,segIdx,word_timestamps:segIdx===0?(s.word_timestamps||null):null}
     }).filter(Boolean)

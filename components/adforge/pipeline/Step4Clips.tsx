@@ -111,7 +111,10 @@ export function Step4Clips({
           selectedClipId: clipId,
           trimStart,
           trimEnd,
-          clipSegments: [{ id: 'seg-' + i + '-0', clipId }],
+          // Write trim onto the segment too — StitchedPreview reads from the
+          // segment level first, so without this trims were being ignored and
+          // total duration inflated to the full item length.
+          clipSegments: [{ id: 'seg-' + i + '-0', clipId, trimStart, trimEnd }],
         }
       })
 
@@ -139,12 +142,14 @@ export function Step4Clips({
     const diff = Math.abs(clipDur - reqDur)
     if (diff < 0.1) {
       // Exact match -- instant swap
+      const ts = item.start_seconds || 0
+      const te = ts + reqDur
       const updated = sections.map((sec, i) => i === swapIdx ? {
         ...sec,
         selectedClipId: clipId,
-        trimStart: item.start_seconds || 0,
-        trimEnd: (item.start_seconds || 0) + reqDur,
-        clipSegments: [{ id: 'seg-' + i + '-0', clipId }],
+        trimStart: ts,
+        trimEnd: te,
+        clipSegments: [{ id: 'seg-' + i + '-0', clipId, trimStart: ts, trimEnd: te }],
       } : sec)
       setSections(updated)
       setSwapIdx(null)
@@ -163,7 +168,7 @@ export function Step4Clips({
       selectedClipId: trimItem.item.id,
       trimStart: data.trimStart,
       trimEnd: data.trimEnd,
-      clipSegments: [{ id: 'seg-' + i + '-0', clipId: trimItem.item.id }],
+      clipSegments: [{ id: 'seg-' + i + '-0', clipId: trimItem.item.id, trimStart: data.trimStart, trimEnd: data.trimEnd }],
     } : sec)
     setSections(updated)
     setTrimItem(null)

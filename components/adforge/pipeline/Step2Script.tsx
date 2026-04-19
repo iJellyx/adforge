@@ -57,14 +57,42 @@ export function Step2Script({
     setTrimming(true)
     try {
       const budget = wordBudgetFor(brief.targetLengthSec)
-      const scriptText = sections.map((s, i) => `[${s.type}]: ${s.spokenWords}`).join('\n')
-      const prompt = `This ad script is ${Math.abs(diff).toFixed(1)}s ${overUnder} the ${brief.targetLengthSec}s target (currently ${totalWords} words, need ~${budget} words).\n\nTrim or expand each section to hit the word budget while keeping the same structure, tone, and key selling points. Return ONLY valid JSON array:\n[{"type":"HOOK","spokenWords":"trimmed text"},{"type":"PROBLEM","spokenWords":"trimmed text"},...]\n\nCurrent script:\n${scriptText}`
-      const raw = await callClaude([{ role: 'user', content: prompt }], 1500)
-      const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
-      if (Array.isArray(data) && data.length === sections.length) {
-        const next = sections.map((sec, i) => ({ ...sec, spokenWords: data[i].spokenWords || sec.spokenWords }))
-        onUpdate(next)
+      const minWords = Math.round(budget * 0.92)
+      const maxWords = Math.round(budget * 1.08)
+
+      // Convergence loop — up to 3 attempts. Each attempt tells Claude exactly
+      // what went wrong with the previous draft so it over-/under-corrects less.
+      let workingSections = sections
+      let lastWords = sections.reduce((sum, s) => sum + countWords(s.spokenWords), 0)
+      let attempts = 0
+
+      while (attempts < 3) {
+        if (lastWords >= minWords && lastWords <= maxWords) break
+        attempts++
+
+        const overBy = lastWords - budget
+        const direction = overBy > 0 ? 'TOO LONG' : 'TOO SHORT'
+        const action = overBy > 0
+          ? `Remove exactly ${Math.abs(overBy)} words total by tightening each section — cut filler, combine sentences, keep only the punchiest lines.`
+          : `Add exactly ${Math.abs(overBy)} words total by expanding sections with more specific claims, numbers, proof points, or vivid detail. Do not add sections; make existing sections longer.`
+
+        const scriptText = workingSections.map((s) => `[${s.type}]: ${s.spokenWords}`).join('\n')
+        const prompt = `An ad script needs to be exactly ${budget} words (acceptable range: ${minWords}-${maxWords}).\nCurrent draft is ${lastWords} words — ${direction} by ${Math.abs(overBy)} words.\n\n${action}\n\nKeep the same section structure (${workingSections.map(s => s.type).join(', ')}), same tone, and same key selling points. Return ONLY valid JSON array:\n[{"type":"HOOK","spokenWords":"new text"},{"type":"PROBLEM","spokenWords":"new text"},...]\n\nCurrent script:\n${scriptText}`
+
+        const raw = await callClaude([{ role: 'user', content: prompt }], 1500)
+        const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
+
+        if (!Array.isArray(data) || data.length !== workingSections.length) {
+          console.warn('[autoTrim] Claude returned wrong shape — aborting')
+          break
+        }
+
+        workingSections = workingSections.map((sec, i) => ({ ...sec, spokenWords: data[i].spokenWords || sec.spokenWords }))
+        lastWords = workingSections.reduce((sum, s) => sum + countWords(s.spokenWords), 0)
+        console.log(`[autoTrim] Attempt ${attempts}: ${lastWords} words (target ${budget}, range ${minWords}-${maxWords})`)
       }
+
+      onUpdate(workingSections)
     } catch (e) {
       console.error('Auto-trim failed:', e)
     }
