@@ -4,7 +4,7 @@ import type { Item } from './types'
 import { C } from './constants'
 import { Btn } from './ui-primitives'
 
-export function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl,onSave}:any){
+export function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl,onSave,aspectRatio}:any){
   const [exporting,setExporting]=useState(false)
   const [progress,setProgress]=useState(0)
   const [msg,setMsg]=useState("")
@@ -35,6 +35,7 @@ export function ExportVideo({sections,libraryItems,voiceoverUrl,musicUrl,onSave}
         itemIds,
         voiceoverUrl:voiceoverUrl||null,
         musicUrl:musicUrl||null,
+        aspectRatio:aspectRatio||"9:16",
       })
     })
     const rawText=await res.text()

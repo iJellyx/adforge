@@ -189,6 +189,7 @@ export function Step5Review({
         voiceoverUrl={voiceoverUrl}
         musicUrl={musicUrl}
         onSave={handleSave}
+        aspectRatio={aspectRatio}
       />
 
       {/* Saved confirmation */}
