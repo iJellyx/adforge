@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Check, AlertTriangle, Film, RefreshCw, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, AlertTriangle, Film, RefreshCw, Loader2, Upload } from 'lucide-react'
 import { C } from '../constants'
 import { callClaude, secColor, muxThumb } from '../utils'
 import { Btn, Card, Label, STitle, Chip } from '../ui-primitives'
@@ -15,7 +15,8 @@ import {
 
 export function Step4Clips({
   brief,
-  sections: initialSections,
+  sections,
+  setSections,
   items,
   brand,
   workspaceId,
@@ -26,6 +27,7 @@ export function Step4Clips({
 }: {
   brief: Brief
   sections: ScriptSection[]
+  setSections: (sections: ScriptSection[]) => void  // lifts state to parent so changes survive navigation
   items: Item[]
   brand: BrandProfile
   workspaceId: string
@@ -34,15 +36,21 @@ export function Step4Clips({
   onApprove: (sections: ScriptSection[]) => void
   onBack: () => void
 }) {
-  const [sections, setSections] = useState<ScriptSection[]>(initialSections)
   const [matching, setMatching] = useState(false)
+  const [matchError, setMatchError] = useState<string | null>(null)
   const [swapIdx, setSwapIdx] = useState<number | null>(null)
   const [trimItem, setTrimItem] = useState<{ item: Item; sectionIdx: number; requiredDur: number } | null>(null)
 
-  // Auto-match on mount
+  // Library-level guards
+  const playableItems = items.filter(i => i.mux_playback_id)
+  const hasNoClips = playableItems.length === 0
+
+  // Auto-match on mount — but only if we have clips AND none assigned yet
   useEffect(() => {
-    if (sections.some(s => s.selectedClipId)) return // already matched
+    if (hasNoClips) return
+    if (sections.some(s => s.selectedClipId)) return // already matched (possibly from resumed draft)
     autoMatch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function classifyClip(item: Item): 'BROLL' | 'TALKING_HEAD' | 'MIXED' {
@@ -57,9 +65,15 @@ export function Step4Clips({
   }
 
   async function autoMatch() {
+    setMatchError(null)
     setMatching(true)
     try {
       const clips = items.filter(i => i.mux_playback_id)
+      if (clips.length === 0) {
+        setMatchError('Your library has no clips yet. Upload videos to the Library tab first.')
+        setMatching(false)
+        return
+      }
       // With voiceover, prefer non-talking-head clips
       const nonTH = clips.filter(i => classifyClip(i) !== 'TALKING_HEAD')
       const matchPool = voiceoverUrl && nonTH.length >= 4 ? nonTH : clips
@@ -119,8 +133,15 @@ export function Step4Clips({
       })
 
       setSections(updated)
-    } catch (e) {
+
+      // Surface partial-match warnings
+      const unassigned = updated.filter(s => !s.selectedClipId).length
+      if (unassigned > 0) {
+        setMatchError(`AI could only match ${updated.length - unassigned} of ${updated.length} sections. Swap clips manually for the rest.`)
+      }
+    } catch (e: any) {
       console.error('Auto-match failed:', e)
+      setMatchError('Clip matching failed: ' + (e?.message || 'unknown error') + '. Try "Re-match" or swap clips manually.')
     }
     setMatching(false)
   }
@@ -193,6 +214,37 @@ export function Step4Clips({
           Each section needs a clip that matches its voiceover duration. Swap or trim to fit.
         </div>
 
+        {/* Empty library guard — blocks the whole step until user adds clips */}
+        {hasNoClips && (
+          <div style={{ padding: 24, borderRadius: 12, background: 'var(--af-red-soft)', border: '1px solid rgba(248,113,113,0.3)', marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 8 }}>
+              <AlertTriangle size={18} color="var(--af-red)" style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--af-red)', marginBottom: 4 }}>
+                  Your library has no clips yet
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--af-text)' }}>
+                  AdForge needs video clips to assemble your ad. Upload creator videos in the Library tab
+                  — they'll be auto-analysed and split into clips tagged by scene. Come back once you have
+                  at least 5-10 clips and AI can match them to your script.
+                </div>
+              </div>
+            </div>
+            <Btn onClick={onBack} style={{ background: 'var(--af-surface)', color: 'var(--af-text)', border: '1px solid var(--af-border)', fontSize: 12, marginTop: 8 }}>
+              <ChevronLeft size={12}/> Go back
+            </Btn>
+          </div>
+        )}
+
+        {/* Match error banner — surfaces silent failures from Claude */}
+        {!hasNoClips && matchError && !matching && (
+          <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--af-warning-soft)', border: '1px solid rgba(251,191,36,0.3)', marginBottom: 12, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <AlertTriangle size={14} color="var(--af-warning)" style={{ flexShrink: 0, marginTop: 2 }}/>
+            <div style={{ flex: 1, fontSize: 12, color: 'var(--af-text)' }}>{matchError}</div>
+            <button onClick={() => setMatchError(null)} style={{ background: 'none', border: 'none', color: 'var(--af-text-secondary)', cursor: 'pointer', padding: 2, fontSize: 11, fontFamily: 'inherit' }}>dismiss</button>
+          </div>
+        )}
+
         {matching && (
           <div style={{ textAlign: 'center', padding: 32, color: 'var(--af-muted)', fontSize: 13 }}>
             <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', marginBottom: 8 }} />
@@ -200,7 +252,7 @@ export function Step4Clips({
           </div>
         )}
 
-        {!matching && sections.map((s, i) => {
+        {!matching && !hasNoClips && sections.map((s, i) => {
           const sc = secColor(s.type)
           const reqDur = s.actualVoDurationSec || s.targetDurationSec || 3
           const currentClip = s.selectedClipId ? items.find(it => it.id === s.selectedClipId) : null
@@ -246,7 +298,7 @@ export function Step4Clips({
         })}
 
         {/* Re-match button */}
-        {!matching && (
+        {!matching && !hasNoClips && (
           <div style={{ marginTop: 8, marginBottom: 16 }}>
             <button onClick={autoMatch} style={{ background: 'none', border: '1px solid var(--af-border)', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 12, color: 'var(--af-text-secondary)', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}>
               <RefreshCw size={12} /> Re-match all clips with AI
@@ -255,7 +307,7 @@ export function Step4Clips({
         )}
 
         {/* Duration summary */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16, fontSize: 12 }}>
+        {!hasNoClips && <div style={{ display: 'flex', gap: 12, marginBottom: 16, fontSize: 12 }}>
           <div style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--af-surface)', border: '1px solid var(--af-border)' }}>
             Clip total: <strong>{totalClipDur.toFixed(1)}s</strong>
           </div>
@@ -265,10 +317,10 @@ export function Step4Clips({
           <div style={{ padding: '6px 12px', borderRadius: 8, background: durMatch ? '#22c55e18' : '#ef444418', border: '1px solid ' + (durMatch ? '#22c55e33' : '#ef444433'), color: durMatch ? 'var(--af-green)' : 'var(--af-red)', fontWeight: 600 }}>
             {durMatch ? 'Synced' : 'Out of sync'}
           </div>
-        </div>
+        </div>}
 
         {/* Action bar */}
-        <div style={{ display: 'flex', gap: 12 }}>
+        {!hasNoClips && <div style={{ display: 'flex', gap: 12 }}>
           <Btn onClick={onBack} style={{ background: 'none', border: '1px solid var(--af-border)', color: 'var(--af-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
             <ChevronLeft size={14} /> Back
           </Btn>
@@ -280,8 +332,8 @@ export function Step4Clips({
           >
             <Check size={14} /> Approve clips <ChevronRight size={14} />
           </Btn>
-        </div>
-        {!canApprove && (
+        </div>}
+        {!hasNoClips && !canApprove && (
           <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--af-muted)', marginTop: 4 }}>
             {!allAssigned ? 'Assign clips to all sections to continue.' : 'Clip durations must match VO durations (within 0.5s).'}
           </div>

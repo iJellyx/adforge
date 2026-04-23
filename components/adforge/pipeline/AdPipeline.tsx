@@ -524,6 +524,12 @@ export function AdPipeline({
           <Step4Clips
             brief={state.brief}
             sections={state.script.sections}
+            // Lift section updates to pipeline state so navigation doesn't lose
+            // clip assignments + the draft auto-save captures them.
+            setSections={(next) => setState(prev => ({
+              ...prev,
+              script: { ...prev.script, sections: next },
+            }))}
             items={items}
             brand={brand}
             workspaceId={workspaceId}
