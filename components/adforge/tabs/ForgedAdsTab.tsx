@@ -8,6 +8,7 @@ import { Btn, Label, Card, STitle, Chip } from '../ui-primitives'
 import { StitchedPreview } from '../StitchedPreview'
 import { ScorePanel } from '../ScorePanel'
 import { ExportVideo } from '../ExportVideo'
+import { FolderTree } from '../FolderTree'
 
 function ForgedAdDownload({ad,onRefresh}:{ad:ForgedAd,onRefresh:()=>void}){
   const [checking,setChecking]=useState(false)
@@ -147,6 +148,8 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
   function handleClick(){if(selectMode)onToggleSelect();else onOpen()}
 
   return<div
+    draggable
+    onDragStart={e=>{e.dataTransfer.setData('text/x-adforge-item',ad.id);e.dataTransfer.effectAllowed='move'}}
     onMouseEnter={()=>setHovered(true)}
     onMouseLeave={()=>setHovered(false)}
     onClick={handleClick}
@@ -210,8 +213,26 @@ function ForgedAdCard({ad,items,onOpen,onRefresh,selectMode,isSelected,onToggleS
   </div>
 }
 
-export function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCreateV2}:{ads:ForgedAd[],items:Item[],brand:BrandProfile,setBrand:(b:BrandProfile)=>void,onRefresh:()=>void,onEditAd:(ad:ForgedAd)=>void,onCreateV2:(ad:ForgedAd)=>void}){
+export function ForgedAdsTab({ads:rawAds,items,brand,setBrand,onRefresh,onEditAd,onCreateV2,workspaceId}:{ads:ForgedAd[],items:Item[],brand:BrandProfile,setBrand:(b:BrandProfile)=>void,onRefresh:()=>void,onEditAd:(ad:ForgedAd)=>void,onCreateV2:(ad:ForgedAd)=>void,workspaceId:string}){
   const supabase=createClient()
+  const [activeFolderId,setActiveFolderId]=useState<string|null|'__root'>(null)
+  const [folderTick,setFolderTick]=useState(0)
+
+  // Filter ads by active folder before any other filter applies
+  const ads=(()=>{
+    if(activeFolderId===null)return rawAds
+    if(activeFolderId==='__root')return rawAds.filter(a=>!a.folder_id)
+    return rawAds.filter(a=>a.folder_id===activeFolderId)
+  })()
+  const folderCounts:Record<string,number>={}
+  rawAds.forEach(a=>{if(a.folder_id){folderCounts[a.folder_id]=(folderCounts[a.folder_id]||0)+1}})
+  const totalAds=rawAds.length
+  const unfiledAds=rawAds.filter(a=>!a.folder_id).length
+  async function moveAdToFolder(adId:string,folderId:string|null){
+    await supabase.from('forged_ads').update({folder_id:folderId}).eq('id',adId)
+    onRefresh()
+    setFolderTick(x=>x+1)
+  }
   const [previewId,setPreviewId]=useState<string|null>(null)
   const [search,setSearch]=useState("")
   const [activeTag,setActiveTag]=useState<string|null>(null)
@@ -357,7 +378,21 @@ export function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCrea
   const totalPending=ads.filter(a=>(a as any).render_status==="pending"||!(a as any).render_status||(a as any).render_status==="failed").length
   const allFilteredIds=filtered.map(a=>a.id)
 
-  return<div style={{padding:28,maxWidth:1200,margin:"0 auto"}}>
+  return<div style={{display:"flex",alignItems:"stretch",minHeight:"calc(100vh - 56px)"}} key={folderTick}>
+    <div style={{width:240,flexShrink:0}}>
+      <FolderTree
+        workspaceId={workspaceId}
+        kind="ads"
+        activeFolderId={activeFolderId}
+        onSelect={setActiveFolderId}
+        counts={folderCounts}
+        totalCount={totalAds}
+        unfiledCount={unfiledAds}
+        onChange={onRefresh}
+        onDropItem={(adId,folderId)=>moveAdToFolder(adId,folderId)}
+      />
+    </div>
+    <div style={{flex:1,padding:28,minWidth:0,overflowX:"hidden"}}>
     {/* Header */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12}}>
       <div>
@@ -526,5 +561,6 @@ export function ForgedAdsTab({ads,items,brand,setBrand,onRefresh,onEditAd,onCrea
         </div>}
       </div>
     })}
+    </div>
   </div>
 }

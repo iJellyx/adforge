@@ -14,8 +14,9 @@ import { ClipDetailPanel } from '../ClipDetailPanel'
 import { ClipReviewModal } from '../ClipReviewModal'
 import { ManualClipModal } from '../ManualClipModal'
 import { UploadPipeline } from '../UploadPipeline'
+import { FolderTree } from '../FolderTree'
 
-export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand,workspaceId}:{items:Item[],onRefresh:()=>void,view:string,setView:(v:string)=>void,brand:BrandProfile,products:Product[],onGoToBrand:()=>void,workspaceId:string}){
+export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products,onGoToBrand,workspaceId}:{items:Item[],onRefresh:()=>void,view:string,setView:(v:string)=>void,brand:BrandProfile,products:Product[],onGoToBrand:()=>void,workspaceId:string}){
   const supabase=createClient()
   const [selected,setSelected]=useState<Item|null>(null)
   const [search,setSearch]=useState("")
@@ -38,6 +39,47 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
   const [subView,setSubView]=useState<"clips"|"originals"|"upload">("clips")
   const [clipDetailItem,setClipDetailItem]=useState<Item|null>(null)
   const [manualClipFor,setManualClipFor]=useState<Item|null>(null)
+  // Folders: null = all, '__root' = unfiled, else = specific folder id
+  const [activeFolderId,setActiveFolderId]=useState<string|null|'__root'>(null)
+  const [folderRefreshTick,setFolderRefreshTick]=useState(0)
+
+  // Pre-filter items by folder. Folder semantics: an original belongs to a
+  // folder; its clips are considered to live there too. So when a user clicks
+  // a folder we include both the originals in that folder and the clips
+  // descended from those originals — even if the clip's own folder_id is null.
+  const folderScopedItems=(()=>{
+    if(activeFolderId===null)return rawItems
+    if(activeFolderId==='__root'){
+      const unfiledOriginals=new Set(rawItems.filter(i=>i.type==='original'&&!i.folder_id).map(i=>i.id))
+      return rawItems.filter(i=>{
+        if(i.type==='original')return !i.folder_id
+        if(i.folder_id)return false
+        return !i.parent_id||unfiledOriginals.has(i.parent_id)
+      })
+    }
+    const originalsInFolder=new Set(rawItems.filter(i=>i.type==='original'&&i.folder_id===activeFolderId).map(i=>i.id))
+    return rawItems.filter(i=>{
+      if(i.type==='original')return i.folder_id===activeFolderId
+      if(i.folder_id===activeFolderId)return true
+      if(i.parent_id&&originalsInFolder.has(i.parent_id))return true
+      return false
+    })
+  })()
+  // Local `items` shadows the prop so all downstream filters/searches/sorts
+  // operate on the folder-scoped subset without touching the rest of the file.
+  const items=folderScopedItems
+
+  // Folder counts (originals only — clips are implicit children)
+  const folderCounts:Record<string,number>={}
+  rawItems.forEach(i=>{if(i.type==='original'&&i.folder_id){folderCounts[i.folder_id]=(folderCounts[i.folder_id]||0)+1}})
+  const totalOriginals=rawItems.filter(i=>i.type==='original').length
+  const unfiledOriginals=rawItems.filter(i=>i.type==='original'&&!i.folder_id).length
+
+  async function moveItemToFolder(itemId:string,folderId:string|null){
+    await supabase.from('items').update({folder_id:folderId}).eq('id',itemId)
+    onRefresh()
+    setFolderRefreshTick(x=>x+1)
+  }
 
   // ── Google Drive integration state ──────────────────────────────────────
   const [gdriveStatus,setGdriveStatus]=useState<any>(null)
@@ -512,7 +554,21 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
 
   // ── Sub-view: Clips (default) ──
   if(subView==="clips"&&view==="grid"){
-    return<div style={{position:"relative"}}>
+    return<div style={{display:"flex",alignItems:"stretch",minHeight:"calc(100vh - 56px)"}} key={folderRefreshTick}>
+      <div style={{width:240,flexShrink:0}}>
+        <FolderTree
+          workspaceId={workspaceId}
+          kind="library"
+          activeFolderId={activeFolderId}
+          onSelect={setActiveFolderId}
+          counts={folderCounts}
+          totalCount={totalOriginals}
+          unfiledCount={unfiledOriginals}
+          onChange={onRefresh}
+          onDropItem={(itemId,folderId)=>moveItemToFolder(itemId,folderId)}
+        />
+      </div>
+      <div style={{flex:1,position:"relative",minWidth:0}}>
       {/* Sub-view toggle bar */}
       <div style={{padding:"16px 24px 0",display:"flex",alignItems:"center",gap:16,borderBottom:"1px solid "+C.border,background:C.card}}>
         <div style={{display:"flex",gap:4}}>
@@ -547,6 +603,7 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
         const idx=Math.max(0,allClips.findIndex(c=>c.id===clipDetailItem.id))
         return <ClipReviewModal clips={allClips} startIndex={idx} onClose={()=>setClipDetailItem(null)} onRefresh={onRefresh}/>
       })()}
+      </div>
     </div>
   }
 
@@ -557,7 +614,21 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
   if(uncategorised.length>0)categoryGroups["Uncategorised"]=uncategorised
   const hasActiveFilters=activeFilterCount>0||search.trim()||filter!=="All"
 
-  return<div style={{padding:20}}>
+  return<div style={{display:"flex",alignItems:"stretch",minHeight:"calc(100vh - 56px)"}} key={folderRefreshTick}>
+    <div style={{width:240,flexShrink:0}}>
+      <FolderTree
+        workspaceId={workspaceId}
+        kind="library"
+        activeFolderId={activeFolderId}
+        onSelect={setActiveFolderId}
+        counts={folderCounts}
+        totalCount={totalOriginals}
+        unfiledCount={unfiledOriginals}
+        onChange={onRefresh}
+        onDropItem={(itemId,folderId)=>moveItemToFolder(itemId,folderId)}
+      />
+    </div>
+    <div style={{flex:1,padding:20,minWidth:0,overflowX:"hidden"}}>
     {/* Sub-view toggle bar for originals */}
     <div style={{display:"flex",gap:4,marginBottom:20}}>
       {(["clips","originals","upload"] as const).map(sv=>{
@@ -611,6 +682,7 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
       <div style={{borderTop:"1px solid "+C.border,paddingTop:20,marginTop:8}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:16}}>📋 All Content</div></div>
     </div>}
     {filtered.length===0?<div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}><div style={{fontSize:44,marginBottom:14}}>🎬</div><div style={{fontSize:17,fontWeight:600,color:C.text,marginBottom:6}}>{items.length===0?"Your library is empty":"No results"}</div><div style={{fontSize:13,color:C.muted,marginBottom:20}}>{items.length===0?"Upload your first video to get started.":"Try adjusting your search or filters."}</div>{items.length===0&&<Btn onClick={()=>setView("add")} style={{background:C.accent,color:"#fff"}}>+ Add First Content</Btn>}{activeFilterCount>0&&<Btn onClick={clearFilters} style={{background:C.surface,color:C.muted,border:"1px solid "+C.border}}>Clear Filters</Btn>}</div>
-    :<><div style={{fontSize:12,color:C.muted,marginBottom:12,display:hasActiveFilters?"block":"none"}}>Showing {filtered.length} result{filtered.length!==1?"s":""}</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:14}}>{filtered.map(item=><div key={item.id}><VideoCard item={item} onClick={()=>{setSelected(item);setView("detail")}} selectMode={selectMode} isSelected={selectedIds.includes(item.id)} onToggleSelect={()=>setSelectedIds(prev=>prev.includes(item.id)?prev.filter(x=>x!==item.id):[...prev,item.id])}/>{item.mux_status&&item.mux_status!=="ready"&&<UploadPipeline item={item} compact/>}</div>)}</div></>}
+    :<><div style={{fontSize:12,color:C.muted,marginBottom:12,display:hasActiveFilters?"block":"none"}}>Showing {filtered.length} result{filtered.length!==1?"s":""}</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:14}}>{filtered.map(item=><div key={item.id} draggable onDragStart={e=>{e.dataTransfer.setData('text/x-adforge-item',item.id);e.dataTransfer.effectAllowed='move'}}><VideoCard item={item} onClick={()=>{setSelected(item);setView("detail")}} selectMode={selectMode} isSelected={selectedIds.includes(item.id)} onToggleSelect={()=>setSelectedIds(prev=>prev.includes(item.id)?prev.filter(x=>x!==item.id):[...prev,item.id])}/>{item.mux_status&&item.mux_status!=="ready"&&<UploadPipeline item={item} compact/>}</div>)}</div></>}
+    </div>
   </div>
 }
