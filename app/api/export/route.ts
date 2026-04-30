@@ -117,17 +117,26 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Aspect ratio passthrough (9:16 default for vertical ads)
+    // Aspect ratio passthrough (9:16 default for vertical ads).
+    // Use explicit `size` so we get full 1080p — `resolution` and `size`
+    // can't coexist in Shotstack output config.
     const validRatios = ['9:16', '16:9', '1:1', '4:5']
     const ar = validRatios.includes(aspectRatio) ? aspectRatio : '9:16'
+    const SIZE_FOR: Record<string, { width: number; height: number }> = {
+      '9:16': { width: 1080, height: 1920 },
+      '1:1':  { width: 1080, height: 1080 },
+      '4:5':  { width: 1080, height: 1350 },
+      '16:9': { width: 1920, height: 1080 },
+    }
+    const size = SIZE_FOR[ar]
 
     const payload = {
       timeline: { tracks },
       output: {
         format: 'mp4',
-        resolution: 'hd',
-        aspectRatio: ar,
+        size,
         fps: 30,
+        quality: 'high',
       },
     }
 

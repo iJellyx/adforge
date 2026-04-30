@@ -204,6 +204,10 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
   function sortItems(arr:Item[]){const c=[...arr];if(sortIdx===0)return c.sort((a,b)=>new Date(b.created_at||0).getTime()-new Date(a.created_at||0).getTime());if(sortIdx===1)return c.sort((a,b)=>new Date(a.created_at||0).getTime()-new Date(b.created_at||0).getTime());if(sortIdx===2)return c.sort((a,b)=>a.title.localeCompare(b.title));return c.sort((a,b)=>b.title.localeCompare(a.title))}
 
   const filtered=sortItems(items.filter(item=>{
+    // Sub-view scopes the list before any user filters apply.
+    // "originals" view → only originals. "clips" view → only clips.
+    if(subView==="originals"&&item.type!=="original")return false
+    if(subView==="clips"&&item.type!=="clip")return false
     if(filter==="Originals"&&item.type!=="original")return false
     if(filter==="Clips"&&item.type!=="clip")return false
     if(filterCtypes.length>0){const ct=item.analysis?.content_type;if(!filterCtypes.some(f=>f===ct||(f==="Clip"&&item.type==="clip")))return false}
@@ -596,7 +600,8 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
           </div>
           {isOpen&&<div style={{padding:14,background:C.bg}}>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:12}}>{catItems.map(item=><VideoCard key={item.id} item={item} onClick={()=>{setSelected(item);setView("detail")}} selectMode={selectMode} isSelected={selectedIds.includes(item.id)} onToggleSelect={()=>setSelectedIds(prev=>prev.includes(item.id)?prev.filter(x=>x!==item.id):[...prev,item.id])}/>)}</div>
-            {catItems.some(i=>i.clip_ids?.length)&&<div style={{marginTop:16,borderTop:"1px solid "+C.border,paddingTop:14}}>
+            {/* Embedded clips strip is suppressed on the Originals subview — pure originals view should stay pure. */}
+            {subView!=="originals"&&catItems.some(i=>i.clip_ids?.length)&&<div style={{marginTop:16,borderTop:"1px solid "+C.border,paddingTop:14}}>
               <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>✂️ Clips from {cat}</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:10}}>{catItems.flatMap(i=>i.clip_ids||[]).map(clipId=>{const clip=items.find(i=>i.id===clipId);if(!clip)return null;return<VideoCard key={clip.id} item={clip} onClick={()=>{setSelected(clip);setView("detail")}} selectMode={selectMode} isSelected={selectedIds.includes(clip.id)} onToggleSelect={()=>setSelectedIds(prev=>prev.includes(clip.id)?prev.filter(x=>x!==clip.id):[...prev,clip.id])}/>})}</div>
             </div>}

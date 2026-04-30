@@ -476,32 +476,23 @@ export async function POST(req: NextRequest) {
       tracks,
     }
 
-    // Determine output size and resolution based on aspectRatio metadata
+    // Output size — full 1080p across all aspect ratios.
+    // NOTE: Shotstack rejects `resolution` and `size` together — pick one.
+    // We pick `size` so we get explicit 1080p dimensions.
     const aspectRatio = ad.metadata?.aspectRatio || '9:16'
-    let outputSize: { width: number; height: number } = { width: 720, height: 1280 }
-    let resolution: string = 'mobile'
-
-    if (aspectRatio === '1:1') {
-      outputSize = { width: 1080, height: 1080 }
-      resolution = 'hd'
-    } else if (aspectRatio === '4:5') {
-      outputSize = { width: 864, height: 1080 }
-      resolution = 'mobile'
-    } else if (aspectRatio === '16:9') {
-      outputSize = { width: 1920, height: 1080 }
-      resolution = 'hd'
-    } else {
-      // Default 9:16 portrait
-      outputSize = { width: 720, height: 1280 }
-      resolution = 'mobile'
+    const SIZE_FOR: Record<string, { width: number; height: number }> = {
+      '9:16': { width: 1080, height: 1920 },
+      '1:1':  { width: 1080, height: 1080 },
+      '4:5':  { width: 1080, height: 1350 },
+      '16:9': { width: 1920, height: 1080 },
     }
+    const outputSize = SIZE_FOR[aspectRatio] || SIZE_FOR['9:16']
 
     const output = {
       format: 'mp4',
-      resolution,
+      size: outputSize,
       fps: 30,
       quality: 'high',
-      size: outputSize,
     }
 
     // 5. Submit to Shotstack
