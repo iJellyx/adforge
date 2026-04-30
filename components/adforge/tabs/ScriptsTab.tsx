@@ -15,10 +15,32 @@ import { AdPipeline } from '../pipeline/AdPipeline'
 import { AutoMashMode } from '../AutoMashMode'
 import { BRollMode } from '../BRollMode'
 import { CreatorBriefModal } from '../CreatorBriefModal'
+import { NewAdModal } from '../NewAdModal'
 
 export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveForgedAd,onGoToForged,startAtChooseMode,editingAd,onEditingAdConsumed,v2SourceAd,onV2Consumed,forgedAds,workspaceId}:any){
   const [view,setView]=useState("list")
+  const [newAdOpen,setNewAdOpen]=useState(false)
   useEffect(()=>{if(startAtChooseMode>0)setView("chooseMode")},[startAtChooseMode])
+
+  // After NewAdModal generates an ad, persist it via the parent's save
+  // handler (which inserts + triggers background scoring) and drop the
+  // user straight into AdStudio with the freshly-saved row.
+  async function loadAdIntoStudio(ad:ForgedAd){
+    const saved=await onSaveForgedAd?.(ad)
+    const final=(saved||ad) as ForgedAd
+    setSections(final.sections||[])
+    setVoiceoverUrl(final.voiceover_url||null)
+    setVoiceoverVoice(final.voiceover_voice||null)
+    setMusicUrl(final.music_url||null)
+    setMusicName(final.music_name||null)
+    setAdTitle(final.title||"")
+    setAspectRatio(final.metadata?.aspectRatio||"9:16")
+    setCaptionSettings(final.metadata?.captionSettings||{...DEFAULT_CAPTIONS})
+    setGenMeta({form:final.metadata?.brief||{},productName:final.metadata?.brief?.productName||""})
+    setNewAdOpen(false)
+    setView("review")
+    setStep("clips")
+  }
 
   // Edit mode — load forged ad back into review flow
   useEffect(()=>{
@@ -316,10 +338,10 @@ Return ONLY valid JSON:
     <STitle size={24} mb={8}>Create New Ad</STitle>
     <div style={{color:C.muted,fontSize:15,marginBottom:40}}>How would you like to start?</div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
-      <div onClick={()=>setView("pipeline")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor=C.accent;(e.currentTarget as any).style.background=C.accentSoft}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
+      <div onClick={()=>{setNewAdOpen(true);setView("list")}} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor=C.accent;(e.currentTarget as any).style.background=C.accentSoft}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
         <div style={{fontSize:36,marginBottom:12}}>✨</div>
         <div style={{fontWeight:700,fontSize:17,marginBottom:8}}>Create from Script</div>
-        <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>Guided 5-step flow: brief → script → voiceover → music → clips → export. Duration stays locked to your target length.</div>
+        <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>Fill the brief, pick a voice, and we'll write, record, score, and assemble it in one go.</div>
       </div>
       <div onClick={()=>setView("automash")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor="#7C3AED";(e.currentTarget as any).style.background="#7C3AED0a"}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
         <div style={{fontSize:36,marginBottom:12}}>⚡</div>
@@ -352,9 +374,18 @@ Return ONLY valid JSON:
   if(view==="list")return<div style={{maxWidth:820,margin:"0 auto",padding:28}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
       <div><STitle size={22} mb={4}>Script Generator</STitle><div style={{color:C.muted,fontSize:14}}>AI direct response scripts powered by your brand data</div></div>
-      <Btn onClick={()=>setView("chooseMode")} style={{background:C.accent,color:"#fff"}}>+ Create New Ad</Btn>
+      <Btn onClick={()=>setNewAdOpen(true)} style={{background:C.accent,color:"#fff"}}>+ Create New Ad</Btn>
     </div>
-    {scripts.length===0?<Card style={{textAlign:"center",padding:60}}><div style={{fontSize:40,marginBottom:12}}>✍️</div><STitle mb={6}>No scripts yet</STitle><Btn onClick={()=>setView("chooseMode")} style={{background:C.accent,color:"#fff",marginTop:8}}>Create First Ad</Btn></Card>
+    <NewAdModal
+      open={newAdOpen}
+      onClose={()=>setNewAdOpen(false)}
+      brand={brand}
+      products={products}
+      items={items}
+      workspaceId={workspaceId}
+      onComplete={loadAdIntoStudio}
+    />
+    {scripts.length===0?<Card style={{textAlign:"center",padding:60}}><div style={{fontSize:40,marginBottom:12}}>✍️</div><STitle mb={6}>No scripts yet</STitle><Btn onClick={()=>setNewAdOpen(true)} style={{background:C.accent,color:"#fff",marginTop:8}}>Create First Ad</Btn></Card>
     :<div style={{display:"grid",gap:12}}>{[...scripts].reverse().map((script:Script)=>{
       const m=script.metadata||{},stage=STAGES.find(s=>s.value===m.awarenessStage),sc2=STAGE_COLORS[m.awarenessStage]||C.accent
       const hook=(script.sections||[]).find((s:any)=>s.type==="HOOK")||(script.sections||[])[0]

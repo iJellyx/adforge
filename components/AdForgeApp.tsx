@@ -71,9 +71,11 @@ export default function AdForgeApp(){
     return()=>window.removeEventListener("keydown",handleKeyDown)
   },[])
 
-  async function handleSaveForgedAd(ad:Omit<ForgedAd,"id">){
+  async function handleSaveForgedAd(ad:Omit<ForgedAd,"id">):Promise<ForgedAd|null>{
   if(!activeWorkspace)return null
-  const{data,error}=await supabase.from("forged_ads").insert({...ad,workspace_id:activeWorkspace.id,updated_at:new Date().toISOString()}).select().single()
+  // Strip the placeholder id used by GenerationFlow before inserting
+  const { id: _ignore, ...insertable } = ad as any
+  const{data,error}=await supabase.from("forged_ads").insert({...insertable,workspace_id:activeWorkspace.id,updated_at:new Date().toISOString()}).select().single()
   if(error){console.error("Save forged ad error:",error);return null}
   if(data){
     setForgedAds(prev=>[data,...prev])
@@ -83,7 +85,7 @@ export default function AdForgeApp(){
       .then(d=>{if(d.score!=null)setForgedAds(prev=>prev.map(a=>a.id===data.id?{...a,metadata:{...a.metadata,score:d.score,grade:d.details?.overall_grade||d.grade,score_details:d.details}}:a))})
       .catch(e=>console.error("Background score error:",e))
   }
-  return data
+  return data as ForgedAd
 }
 
   async function handleSignOut(){await supabase.auth.signOut();window.location.href="/login"}
