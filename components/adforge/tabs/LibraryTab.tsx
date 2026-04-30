@@ -12,6 +12,7 @@ import { TrimSlider } from '../TrimSlider'
 import { ClipsView } from '../ClipsView'
 import { ClipDetailPanel } from '../ClipDetailPanel'
 import { ClipReviewModal } from '../ClipReviewModal'
+import { ManualClipModal } from '../ManualClipModal'
 import { UploadPipeline } from '../UploadPipeline'
 
 export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBrand,workspaceId}:{items:Item[],onRefresh:()=>void,view:string,setView:(v:string)=>void,brand:BrandProfile,products:Product[],onGoToBrand:()=>void,workspaceId:string}){
@@ -36,6 +37,7 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
   const [autoClipEnabled,setAutoClipEnabled]=useState(true)
   const [subView,setSubView]=useState<"clips"|"originals"|"upload">("clips")
   const [clipDetailItem,setClipDetailItem]=useState<Item|null>(null)
+  const [manualClipFor,setManualClipFor]=useState<Item|null>(null)
 
   // ── Google Drive integration state ──────────────────────────────────────
   const [gdriveStatus,setGdriveStatus]=useState<any>(null)
@@ -466,6 +468,17 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
           }} style={{background:clips.length===0?C.yellow:C.accent,color:"#fff",fontSize:12,padding:"7px 16px",whiteSpace:"nowrap"}}>Re-analyse</Btn>
         </div>
       </Card>}
+
+      {/* Manual clip creation — for shots the user wants to grab themselves */}
+      {selected.type==="original"&&selected.mux_status==="ready"&&<Card style={{marginBottom:12,background:"#F5FBF5",border:"1.5px solid #86EFAC"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:13,color:C.green,marginBottom:2}}>✂️ Create a custom clip</div>
+            <div style={{fontSize:11,color:C.muted}}>Cut your own shot from this video — pick the exact start/end, give it a title, optionally tag it. Goes straight into your library.</div>
+          </div>
+          <Btn onClick={()=>setManualClipFor(selected)} style={{background:C.green,color:"#000",fontSize:12,padding:"7px 16px",whiteSpace:"nowrap",fontWeight:700}}>Create clip</Btn>
+        </div>
+      </Card>}
       {selected.type==="original"&&selected.mux_status==="analysing"&&<Card style={{marginBottom:12,background:"#F0F4FF",border:"1.5px solid "+C.accent+"44"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:18,height:18,border:"2px solid "+C.accent,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
@@ -473,6 +486,23 @@ export function LibraryTab({items,onRefresh,view,setView,brand,products,onGoToBr
         </div>
       </Card>}
       {clips.length>0&&<div style={{marginTop:24}}><STitle>✂️ Auto-Generated Clips ({clips.length})</STitle><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>{clips.map(c=><VideoCard key={c.id} item={c} onClick={()=>setSelected(c)} selectMode={false} isSelected={false} onToggleSelect={()=>{}}/>)}</div></div>}
+
+      {/* Manual clip modal — opens from the green card above */}
+      {manualClipFor && (
+        <ManualClipModal
+          original={manualClipFor}
+          workspaceId={workspaceId}
+          onSave={(newClip)=>{
+            setManualClipFor(null)
+            onRefresh()
+            // If we're still on the original's detail view, refresh selected.clip_ids
+            if (selected?.id === manualClipFor.id) {
+              setSelected({...selected, clip_ids: [...(selected.clip_ids||[]), newClip.id]})
+            }
+          }}
+          onClose={()=>setManualClipFor(null)}
+        />
+      )}
     </div>
   }
 
