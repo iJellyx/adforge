@@ -1,16 +1,31 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Video, Wand2, Zap, Brain, ArrowRight } from 'lucide-react'
+import { Video, Wand2, Zap, Brain, ArrowRight, Mail, ChevronLeft } from 'lucide-react'
+
+type Mode = 'login' | 'forgot' | 'forgot_sent'
 
 export default function LoginPage() {
+  const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+
+  // If /auth/callback bounced back with an error (e.g. expired link), surface it
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const err = params.get('error')
+    if (err) {
+      setError(decodeURIComponent(err))
+      // Clean the URL so a refresh doesn't re-show the error
+      window.history.replaceState({}, '', '/login')
+    }
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -23,6 +38,22 @@ export default function LoginPage() {
     } else {
       router.push('/dashboard')
     }
+  }
+
+  async function handleForgot(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    // After clicking the email link, Supabase redirects here, the callback
+    // exchanges the code, then sends them to /auth/reset-password.
+    const redirectTo = `${window.location.origin}/auth/callback?next=/auth/reset-password`
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    setLoading(false)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    setMode('forgot_sent')
   }
 
   const features = [
@@ -74,51 +105,131 @@ export default function LoginPage() {
           <div style={{ fontWeight:700, fontSize:24, color:'var(--af-text)', letterSpacing:'-0.02em', marginBottom:6 }}>Sign in</div>
           <div style={{ color:'var(--af-text-secondary)', fontSize:14, marginBottom:32 }}>Access your workspace</div>
 
-          <form onSubmit={handleLogin}>
-            <div style={{ marginBottom:16 }}>
-              <label style={{ display:'block', fontSize:11, fontWeight:700, color:'var(--af-muted)', marginBottom:7, letterSpacing:'0.08em', textTransform:'uppercase' as const }}>Email</label>
-              <input
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                type="email"
-                required
-                placeholder="you@brand.com"
-                style={{ width:'100%', background:'var(--af-card)', border:'1px solid var(--af-border)', borderRadius:10, padding:'11px 14px', color:'var(--af-text)', fontSize:14, outline:'none', boxSizing:'border-box' as any, fontFamily:'inherit', transition:'border-color 0.15s' }}
-                onFocus={e => e.currentTarget.style.borderColor = 'var(--af-accent)'}
-                onBlur={e => e.currentTarget.style.borderColor = 'var(--af-border)'}
-              />
-            </div>
-            <div style={{ marginBottom:8 }}>
-              <label style={{ display:'block', fontSize:11, fontWeight:700, color:'var(--af-muted)', marginBottom:7, letterSpacing:'0.08em', textTransform:'uppercase' as const }}>Password</label>
-              <input
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                type="password"
-                required
-                placeholder="••••••••"
-                style={{ width:'100%', background:'var(--af-card)', border:'1px solid var(--af-border)', borderRadius:10, padding:'11px 14px', color:'var(--af-text)', fontSize:14, outline:'none', boxSizing:'border-box' as any, fontFamily:'inherit', transition:'border-color 0.15s' }}
-                onFocus={e => e.currentTarget.style.borderColor = 'var(--af-accent)'}
-                onBlur={e => e.currentTarget.style.borderColor = 'var(--af-border)'}
-              />
-            </div>
-            <div style={{ textAlign:'right' as const, marginBottom:24 }}>
-              <span style={{ fontSize:12, color:'var(--af-accent)', cursor:'pointer' }}>Forgot password?</span>
-            </div>
-            {error && (
-              <div style={{ background:'var(--af-red-soft)', border:'1px solid rgba(248,113,113,0.25)', borderRadius:8, padding:'10px 14px', fontSize:13, color:'var(--af-red)', marginBottom:16 }}>
-                {error}
+          {/* ── Mode: login (default) ── */}
+          {mode === 'login' && (
+            <form onSubmit={handleLogin}>
+              <div style={{ marginBottom:16 }}>
+                <label style={{ display:'block', fontSize:11, fontWeight:700, color:'var(--af-muted)', marginBottom:7, letterSpacing:'0.08em', textTransform:'uppercase' as const }}>Email</label>
+                <input
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  type="email"
+                  required
+                  placeholder="you@brand.com"
+                  style={{ width:'100%', background:'var(--af-card)', border:'1px solid var(--af-border)', borderRadius:10, padding:'11px 14px', color:'var(--af-text)', fontSize:14, outline:'none', boxSizing:'border-box' as any, fontFamily:'inherit', transition:'border-color 0.15s' }}
+                  onFocus={e => e.currentTarget.style.borderColor = 'var(--af-accent)'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'var(--af-border)'}
+                />
               </div>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              style={{ width:'100%', background:loading ? 'var(--af-muted)' : 'var(--af-accent)', color:'#fff', border:'none', borderRadius:10, padding:'13px', fontSize:14, fontWeight:600, cursor:loading ? 'not-allowed' : 'pointer', fontFamily:'inherit', letterSpacing:'-0.005em', display:'flex', alignItems:'center', justifyContent:'center', gap:7, transition:'background 0.15s' }}
-              onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--af-accent-hover)' }}
-              onMouseLeave={e => { if (!loading) e.currentTarget.style.background = 'var(--af-accent)' }}
-            >
-              {loading ? 'Signing in…' : <>Sign in <ArrowRight size={15} strokeWidth={2.5}/></>}
-            </button>
-          </form>
+              <div style={{ marginBottom:8 }}>
+                <label style={{ display:'block', fontSize:11, fontWeight:700, color:'var(--af-muted)', marginBottom:7, letterSpacing:'0.08em', textTransform:'uppercase' as const }}>Password</label>
+                <input
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  style={{ width:'100%', background:'var(--af-card)', border:'1px solid var(--af-border)', borderRadius:10, padding:'11px 14px', color:'var(--af-text)', fontSize:14, outline:'none', boxSizing:'border-box' as any, fontFamily:'inherit', transition:'border-color 0.15s' }}
+                  onFocus={e => e.currentTarget.style.borderColor = 'var(--af-accent)'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'var(--af-border)'}
+                />
+              </div>
+              <div style={{ textAlign:'right' as const, marginBottom:24 }}>
+                <button
+                  type="button"
+                  onClick={() => { setMode('forgot'); setError('') }}
+                  style={{ background:'none', border:'none', padding:0, fontSize:12, color:'var(--af-accent)', cursor:'pointer', fontFamily:'inherit', textDecoration:'none' }}
+                  onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                  onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+                >
+                  Forgot password?
+                </button>
+              </div>
+              {error && (
+                <div style={{ background:'var(--af-red-soft)', border:'1px solid rgba(248,113,113,0.25)', borderRadius:8, padding:'10px 14px', fontSize:13, color:'var(--af-red)', marginBottom:16 }}>
+                  {error}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={loading}
+                style={{ width:'100%', background:loading ? 'var(--af-muted)' : 'var(--af-accent)', color:'#fff', border:'none', borderRadius:10, padding:'13px', fontSize:14, fontWeight:600, cursor:loading ? 'not-allowed' : 'pointer', fontFamily:'inherit', letterSpacing:'-0.005em', display:'flex', alignItems:'center', justifyContent:'center', gap:7, transition:'background 0.15s' }}
+                onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--af-accent-hover)' }}
+                onMouseLeave={e => { if (!loading) e.currentTarget.style.background = 'var(--af-accent)' }}
+              >
+                {loading ? 'Signing in…' : <>Sign in <ArrowRight size={15} strokeWidth={2.5}/></>}
+              </button>
+            </form>
+          )}
+
+          {/* ── Mode: forgot — request reset email ── */}
+          {mode === 'forgot' && (
+            <form onSubmit={handleForgot}>
+              <button
+                type="button"
+                onClick={() => { setMode('login'); setError('') }}
+                style={{ background:'none', border:'none', padding:0, fontSize:12, color:'var(--af-text-secondary)', cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:4, marginBottom:16 }}
+              >
+                <ChevronLeft size={12}/> Back to sign in
+              </button>
+              <div style={{ fontWeight:700, fontSize:18, color:'var(--af-text)', marginBottom:6, letterSpacing:'-0.02em' }}>Reset your password</div>
+              <div style={{ color:'var(--af-text-secondary)', fontSize:13, marginBottom:20, lineHeight:1.5 }}>
+                Enter your email and we'll send a link to set a new password.
+              </div>
+              <div style={{ marginBottom:20 }}>
+                <label style={{ display:'block', fontSize:11, fontWeight:700, color:'var(--af-muted)', marginBottom:7, letterSpacing:'0.08em', textTransform:'uppercase' as const }}>Email</label>
+                <input
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  type="email"
+                  required
+                  autoFocus
+                  placeholder="you@brand.com"
+                  style={{ width:'100%', background:'var(--af-card)', border:'1px solid var(--af-border)', borderRadius:10, padding:'11px 14px', color:'var(--af-text)', fontSize:14, outline:'none', boxSizing:'border-box' as any, fontFamily:'inherit', transition:'border-color 0.15s' }}
+                  onFocus={e => e.currentTarget.style.borderColor = 'var(--af-accent)'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'var(--af-border)'}
+                />
+              </div>
+              {error && (
+                <div style={{ background:'var(--af-red-soft)', border:'1px solid rgba(248,113,113,0.25)', borderRadius:8, padding:'10px 14px', fontSize:13, color:'var(--af-red)', marginBottom:16 }}>
+                  {error}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={loading}
+                style={{ width:'100%', background:loading ? 'var(--af-muted)' : 'var(--af-accent)', color:'#fff', border:'none', borderRadius:10, padding:'13px', fontSize:14, fontWeight:600, cursor:loading ? 'not-allowed' : 'pointer', fontFamily:'inherit', letterSpacing:'-0.005em', display:'flex', alignItems:'center', justifyContent:'center', gap:7, transition:'background 0.15s' }}
+                onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--af-accent-hover)' }}
+                onMouseLeave={e => { if (!loading) e.currentTarget.style.background = 'var(--af-accent)' }}
+              >
+                <Mail size={14}/> {loading ? 'Sending…' : 'Send reset link'}
+              </button>
+            </form>
+          )}
+
+          {/* ── Mode: forgot_sent — confirmation ── */}
+          {mode === 'forgot_sent' && (
+            <div>
+              <div style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:48, height:48, borderRadius:'50%', background:'var(--af-green-soft)', marginBottom:16 }}>
+                <Mail size={22} color="var(--af-green)" strokeWidth={2.2}/>
+              </div>
+              <div style={{ fontWeight:700, fontSize:20, color:'var(--af-text)', marginBottom:6, letterSpacing:'-0.02em' }}>Check your email</div>
+              <div style={{ color:'var(--af-text-secondary)', fontSize:13, lineHeight:1.6, marginBottom:20 }}>
+                We sent a password reset link to <strong style={{ color:'var(--af-text)' }}>{email}</strong>.
+                Click the link to set a new password. The link expires in 1 hour.
+              </div>
+              <div style={{ background:'var(--af-card)', border:'1px solid var(--af-border)', borderRadius:10, padding:'12px 14px', fontSize:12, color:'var(--af-text-secondary)', marginBottom:20, lineHeight:1.6 }}>
+                Didn't get the email? Check your spam folder, or wait a couple of minutes and try again.
+              </div>
+              <button
+                type="button"
+                onClick={() => { setMode('login'); setError('') }}
+                style={{ width:'100%', background:'none', color:'var(--af-text)', border:'1px solid var(--af-border)', borderRadius:10, padding:'13px', fontSize:14, fontWeight:600, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:7 }}
+              >
+                <ChevronLeft size={14}/> Back to sign in
+              </button>
+            </div>
+          )}
 
           <div style={{ marginTop:32, padding:'16px', background:'var(--af-accent-soft)', borderRadius:12, border:'1px solid rgba(139,127,255,0.15)' }}>
             <div style={{ fontSize:11, fontWeight:700, color:'var(--af-accent)', marginBottom:6, letterSpacing:'0.08em', textTransform:'uppercase' as const }}>New to AdForge?</div>
