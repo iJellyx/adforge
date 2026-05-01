@@ -140,34 +140,34 @@ export function VoicePicker({ selectedVoiceId, onSelect, layout = 'grid' }: Prop
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: 12,
-                background: isSelected ? C.accentSoft : C.card,
-                border: '1.5px solid ' + (isSelected ? C.accent : C.border),
+                background: isSelected ? 'var(--af-accent)' : C.card,
+                border: '1.5px solid ' + (isSelected ? 'var(--af-accent)' : C.border),
                 borderRadius: 12,
                 cursor: 'pointer',
                 textAlign: 'left',
                 fontFamily: 'inherit',
-                color: C.text,
-                transition: 'all 0.15s',
+                color: isSelected ? 'var(--af-accent-text)' : C.text,
+                transition: 'background 0.15s, color 0.15s, border-color 0.15s',
                 position: 'relative',
               }}
               onMouseEnter={e => {
-                if (!isSelected) e.currentTarget.style.borderColor = C.accent + '88'
+                if (!isSelected) e.currentTarget.style.borderColor = 'var(--af-accent)'
               }}
               onMouseLeave={e => {
                 if (!isSelected) e.currentTarget.style.borderColor = C.border
               }}
             >
-              {/* Avatar / play button */}
+              {/* Avatar / play button — inverts to white circle when card is selected */}
               <div
                 onClick={e => { e.stopPropagation(); togglePreview(v) }}
                 style={{
                   width: 38, height: 38, borderRadius: '50%',
-                  background: isPlaying ? C.accent : 'linear-gradient(135deg, #8B7FFF22, #5B49FF11)',
-                  border: '1px solid ' + (isPlaying ? C.accent : C.border),
+                  background: isSelected ? '#FFFFFF' : (isPlaying ? C.accent : 'var(--af-surface)'),
+                  border: '1px solid ' + (isSelected ? '#FFFFFF' : (isPlaying ? C.accent : C.border)),
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   flexShrink: 0,
                   cursor: v.preview_url ? 'pointer' : 'default',
-                  color: isPlaying ? '#fff' : C.accent,
+                  color: isSelected ? 'var(--af-accent)' : (isPlaying ? '#fff' : C.text),
                 }}
                 title={v.preview_url ? (isPlaying ? 'Pause preview' : 'Play preview') : 'No preview available'}
               >
@@ -176,9 +176,9 @@ export function VoicePicker({ selectedVoiceId, onSelect, layout = 'grid' }: Prop
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.name}</span>
-                  {isSelected && <Check size={13} color={C.accent} strokeWidth={3} />}
+                  {isSelected && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: 11, color: isSelected ? 'rgba(255,255,255,0.65)' : C.muted, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {[v.gender, v.age, v.accent].filter(Boolean).join(' · ') || v.description || 'Voice'}
                 </div>
               </div>

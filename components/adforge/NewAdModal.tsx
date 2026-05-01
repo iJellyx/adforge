@@ -165,15 +165,16 @@ export function NewAdModal({ open, onClose, brand, products, items, workspaceId,
                   onClick={() => setTargetLengthSec(s)}
                   style={{
                     flex: 1, padding: '14px 8px',
-                    background: active ? 'var(--af-accent-soft)' : 'var(--af-surface)',
+                    background: active ? 'var(--af-accent)' : 'var(--af-surface)',
                     border: '1.5px solid ' + (active ? 'var(--af-accent)' : 'var(--af-border)'),
-                    borderRadius: 10,
+                    borderRadius: 12,
                     cursor: 'pointer', fontFamily: 'inherit',
-                    color: active ? 'var(--af-accent)' : 'var(--af-text)',
+                    color: active ? 'var(--af-accent-text)' : 'var(--af-text)',
+                    transition: 'background 0.15s, color 0.15s',
                   }}
                 >
                   <div style={{ fontSize: 18, fontWeight: 800 }}>{s}s</div>
-                  <div style={{ fontSize: 10, color: 'var(--af-text-secondary)', marginTop: 2 }}>{Math.round(s * WORDS_PER_SECOND)} words</div>
+                  <div style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.6)' : 'var(--af-text-secondary)', marginTop: 2 }}>{Math.round(s * WORDS_PER_SECOND)} words</div>
                 </button>
               )
             })}
@@ -198,21 +199,22 @@ export function NewAdModal({ open, onClose, brand, products, items, workspaceId,
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 width: '100%', padding: 12,
-                background: 'var(--af-accent-soft)',
+                background: 'var(--af-accent)',
                 border: '1.5px solid var(--af-accent)',
-                borderRadius: 10,
+                borderRadius: 12,
                 cursor: 'pointer', textAlign: 'left',
-                color: 'var(--af-text)', fontFamily: 'inherit',
+                color: 'var(--af-accent-text)', fontFamily: 'inherit',
+                transition: 'opacity 0.15s',
               }}
             >
-              <span style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--af-accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>
+              <span style={{ width: 32, height: 32, borderRadius: '50%', background: '#FFFFFF', color: 'var(--af-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>
                 {voice.name[0]}
               </span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{voice.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--af-text-secondary)' }}>{[voice.gender, voice.accent, voice.age].filter(Boolean).join(' · ')}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>{[voice.gender, voice.accent, voice.age].filter(Boolean).join(' · ')}</div>
               </div>
-              <span style={{ fontSize: 12, color: 'var(--af-accent)', fontWeight: 600 }}>Change</span>
+              <span style={{ fontSize: 12, color: '#FFFFFF', fontWeight: 600, opacity: 0.85 }}>Change</span>
             </button>
           ) : (
             <div style={{ background: 'var(--af-surface)', border: '1px solid var(--af-border)', borderRadius: 10, padding: 14 }}>
@@ -289,13 +291,14 @@ function ChipRow({ options, value, onChange }: { options: { value: string; label
             onClick={() => onChange(opt.value)}
             title={opt.hint}
             style={{
-              padding: '8px 12px',
-              background: active ? 'var(--af-accent-soft)' : 'var(--af-surface)',
-              color: active ? 'var(--af-accent)' : 'var(--af-text)',
+              padding: '8px 14px',
+              background: active ? 'var(--af-accent)' : 'var(--af-surface)',
+              color: active ? 'var(--af-accent-text)' : 'var(--af-text)',
               border: '1.5px solid ' + (active ? 'var(--af-accent)' : 'var(--af-border)'),
-              borderRadius: 99,
-              fontSize: 12, fontWeight: 600,
+              borderRadius: 9999,
+              fontSize: 12.5, fontWeight: 600,
               cursor: 'pointer', fontFamily: 'inherit',
+              transition: 'background 0.15s, color 0.15s',
             }}
           >
             {opt.label}
