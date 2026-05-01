@@ -5,35 +5,97 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   Dark Theme (default) — analytics dashboard aesthetic
-   Deep navy-black background, subtle card elevation,
-   semantic status colors with soft tinted backgrounds.
+   Light Theme (default) — AdSplit-inspired paper aesthetic
+   Warm cream canvas, pure white cards with crisp near-black 1px
+   borders, black pill primary buttons, green / yellow / pink as
+   tiny stage accents. Pills everywhere — buttons, tabs, badges.
    ══════════════════════════════════════════════════════════════════ */
 :root {
-  /* Canvas */
+  /* Canvas — warm paper, not cold grey */
+  --af-bg: #F5F2EA;
+  --af-surface: #FBF9F4;
+  --af-card: #FFFFFF;
+  --af-card-hover: #FEFCF7;
+  --af-card-elevated: #FFFFFF;
+
+  /* Borders — the AdSplit signature: crisp dark 1px, not soft grey */
+  --af-border: #1A1A1A;
+  --af-border-soft: rgba(26, 26, 26, 0.12);
+  --af-border-strong: #1A1A1A;
+  --af-border-focus: rgba(26, 26, 26, 0.4);
+
+  /* Accent — black for primary CTA pills, deep green for success */
+  --af-accent: #1A1A1A;
+  --af-accent-hover: #2A2A2A;
+  --af-accent-soft: rgba(26, 26, 26, 0.06);
+  --af-accent-muted: rgba(26, 26, 26, 0.03);
+  --af-accent-text: #FFFFFF; /* text colour ON the accent button */
+
+  /* Text */
+  --af-text: #0F0F0F;
+  --af-text-secondary: #4A4A4A;
+  --af-muted: #7A7A7A;
+
+  /* Semantic status — saturated for emphasis on light bg */
+  --af-green: #16A34A;
+  --af-green-soft: rgba(22, 163, 74, 0.10);
+  --af-yellow: #CA8A04;
+  --af-yellow-soft: rgba(202, 138, 4, 0.10);
+  --af-orange: #EA580C;
+  --af-orange-soft: rgba(234, 88, 12, 0.10);
+  --af-red: #DC2626;
+  --af-red-soft: rgba(220, 38, 38, 0.10);
+  --af-blue: #2563EB;
+  --af-blue-soft: rgba(37, 99, 235, 0.10);
+  --af-teal: #0D9488;
+  --af-teal-soft: rgba(13, 148, 136, 0.10);
+  --af-pink: #DB2777;
+  --af-pink-soft: rgba(219, 39, 119, 0.10);
+
+  /* Sidebar — light nav rail with crisp right border */
+  --af-sidebar: #FBF9F4;
+  --af-sidebar-text: #4A4A4A;
+  --af-sidebar-text-active: #0F0F0F;
+  --af-sidebar-hover: rgba(26, 26, 26, 0.04);
+  --af-sidebar-active: #FFFFFF;
+  --af-sidebar-section-label: #7A7A7A;
+
+  /* Shadows — kept minimal; the borders do the work */
+  --af-shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.04);
+  --af-shadow-md: 0 4px 12px rgba(15, 15, 15, 0.06);
+  --af-shadow-lg: 0 10px 30px rgba(15, 15, 15, 0.10);
+  --af-shadow-glow: 0 0 0 1px rgba(26, 26, 26, 0.3);
+
+  /* Border radii — pill for buttons/tabs, large radius for cards */
+  --af-radius-sm: 8px;
+  --af-radius-md: 12px;
+  --af-radius-lg: 16px;
+  --af-radius-pill: 9999px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Dark Theme (opt-in via .dark on <html>)
+   Original analytics dashboard aesthetic preserved for users
+   who prefer dark — the AdSplit redesign defaults to light.
+   ══════════════════════════════════════════════════════════════════ */
+:root.dark {
   --af-bg: #0a0d18;
   --af-surface: #11141f;
   --af-card: #151926;
   --af-card-hover: #1b2030;
   --af-card-elevated: #1e2436;
-
-  /* Borders */
-  --af-border: rgba(255, 255, 255, 0.06);
-  --af-border-strong: rgba(255, 255, 255, 0.12);
-  --af-border-focus: rgba(139, 127, 255, 0.5);
-
-  /* Accent (primary action) */
-  --af-accent: #8B7FFF;
-  --af-accent-hover: #a097ff;
-  --af-accent-soft: rgba(139, 127, 255, 0.12);
-  --af-accent-muted: rgba(139, 127, 255, 0.06);
-
-  /* Text */
+  --af-border: rgba(255, 255, 255, 0.10);
+  --af-border-soft: rgba(255, 255, 255, 0.06);
+  --af-border-strong: rgba(255, 255, 255, 0.16);
+  --af-border-focus: rgba(255, 255, 255, 0.35);
+  --af-accent: #FFFFFF;
+  --af-accent-hover: #EAEAEA;
+  --af-accent-soft: rgba(255, 255, 255, 0.06);
+  --af-accent-muted: rgba(255, 255, 255, 0.03);
+  --af-accent-text: #0F0F0F;
   --af-text: #eef0f6;
   --af-text-secondary: #a0a5b8;
   --af-muted: #62687a;
-
-  /* Semantic status — vibrant with soft tinted backgrounds */
   --af-green: #4ade80;
   --af-green-soft: rgba(74, 222, 128, 0.12);
   --af-yellow: #facc15;
@@ -48,154 +110,135 @@
   --af-teal-soft: rgba(45, 212, 191, 0.12);
   --af-pink: #f472b6;
   --af-pink-soft: rgba(244, 114, 182, 0.12);
-
-  /* Sidebar */
   --af-sidebar: #07080f;
   --af-sidebar-text: rgba(255, 255, 255, 0.55);
   --af-sidebar-text-active: #ffffff;
   --af-sidebar-hover: rgba(255, 255, 255, 0.04);
-  --af-sidebar-active: rgba(139, 127, 255, 0.14);
+  --af-sidebar-active: rgba(255, 255, 255, 0.10);
   --af-sidebar-section-label: rgba(255, 255, 255, 0.35);
-
-  /* Shadows */
   --af-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --af-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
   --af-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
-  --af-shadow-glow: 0 0 0 1px rgba(139, 127, 255, 0.2), 0 8px 24px rgba(139, 127, 255, 0.08);
+  --af-shadow-glow: 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   Light Theme
-   ══════════════════════════════════════════════════════════════════ */
-:root.light {
-  --af-bg: #f6f7fb;
-  --af-surface: #ffffff;
-  --af-card: #ffffff;
-  --af-card-hover: #fafbfe;
-  --af-card-elevated: #ffffff;
-  --af-border: rgba(17, 24, 39, 0.08);
-  --af-border-strong: rgba(17, 24, 39, 0.15);
-  --af-border-focus: rgba(91, 73, 255, 0.5);
-  --af-accent: #5B49FF;
-  --af-accent-hover: #4a39e8;
-  --af-accent-soft: rgba(91, 73, 255, 0.08);
-  --af-accent-muted: rgba(91, 73, 255, 0.04);
-  --af-text: #0F1133;
-  --af-text-secondary: #4b5162;
-  --af-muted: #8a8fa3;
-  --af-green: #16a34a;
-  --af-green-soft: rgba(22, 163, 74, 0.08);
-  --af-yellow: #ca8a04;
-  --af-yellow-soft: rgba(202, 138, 4, 0.08);
-  --af-orange: #ea580c;
-  --af-orange-soft: rgba(234, 88, 12, 0.08);
-  --af-red: #dc2626;
-  --af-red-soft: rgba(220, 38, 38, 0.08);
-  --af-blue: #2563eb;
-  --af-blue-soft: rgba(37, 99, 235, 0.08);
-  --af-teal: #0d9488;
-  --af-teal-soft: rgba(13, 148, 136, 0.08);
-  --af-pink: #db2777;
-  --af-pink-soft: rgba(219, 39, 119, 0.08);
-  --af-sidebar: #0d1020;
-  --af-sidebar-text: rgba(255, 255, 255, 0.6);
-  --af-sidebar-text-active: #ffffff;
-  --af-sidebar-hover: rgba(255, 255, 255, 0.05);
-  --af-sidebar-active: rgba(139, 127, 255, 0.18);
-  --af-sidebar-section-label: rgba(255, 255, 255, 0.40);
-  --af-shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.05);
-  --af-shadow-md: 0 4px 16px rgba(17, 24, 39, 0.08);
-  --af-shadow-lg: 0 12px 40px rgba(17, 24, 39, 0.12);
-  --af-shadow-glow: 0 0 0 1px rgba(91, 73, 255, 0.2), 0 8px 24px rgba(91, 73, 255, 0.1);
-}
+/* Backwards compat: old code used `.light` to opt-IN to light. Since
+   light is now the default, .light is a no-op (nothing to do — already light).
+   This keeps any lingering toggle code from breaking. */
+:root.light { /* already light; intentionally empty */ }
 
 body {
   background: var(--af-bg);
   color: var(--af-text);
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  font-feature-settings: 'ss01', 'cv11';
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--af-border-strong); border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: var(--af-border-soft); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--af-muted); }
 
-/* Focus styles */
+/* Focus styles — subtle dark ring that matches the bordered aesthetic */
 *:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--af-bg), 0 0 0 4px var(--af-border-focus);
   border-radius: 6px;
 }
 
-button { font-family: inherit; letter-spacing: -0.005em; }
+button { font-family: inherit; letter-spacing: -0.01em; }
+input, textarea, select { font-family: inherit; }
 
 /* ══════════════════════════════════════════════════════════════════
-   Reusable Utility Classes — analytics dashboard patterns
+   AdSplit-style component utilities
    ══════════════════════════════════════════════════════════════════ */
 
-/* Card with optional left-border status accent */
+/* Card — pure white, crisp 1px near-black border, no shadow */
 .af-card {
   background: var(--af-card);
   border: 1px solid var(--af-border);
-  border-radius: 12px;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  border-radius: var(--af-radius-lg);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.af-card:hover {
-  border-color: var(--af-border-strong);
-  background: var(--af-card-hover);
-}
-.af-card-interactive {
-  cursor: pointer;
-}
+.af-card-interactive { cursor: pointer; }
 .af-card-interactive:hover {
   transform: translateY(-1px);
+  box-shadow: var(--af-shadow-md);
 }
 
-/* Left-edge status bar (like the reference cards) */
-.af-card-accent-left {
-  position: relative;
-  overflow: hidden;
+/* Primary button — solid black pill */
+.af-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: var(--af-accent);
+  color: var(--af-accent-text);
+  border: 1px solid var(--af-accent);
+  border-radius: var(--af-radius-pill);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease;
+  font-family: inherit;
+  letter-spacing: -0.01em;
 }
-.af-card-accent-left::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: var(--accent-color, var(--af-accent));
-}
+.af-btn-primary:hover { background: var(--af-accent-hover); }
+.af-btn-primary:active { transform: scale(0.98); }
 
-/* Status pill */
+/* Secondary button — white pill with thin black border */
+.af-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: var(--af-card);
+  color: var(--af-text);
+  border: 1px solid var(--af-border);
+  border-radius: var(--af-radius-pill);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-family: inherit;
+}
+.af-btn-secondary:hover { background: var(--af-surface); }
+
+/* Status pill — small rounded badge */
 .af-pill {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
   padding: 3px 9px;
   border-radius: 99px;
   white-space: nowrap;
+  border: 1px solid transparent;
 }
-.af-pill-green { background: var(--af-green-soft); color: var(--af-green); }
-.af-pill-yellow { background: var(--af-yellow-soft); color: var(--af-yellow); }
-.af-pill-orange { background: var(--af-orange-soft); color: var(--af-orange); }
-.af-pill-red { background: var(--af-red-soft); color: var(--af-red); }
-.af-pill-blue { background: var(--af-blue-soft); color: var(--af-blue); }
-.af-pill-teal { background: var(--af-teal-soft); color: var(--af-teal); }
-.af-pill-pink { background: var(--af-pink-soft); color: var(--af-pink); }
-.af-pill-accent { background: var(--af-accent-soft); color: var(--af-accent); }
-.af-pill-muted { background: rgba(255,255,255,0.04); color: var(--af-text-secondary); }
+.af-pill-green { background: var(--af-green-soft); color: var(--af-green); border-color: var(--af-green-soft); }
+.af-pill-yellow { background: var(--af-yellow-soft); color: var(--af-yellow); border-color: var(--af-yellow-soft); }
+.af-pill-orange { background: var(--af-orange-soft); color: var(--af-orange); border-color: var(--af-orange-soft); }
+.af-pill-red { background: var(--af-red-soft); color: var(--af-red); border-color: var(--af-red-soft); }
+.af-pill-blue { background: var(--af-blue-soft); color: var(--af-blue); border-color: var(--af-blue-soft); }
+.af-pill-teal { background: var(--af-teal-soft); color: var(--af-teal); border-color: var(--af-teal-soft); }
+.af-pill-pink { background: var(--af-pink-soft); color: var(--af-pink); border-color: var(--af-pink-soft); }
+.af-pill-accent { background: var(--af-accent-soft); color: var(--af-accent); border-color: var(--af-accent-soft); }
+.af-pill-muted { background: var(--af-accent-soft); color: var(--af-text-secondary); border-color: var(--af-accent-soft); }
 
-/* Tab button (horizontal tabs like the reference screenshot) */
+/* Top nav tab — black pill when active, plain text when inactive */
 .af-tab {
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 12.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--af-radius-pill);
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--af-text-secondary);
   background: transparent;
@@ -203,19 +246,18 @@ button { font-family: inherit; letter-spacing: -0.005em; }
   cursor: pointer;
   transition: all 0.15s ease;
   font-family: inherit;
-  letter-spacing: -0.005em;
 }
-.af-tab:hover { color: var(--af-text); background: var(--af-card); }
+.af-tab:hover { color: var(--af-text); background: var(--af-accent-soft); }
 .af-tab-active {
-  background: var(--af-card-elevated);
-  color: var(--af-text);
+  background: var(--af-accent);
+  color: var(--af-accent-text);
   font-weight: 600;
-  box-shadow: var(--af-shadow-sm);
 }
+.af-tab-active:hover { background: var(--af-accent-hover); color: var(--af-accent-text); }
 
 /* Section label (small-caps style) */
 .af-section-label {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -224,22 +266,24 @@ button { font-family: inherit; letter-spacing: -0.005em; }
 
 /* Brand bubble icon (colored circle with initial) */
 .af-bubble {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 14px;
-  color: #0a0d18;
+  font-size: 13px;
+  color: var(--af-text);
+  background: var(--af-card);
+  border: 1px solid var(--af-border);
   flex-shrink: 0;
 }
 
 /* Subtle divider */
 .af-divider {
   height: 1px;
-  background: var(--af-border);
+  background: var(--af-border-soft);
 }
 
 /* Animations */

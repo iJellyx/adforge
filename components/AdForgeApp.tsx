@@ -112,21 +112,21 @@ export default function AdForgeApp(){
   const navItem=(id:string,label:string)=>{
     const active=tab===id
     const Icon=NAV_ICONS[id]
-    return<button key={id} onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}} style={{display:"flex",alignItems:"center",gap:11,padding:"8px 12px",margin:"0 10px",borderRadius:8,border:"none",background:active?"var(--af-sidebar-active)":"transparent",color:active?"var(--af-sidebar-text-active)":"var(--af-sidebar-text)",fontWeight:active?600:500,fontSize:13,cursor:"pointer",width:"calc(100% - 20px)",textAlign:"left",fontFamily:"inherit",transition:"all 0.15s ease",letterSpacing:"-0.005em"}} onMouseEnter={e=>{if(!active)(e.currentTarget as any).style.background="var(--af-sidebar-hover)"}} onMouseLeave={e=>{if(!active)(e.currentTarget as any).style.background="transparent"}}>
+    return<button key={id} onClick={()=>{setTab(id);if(id==="library")setLibView("grid")}} style={{display:"flex",alignItems:"center",gap:11,padding:"9px 12px",margin:"1px 10px",borderRadius:9999,border:"1px solid "+(active?"var(--af-border)":"transparent"),background:active?"var(--af-sidebar-active)":"transparent",color:active?"var(--af-sidebar-text-active)":"var(--af-sidebar-text)",fontWeight:active?600:500,fontSize:13.5,cursor:"pointer",width:"calc(100% - 20px)",textAlign:"left",fontFamily:"inherit",transition:"all 0.15s ease",letterSpacing:"-0.01em"}} onMouseEnter={e=>{if(!active)(e.currentTarget as any).style.background="var(--af-sidebar-hover)"}} onMouseLeave={e=>{if(!active)(e.currentTarget as any).style.background="transparent"}}>
       {Icon&&<Icon size={16} strokeWidth={active?2.2:1.8} style={{flexShrink:0,opacity:active?1:0.75}}/>}<span style={{flex:1}}>{label}</span>
-      {id==="forged"&&draftCount>0&&<span style={{background:"var(--af-yellow)",color:"#000",borderRadius:99,fontSize:9.5,padding:"1px 6px",fontWeight:700}}>{draftCount}</span>}
+      {id==="forged"&&draftCount>0&&<span style={{background:"var(--af-yellow-soft)",color:"var(--af-yellow)",borderRadius:99,fontSize:10,padding:"1px 7px",fontWeight:700,border:"1px solid var(--af-yellow-soft)"}}>{draftCount}</span>}
     </button>
   }
   const navSection=(label:string)=><div style={{padding:"14px 22px 6px",fontSize:10.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--af-sidebar-section-label)"}}>{label}</div>
 
-  return<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",color:C.text,display:"flex"}}>
-    {/* Sidebar */}
-    <div style={{width:232,background:"var(--af-sidebar)",display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0,borderRight:"1px solid rgba(255,255,255,0.04)"}}>
+  return<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Inter',system-ui,sans-serif",color:C.text,display:"flex"}}>
+    {/* Sidebar — paper-white rail with crisp right border (AdSplit-inspired) */}
+    <div style={{width:232,background:"var(--af-sidebar)",display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:50,flexShrink:0,borderRight:"1px solid var(--af-border)"}}>
       {/* Brand */}
       <div style={{padding:"22px 20px 16px"}}>
-        <div style={{fontWeight:800,fontSize:20,color:"#fff",letterSpacing:"-0.03em",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
-          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:7,background:"linear-gradient(135deg,#8B7FFF,#5B49FF)",boxShadow:"0 4px 12px rgba(139,127,255,0.3)"}}><Wand2 size={14} color="#fff" strokeWidth={2.5}/></span>
-          Ad<span style={{color:"var(--af-accent)"}}>Forge</span>
+        <div style={{fontWeight:800,fontSize:20,color:"var(--af-text)",letterSpacing:"-0.03em",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:7,background:"var(--af-accent)",color:"var(--af-accent-text)"}}><Wand2 size={14} strokeWidth={2.5}/></span>
+          adforge
         </div>
         <WorkspaceSwitcher/>
       </div>
@@ -143,11 +143,11 @@ export default function AdForgeApp(){
         {navItem("brand","Brand")}
       </div>
       {/* Footer */}
-      <div style={{padding:"12px 14px 18px",borderTop:"1px solid rgba(255,255,255,0.04)",display:"flex",flexDirection:"column",gap:8}}>
-        <button onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts")}} style={{width:"100%",background:"var(--af-accent)",color:"#fff",border:"none",borderRadius:8,padding:"10px 12px",fontFamily:"inherit",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all 0.15s",letterSpacing:"-0.005em"}} onMouseEnter={e=>(e.currentTarget as any).style.background="var(--af-accent-hover)"} onMouseLeave={e=>(e.currentTarget as any).style.background="var(--af-accent)"}><Wand2 size={14} strokeWidth={2.2}/>New ad</button>
+      <div style={{padding:"12px 14px 18px",borderTop:"1px solid var(--af-border)",display:"flex",flexDirection:"column",gap:8}}>
+        <button onClick={()=>{setScriptsStartMode(c=>c+1);setTab("scripts")}} style={{width:"100%",background:"var(--af-accent)",color:"var(--af-accent-text)",border:"1px solid var(--af-accent)",borderRadius:9999,padding:"10px 12px",fontFamily:"inherit",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all 0.15s",letterSpacing:"-0.01em"}} onMouseEnter={e=>(e.currentTarget as any).style.background="var(--af-accent-hover)"} onMouseLeave={e=>(e.currentTarget as any).style.background="var(--af-accent)"}><Wand2 size={14} strokeWidth={2.2}/>New ad</button>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:4}}>
-          <button onClick={handleSignOut} style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",fontSize:11.5,fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"color 0.15s",padding:"4px 6px"}} onMouseEnter={e=>(e.currentTarget as any).style.color="rgba(255,255,255,0.6)"} onMouseLeave={e=>(e.currentTarget as any).style.color="rgba(255,255,255,0.3)"}><LogOut size={12}/>Sign out</button>
-          <button onClick={toggleTheme} title={theme==="dark"?"Switch to light":"Switch to dark"} style={{background:"rgba(255,255,255,0.05)",border:"none",color:"rgba(255,255,255,0.5)",cursor:"pointer",borderRadius:7,padding:7,display:"flex",alignItems:"center",transition:"all 0.15s"}} onMouseEnter={e=>{(e.currentTarget as any).style.background="rgba(255,255,255,0.1)";(e.currentTarget as any).style.color="rgba(255,255,255,0.8)"}} onMouseLeave={e=>{(e.currentTarget as any).style.background="rgba(255,255,255,0.05)";(e.currentTarget as any).style.color="rgba(255,255,255,0.5)"}}>{theme==="dark"?<Sun size={14}/>:<Moon size={14}/>}</button>
+          <button onClick={handleSignOut} style={{background:"none",border:"none",color:"var(--af-muted)",cursor:"pointer",fontSize:11.5,fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,transition:"color 0.15s",padding:"4px 6px"}} onMouseEnter={e=>(e.currentTarget as any).style.color="var(--af-text)"} onMouseLeave={e=>(e.currentTarget as any).style.color="var(--af-muted)"}><LogOut size={12}/>Sign out</button>
+          <button onClick={toggleTheme} title={theme==="dark"?"Switch to light":"Switch to dark"} style={{background:"var(--af-card)",border:"1px solid var(--af-border)",color:"var(--af-muted)",cursor:"pointer",borderRadius:9999,padding:7,display:"flex",alignItems:"center",transition:"all 0.15s"}} onMouseEnter={e=>{(e.currentTarget as any).style.color="var(--af-text)"}} onMouseLeave={e=>{(e.currentTarget as any).style.color="var(--af-muted)"}}>{theme==="dark"?<Sun size={14}/>:<Moon size={14}/>}</button>
         </div>
       </div>
     </div>

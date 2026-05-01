@@ -1,8 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useWorkspace, Workspace } from '@/lib/workspace-context'
-
-const C = { bg:"#0a0a0f",surface:"#13131a",card:"#1a1a24",border:"#2a2a3a",accent:"#6c63ff",accentSoft:"#6c63ff22",text:"#f0f0f5",muted:"#7a7a9a",green:"#22c55e",yellow:"#f59e0b",red:"#ef4444" }
+import { ChevronDown, Check, Plus } from 'lucide-react'
 
 export default function WorkspaceSwitcher() {
   const { workspaces, activeWorkspace, switchWorkspace, createWorkspace } = useWorkspace()
@@ -51,62 +50,53 @@ export default function WorkspaceSwitcher() {
   if (!activeWorkspace) return null
 
   const initials = activeWorkspace.name
-    .split(' ')
-    .map(w => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
+    .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      {/* Trigger button */}
+      {/* Trigger — paper white pill with crisp border, AdSplit feel */}
       <button
         onClick={() => setOpen(!open)}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          padding: '6px 10px',
-          background: open ? 'rgba(91,73,255,0.15)' : 'rgba(255,255,255,0.06)',
-          border: '1px solid ' + (open ? 'rgba(91,73,255,0.4)' : 'rgba(255,255,255,0.1)'),
-          borderRadius: 8,
+          padding: '7px 11px',
+          background: 'var(--af-card)',
+          border: '1px solid var(--af-border)',
+          borderRadius: 9999,
           cursor: 'pointer',
-          color: '#fff',
-          fontSize: 12,
+          color: 'var(--af-text)',
+          fontSize: 12.5,
           fontWeight: 600,
-          transition: 'all 0.15s',
-          maxWidth: 180,
+          transition: 'background 0.15s',
+          maxWidth: '100%',
           width: '100%',
           fontFamily: 'inherit',
+          letterSpacing: '-0.01em',
         }}
       >
         <div style={{
-          width: 22,
-          height: 22,
+          width: 20,
+          height: 20,
           borderRadius: 5,
-          background: '#7C6FFF',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          background: 'var(--af-accent)',
+          color: 'var(--af-accent-text)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 9,
           fontWeight: 800,
           flexShrink: 0,
+          letterSpacing: 0,
         }}>
           {initials}
         </div>
         <span style={{
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          flex: 1,
-          textAlign: 'left',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          flex: 1, textAlign: 'left',
         }}>
           {activeWorkspace.name}
         </span>
-        <span style={{ fontSize: 7, opacity: 0.4, flexShrink: 0 }}>
-          {open ? '▲' : '▼'}
-        </span>
+        <ChevronDown size={12} style={{ flexShrink: 0, opacity: 0.5, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
       </button>
 
       {/* Dropdown */}
@@ -115,23 +105,23 @@ export default function WorkspaceSwitcher() {
           position: 'absolute',
           top: 'calc(100% + 6px)',
           left: 0,
-          background: '#181838',
-          border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: 12,
+          background: 'var(--af-card)',
+          border: '1px solid var(--af-border)',
+          borderRadius: 14,
           padding: 6,
           zIndex: 300,
-          minWidth: 220,
+          minWidth: 240,
           maxHeight: 360,
           overflowY: 'auto',
-          boxShadow: '0 12px 36px #000a',
+          boxShadow: '0 12px 36px rgba(15,15,15,0.12)',
         }}>
           <div style={{
             padding: '8px 10px 6px',
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: 700,
-            color: 'rgba(255,255,255,0.35)',
+            color: 'var(--af-muted)',
             textTransform: 'uppercase',
-            letterSpacing: '0.06em',
+            letterSpacing: '0.08em',
           }}>
             Workspaces
           </div>
@@ -148,52 +138,45 @@ export default function WorkspaceSwitcher() {
                   alignItems: 'center',
                   gap: 10,
                   padding: '8px 10px',
-                  borderRadius: 8,
+                  borderRadius: 9,
                   cursor: 'pointer',
-                  background: isActive ? 'rgba(91,73,255,0.15)' : 'transparent',
+                  background: isActive ? 'var(--af-accent-soft)' : 'transparent',
                   transition: 'background 0.1s',
                 }}
-                onMouseOver={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.06)' }}
+                onMouseOver={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'var(--af-surface)' }}
                 onMouseOut={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
               >
                 <div style={{
                   width: 26,
                   height: 26,
                   borderRadius: 6,
-                  background: isActive ? '#7C6FFF' : 'rgba(255,255,255,0.08)',
-                  color: isActive ? '#fff' : 'rgba(255,255,255,0.5)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  flexShrink: 0,
+                  background: isActive ? 'var(--af-accent)' : 'var(--af-surface)',
+                  color: isActive ? 'var(--af-accent-text)' : 'var(--af-text-secondary)',
+                  border: '1px solid ' + (isActive ? 'var(--af-accent)' : 'var(--af-border)'),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 800, flexShrink: 0,
                 }}>
                   {wsInitials}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     fontWeight: 600,
-                    fontSize: 12,
-                    color: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    fontSize: 13,
+                    color: 'var(--af-text)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
                     {ws.name}
                   </div>
-                  <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>
+                  <div style={{ fontSize: 10, color: 'var(--af-muted)' }}>
                     {ws.role}
                   </div>
                 </div>
-                {isActive && (
-                  <div style={{ color: '#7C6FFF', fontSize: 12, fontWeight: 800 }}>✓</div>
-                )}
+                {isActive && <Check size={14} color="var(--af-accent)" strokeWidth={3} />}
               </div>
             )
           })}
 
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '6px 0' }} />
+          <div style={{ borderTop: '1px solid var(--af-border)', margin: '6px 0' }} />
 
           {!creating ? (
             <div
@@ -203,28 +186,23 @@ export default function WorkspaceSwitcher() {
                 alignItems: 'center',
                 gap: 10,
                 padding: '8px 10px',
-                borderRadius: 8,
+                borderRadius: 9,
                 cursor: 'pointer',
-                color: '#7C6FFF',
-                fontSize: 12,
+                color: 'var(--af-text)',
+                fontSize: 12.5,
                 fontWeight: 600,
               }}
-              onMouseOver={e => (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.06)'}
+              onMouseOver={e => (e.currentTarget as HTMLDivElement).style.background = 'var(--af-surface)'}
               onMouseOut={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
             >
               <div style={{
-                width: 26,
-                height: 26,
-                borderRadius: 6,
-                background: 'rgba(91,73,255,0.15)',
-                color: '#7C6FFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 15,
-                fontWeight: 600,
+                width: 26, height: 26, borderRadius: 6,
+                background: 'var(--af-surface)',
+                color: 'var(--af-text)',
+                border: '1px solid var(--af-border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                +
+                <Plus size={13} strokeWidth={2.5} />
               </div>
               New workspace
             </div>
@@ -238,12 +216,12 @@ export default function WorkspaceSwitcher() {
                 autoFocus
                 style={{
                   width: '100%',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(91,73,255,0.4)',
-                  borderRadius: 7,
-                  padding: '7px 10px',
-                  color: '#fff',
-                  fontSize: 12,
+                  background: 'var(--af-surface)',
+                  border: '1px solid var(--af-border)',
+                  borderRadius: 8,
+                  padding: '8px 11px',
+                  color: 'var(--af-text)',
+                  fontSize: 12.5,
                   outline: 'none',
                   boxSizing: 'border-box' as const,
                   marginBottom: 7,
@@ -256,12 +234,12 @@ export default function WorkspaceSwitcher() {
                   disabled={!newName.trim() || saving}
                   style={{
                     flex: 1,
-                    background: saving ? 'rgba(255,255,255,0.1)' : '#7C6FFF',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 6,
-                    padding: '6px 0',
-                    fontSize: 11,
+                    background: saving ? 'var(--af-surface)' : 'var(--af-accent)',
+                    color: saving ? 'var(--af-muted)' : 'var(--af-accent-text)',
+                    border: '1px solid var(--af-accent)',
+                    borderRadius: 9999,
+                    padding: '7px 0',
+                    fontSize: 12,
                     fontWeight: 600,
                     cursor: saving ? 'not-allowed' : 'pointer',
                     fontFamily: 'inherit',
@@ -272,12 +250,12 @@ export default function WorkspaceSwitcher() {
                 <button
                   onClick={() => { setCreating(false); setNewName('') }}
                   style={{
-                    background: 'transparent',
-                    color: 'rgba(255,255,255,0.4)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 6,
-                    padding: '6px 10px',
-                    fontSize: 11,
+                    background: 'var(--af-card)',
+                    color: 'var(--af-text-secondary)',
+                    border: '1px solid var(--af-border)',
+                    borderRadius: 9999,
+                    padding: '7px 14px',
+                    fontSize: 12,
                     cursor: 'pointer',
                     fontFamily: 'inherit',
                   }}
