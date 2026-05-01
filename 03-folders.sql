@@ -2,7 +2,10 @@
 -- Adds nested folders (per-workspace, like Drive/AIR) for organising
 -- library items (originals + clips) AND finished/draft ads.
 --
--- Run this once in the Supabase SQL editor.
+-- Idempotent — safe to re-run. Each block uses IF NOT EXISTS / ALTER
+-- so a partially-applied previous run is repaired rather than rejected.
+--
+-- Run this in the Supabase SQL editor.
 
 -- ── Folders table ────────────────────────────────────────────────────────────
 create table if not exists folders (
@@ -10,17 +13,34 @@ create table if not exists folders (
   workspace_id uuid not null references workspaces(id) on delete cascade,
   parent_id uuid references folders(id) on delete cascade,
   name text not null,
-  -- "library" → for items, "ads" → for forged_ads. Keeps the two trees
-  -- separate so item folders don't pollute the ad library and vice versa.
-  kind text not null default 'library' check (kind in ('library', 'ads')),
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 
+-- `kind` is added separately so a previous half-applied run that created
+-- the table without it is repaired here. "library" → items tree,
+-- "ads" → forged_ads tree. Keeps the two trees separate so item folders
+-- don't pollute the ad library and vice versa.
+alter table folders
+  add column if not exists kind text not null default 'library';
+
+-- Add the constraint only if it isn't already present (no IF NOT EXISTS
+-- on ADD CONSTRAINT, so guard with a DO block).
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'folders_kind_check' and conrelid = 'folders'::regclass
+  ) then
+    alter table folders
+      add constraint folders_kind_check check (kind in ('library', 'ads'));
+  end if;
+end $$;
+
 create index if not exists folders_workspace_kind_idx on folders(workspace_id, kind);
 create index if not exists folders_parent_idx on folders(parent_id);
 
--- ── Membership columns ───────────────────────────────────────────────────────
+-- ── Membership columns on items + forged_ads ────────────────────────────────
 alter table items
   add column if not exists folder_id uuid references folders(id) on delete set null;
 
