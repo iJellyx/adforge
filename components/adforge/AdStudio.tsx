@@ -673,7 +673,7 @@ export function AdStudio({
                     onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--af-accent)')}
                     onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--af-border)')}
                   >
-                    <Eye size={14} /> Browse full library
+                    <Eye size={14} /> Browse full Stash
                   </button>
                   <button
                     onClick={onMatchClips}

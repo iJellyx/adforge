@@ -130,8 +130,8 @@ Return ONLY valid JSON:
 
   if(step==="config")return<div style={{maxWidth:700,margin:"0 auto",padding:40}}>
     <button onClick={onBack} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:24,fontSize:14}}>← Back</button>
-    <STitle size={24} mb={6}>⚡ Auto-Mash from Library</STitle>
-    <div style={{color:C.muted,fontSize:14,marginBottom:32,lineHeight:1.6}}>AI analyses your clip library and assembles a complete direct response ad using your creators' real voices — no scripting needed.</div>
+    <STitle size={24} mb={6}>⚡ Auto-Mash from Stash</STitle>
+    <div style={{color:C.muted,fontSize:14,marginBottom:32,lineHeight:1.6}}>AI analyses your Stash and assembles a complete direct response ad using your creators' real voices — no scripting needed.</div>
 
     {usableClips.length<3&&<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:12,padding:"12px 16px",fontSize:13,color:C.yellow,marginBottom:20}}>⚠️ You need at least 3 clips with transcripts. Upload more content first, or wait for AI analysis to complete.</div>}
 
@@ -163,7 +163,7 @@ Return ONLY valid JSON:
     </Card>
 
     <div style={{background:"#EDE8FF",border:"1.5px solid "+C.accent,borderRadius:12,padding:"12px 16px",fontSize:13,color:C.accent,marginBottom:20}}>
-      ✦ {usableClips.length} clips ready in your library — AI will pick the best combination
+      ✦ {usableClips.length} clips ready in your Stash — AI will pick the best combination
     </div>
 
     <Btn onClick={generateMash} disabled={generating||usableClips.length<3} style={{background:C.accent,color:"#fff",width:"100%",padding:14,fontSize:15,borderRadius:12}}>

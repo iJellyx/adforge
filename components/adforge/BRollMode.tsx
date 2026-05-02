@@ -108,11 +108,11 @@ Return ONLY valid JSON:
   if(step==="upload")return<div style={{maxWidth:700,margin:"0 auto",padding:28}}>
     <button onClick={onBack} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back</button>
     <STitle size={22}>Add B-Roll to Existing Video</STitle>
-    <div style={{color:C.muted,fontSize:14,marginBottom:24}}>Upload your existing video ad or talking head — the original audio stays intact. AI will suggest b-roll clips from your library to overlay at the right moments.</div>
+    <div style={{color:C.muted,fontSize:14,marginBottom:24}}>Upload your existing video ad or talking head — the original audio stays intact. AI will suggest b-roll clips from your Stash to overlay at the right moments.</div>
 
-    {/* Use existing from library */}
+    {/* Use existing from Stash */}
     {originals.length>0&&<div style={{marginBottom:24}}>
-      <Label>Use a video already in your library</Label>
+      <Label>Use a video already in your Stash</Label>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:8}}>
         {originals.slice(0,8).map((item:Item)=><div key={item.id} onClick={()=>useExistingBase(item)} style={{cursor:"pointer"}}>
           <div style={{position:"relative",paddingTop:"177.78%",background:"#111",borderRadius:8,overflow:"hidden"}}>

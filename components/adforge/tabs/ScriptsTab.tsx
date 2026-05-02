@@ -345,7 +345,7 @@ Return ONLY valid JSON:
       </div>
       <div onClick={()=>setView("automash")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor="#7C3AED";(e.currentTarget as any).style.background="#7C3AED0a"}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>
         <div style={{fontSize:36,marginBottom:12}}>⚡</div>
-        <div style={{fontWeight:700,fontSize:17,marginBottom:8}}>Auto-Mash from Library</div>
+        <div style={{fontWeight:700,fontSize:17,marginBottom:8}}>Auto-Mash from Stash</div>
         <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>AI assembles a complete ad from your existing creator clips — using their real voices to tell a logical story.</div>
       </div>
       <div onClick={()=>setView("broll")} style={{background:C.card,border:"2px solid "+C.border,borderRadius:12,padding:28,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{(e.currentTarget as any).style.borderColor=C.green;(e.currentTarget as any).style.background="#22c55e0a"}} onMouseOut={e=>{(e.currentTarget as any).style.borderColor=C.border;(e.currentTarget as any).style.background=C.card}}>

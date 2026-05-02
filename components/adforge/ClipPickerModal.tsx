@@ -88,9 +88,9 @@ export function ClipPickerModal({currentId,matchedIds,libraryItems,sectionLabel,
           {([["all","All"],["broll","B-Roll"],["talking_head","Talking"]] as [typeof filterType,string][]).map(([v,l])=><button key={v} onClick={()=>setFilterType(v)} style={{background:filterType===v?C.accent:C.surface,color:filterType===v?"#fff":C.muted,border:"1px solid "+(filterType===v?C.accent:C.border),borderRadius:6,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{l}</button>)}
         </div>
       </div>
-      {!useApprovedOnly&&eligibleClips.length>0&&<div style={{background:"#f59e0b11",border:"1px solid #f59e0b33",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#f59e0b",marginBottom:12}}>No approved clips yet. Showing all pending clips. Review clips in the Library to approve them.</div>}
+      {!useApprovedOnly&&eligibleClips.length>0&&<div style={{background:"#f59e0b11",border:"1px solid #f59e0b33",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#f59e0b",marginBottom:12}}>No approved clips yet. Showing all pending clips. Review clips in your Stash to approve them.</div>}
       {sortedMatched.length>0&&<div style={{marginBottom:24}}><div style={{fontSize:11,fontWeight:700,color:C.green,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>AI-Matched ({sortedMatched.length})</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>{sortedMatched.map(clipCard)}</div></div>}
-      {sortedOthers.length>0&&<div><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>All Library ({sortedOthers.length})</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>{sortedOthers.map(clipCard)}</div></div>}
+      {sortedOthers.length>0&&<div><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>Your Stash ({sortedOthers.length})</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>{sortedOthers.map(clipCard)}</div></div>}
       {sortedMatched.length===0&&sortedOthers.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}>No clips found{filterType!=="all"?" with this filter. Try 'All'.":"."}</div>}
     </div>
   </div>

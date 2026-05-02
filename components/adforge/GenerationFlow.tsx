@@ -15,7 +15,7 @@ const STEPS: StepDef[] = [
   { key: 'script', label: 'Wrote your script', activeLabel: 'Writing your script…' },
   { key: 'voiceover', label: 'Recorded the voiceover', activeLabel: 'Recording the voiceover…' },
   { key: 'music', label: 'Picked the music', activeLabel: 'Picking music…' },
-  { key: 'clips', label: 'Matched footage from your library', activeLabel: 'Matching footage from your library…' },
+  { key: 'clips', label: 'Matched footage from your Stash', activeLabel: 'Matching footage from your Stash…' },
   { key: 'save', label: 'Saved your ad', activeLabel: 'Saving…' },
 ]
 
@@ -258,7 +258,7 @@ export function GenerationFlow({ brief, brand, products, items, workspaceId, voi
     const clips = items.filter(i => i.mux_playback_id)
     if (clips.length === 0) {
       sections.forEach(s => { (s as any).matchedClipIds = []; (s as any).selectedClipId = null })
-      throw new Error('Library is empty — upload clips first')
+      throw new Error('Stash is empty — upload clips first')
     }
     setSubstatus('Asking AI to match clips…')
 

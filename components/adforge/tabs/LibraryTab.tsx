@@ -265,7 +265,7 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
 
   // ── Sub-view toggle: Clips (default) | Originals | Upload ──
   if(view==="add"||subView==="upload")return<div style={{maxWidth:860,margin:"0 auto",padding:28}}>
-    <button onClick={()=>{setView("grid");setSubView("clips")}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back to Library</button>
+    <button onClick={()=>{setView("grid");setSubView("clips")}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back to Stash</button>
     <STitle size={22}>Add Content</STitle>
     <div style={{color:C.muted,fontSize:14,marginBottom:24}}>Upload videos manually or connect a Google Drive folder for automatic syncing.</div>
 
@@ -431,7 +431,7 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
     const clips=selected.type==="original"&&selected.clip_ids?items.filter(i=>selected.clip_ids!.includes(i.id)):[]
     const adPotColor=a.ad_potential==="High"?C.green:a.ad_potential==="Medium"?C.yellow:C.red
     return<div style={{maxWidth:860,margin:"0 auto",padding:28}}>
-      <button onClick={()=>{setSelected(null);setView("grid")}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back to Library</button>
+      <button onClick={()=>{setSelected(null);setView("grid")}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",marginBottom:20,fontSize:14}}>← Back to Stash</button>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:16}}>
         <div><Chip label={selected.type==="clip"?"CLIP":(a.content_type||"Untagged")} color={selected.type==="clip"?typeColor("Clip"):undefined}/><div style={{fontWeight:800,fontSize:22,marginTop:8,marginBottom:4}}>{selected.title}</div><div style={{color:C.muted,fontSize:13,display:"flex",gap:12,flexWrap:"wrap"}}>{selected.duration_seconds&&<span>⏱ {fmt(selected.duration_seconds)}</span>}{selected.creator&&<span>👤 {selected.creator}{selected.creator_age?` · ${selected.creator_age}`:""}</span>}{selected.created_at&&<span>Added {new Date(selected.created_at).toLocaleDateString()}</span>}</div></div>
         <Btn onClick={async()=>{
@@ -520,7 +520,7 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontWeight:700,fontSize:13,color:C.green,marginBottom:2}}>✂️ Create a custom clip</div>
-            <div style={{fontSize:11,color:C.muted}}>Cut your own shot from this video — pick the exact start/end, give it a title, optionally tag it. Goes straight into your library.</div>
+            <div style={{fontSize:11,color:C.muted}}>Cut your own shot from this video — pick the exact start/end, give it a title, optionally tag it. Goes straight into your Stash.</div>
           </div>
           <Btn onClick={()=>setManualClipFor(selected)} style={{background:C.green,color:"#000",fontSize:12,padding:"7px 16px",whiteSpace:"nowrap",fontWeight:700}}>Create clip</Btn>
         </div>
@@ -681,7 +681,7 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
       })}
       <div style={{borderTop:"1px solid "+C.border,paddingTop:20,marginTop:8}}><div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:16}}>📋 All Content</div></div>
     </div>}
-    {filtered.length===0?<div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}><div style={{fontSize:44,marginBottom:14}}>🎬</div><div style={{fontSize:17,fontWeight:600,color:C.text,marginBottom:6}}>{items.length===0?"Your library is empty":"No results"}</div><div style={{fontSize:13,color:C.muted,marginBottom:20}}>{items.length===0?"Upload your first video to get started.":"Try adjusting your search or filters."}</div>{items.length===0&&<Btn onClick={()=>setView("add")} style={{background:C.accent,color:"#fff"}}>+ Add First Content</Btn>}{activeFilterCount>0&&<Btn onClick={clearFilters} style={{background:C.surface,color:C.muted,border:"1px solid "+C.border}}>Clear Filters</Btn>}</div>
+    {filtered.length===0?<div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}><div style={{fontSize:44,marginBottom:14}}>🎬</div><div style={{fontSize:17,fontWeight:600,color:C.text,marginBottom:6}}>{items.length===0?"Your Stash is empty":"No results"}</div><div style={{fontSize:13,color:C.muted,marginBottom:20}}>{items.length===0?"Upload your first video to get started.":"Try adjusting your search or filters."}</div>{items.length===0&&<Btn onClick={()=>setView("add")} style={{background:C.accent,color:"#fff"}}>+ Add First Content</Btn>}{activeFilterCount>0&&<Btn onClick={clearFilters} style={{background:C.surface,color:C.muted,border:"1px solid "+C.border}}>Clear Filters</Btn>}</div>
     :<><div style={{fontSize:12,color:C.muted,marginBottom:12,display:hasActiveFilters?"block":"none"}}>Showing {filtered.length} result{filtered.length!==1?"s":""}</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:14}}>{filtered.map(item=><div key={item.id} draggable onDragStart={e=>{e.dataTransfer.setData('text/x-adforge-item',item.id);e.dataTransfer.effectAllowed='move'}}><VideoCard item={item} onClick={()=>{setSelected(item);setView("detail")}} selectMode={selectMode} isSelected={selectedIds.includes(item.id)} onToggleSelect={()=>setSelectedIds(prev=>prev.includes(item.id)?prev.filter(x=>x!==item.id):[...prev,item.id])}/>{item.mux_status&&item.mux_status!=="ready"&&<UploadPipeline item={item} compact/>}</div>)}</div></>}
     </div>
   </div>

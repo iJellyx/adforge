@@ -135,7 +135,7 @@ export default function AdForgeApp(){
       {/* Nav */}
       <div style={{padding:"4px 0 16px",flex:1,display:"flex",flexDirection:"column",overflowY:"auto"}}>
         {navSection("Content")}
-        {navItem("library","Library")}
+        {navItem("library","Stash")}
         {navSection("Ads")}
         {navItem("scripts","Create Ad")}
         {navItem("forged","My Ads")}
