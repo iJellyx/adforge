@@ -1,39 +1,44 @@
-import { createServerClient } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
 
-export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({
-    request: { headers: request.headers },
-  })
+/**
+ * Clerk auth proxy — Next.js 16 calls this `proxy.ts` (was `middleware.ts`
+ * in earlier versions). Mirrors the AdSplit pattern.
+ *
+ * Public routes are explicit. Everything else requires sign-in.
+ * Webhooks and creator brief share links must stay public so external
+ * services can hit them without a Clerk session.
+ */
+const isPublic = createRouteMatcher([
+  '/',
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+  '/brief/(.*)',                 // public brief share links — token-protected internally
+  '/api/mux/webhook(.*)',        // Mux callbacks
+  '/api/items/(.*)',             // Item status polling — TODO Clerk-protect once UI passes auth header
+  '/api/elevenlabs/voices(.*)',  // public voice list (no PII)
+  '/api/pixabay/music(.*)',      // public music search proxy
+])
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) { return request.cookies.get(name)?.value },
-        set(name: string, value: string, options: any) {
-          response.cookies.set({ name, value, ...options })
-        },
-        remove(name: string, options: any) {
-          response.cookies.set({ name, value: '', ...options })
-        },
-      },
-    }
-  )
+export default clerkMiddleware(async (auth, req) => {
+  const { userId } = await auth()
+  const path = req.nextUrl.pathname
 
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
-    return NextResponse.redirect(new URL('/login', request.url))
+  // Signed-in user on the marketing/landing page → bounce to dashboard.
+  if (userId && path === '/') {
+    const url = req.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
   }
-  if (user && request.nextUrl.pathname === '/login') {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
 
-  return response
-}
+  if (!isPublic(req)) {
+    await auth.protect()
+  }
+})
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/login', '/'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|mp4)$).*)',
+    '/(api|trpc)(.*)',
+  ],
 }

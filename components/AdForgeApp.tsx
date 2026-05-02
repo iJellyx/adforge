@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useWorkspace } from '@/lib/workspace-context'
 import { useTheme } from '@/lib/theme-context'
+import { useClerk } from '@clerk/nextjs'
 import WorkspaceSwitcher from '@/components/WorkspaceSwitcher'
 import { Film, Wand2, Zap, Lightbulb, Settings, Sun, Moon, Plus, LogOut } from 'lucide-react'
 import type { Item, Script, ForgedAd, BrandProfile, Product } from './adforge/types'
@@ -20,6 +21,7 @@ export default function AdForgeApp(){
   const supabase=createClient()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
   const { theme, toggleTheme } = useTheme()
+  const { signOut } = useClerk()
   const [tab,setTab]=useState("library")
   const [libView,setLibView]=useState("grid")
   const [items,setItems]=useState<Item[]>([])
@@ -88,7 +90,7 @@ export default function AdForgeApp(){
   return data as ForgedAd
 }
 
-  async function handleSignOut(){await supabase.auth.signOut();window.location.href="/login"}
+  async function handleSignOut(){await signOut({ redirectUrl: '/sign-in' })}
 
   const draftCount=forgedAds.filter(a=>a.status==="draft").length
 
