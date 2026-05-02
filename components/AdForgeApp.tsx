@@ -3,9 +3,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useWorkspace } from '@/lib/workspace-context'
 import { useTheme } from '@/lib/theme-context'
+import { useAccess } from '@/lib/access-client'
 import { useClerk } from '@clerk/nextjs'
 import WorkspaceSwitcher from '@/components/WorkspaceSwitcher'
-import { Film, Wand2, Zap, Lightbulb, Settings, Sun, Moon, Plus, LogOut } from 'lucide-react'
+import { UpsellModal } from '@/components/UpsellModal'
+import type { ProductSlug } from '@/lib/access-types'
+import { Film, Wand2, Zap, Lightbulb, Settings, Sun, Moon, Plus, LogOut, Lock, Layers, Image as ImageIcon, Video } from 'lucide-react'
 import type { Item, Script, ForgedAd, BrandProfile, Product } from './adforge/types'
 import { C, DEFAULT_BRAND } from './adforge/constants'
 import { LibraryTab } from './adforge/tabs/LibraryTab'
@@ -21,7 +24,10 @@ export default function AdForgeApp(){
   const supabase=createClient()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
   const { theme, toggleTheme } = useTheme()
+  const { access } = useAccess()
   const { signOut } = useClerk()
+  // Locked-product upsell modal state
+  const [upsellFor, setUpsellFor] = useState<ProductSlug | null>(null)
   const [tab,setTab]=useState("library")
   const [libView,setLibView]=useState("grid")
   const [items,setItems]=useState<Item[]>([])
@@ -119,6 +125,46 @@ export default function AdForgeApp(){
       {id==="forged"&&draftCount>0&&<span style={{background:"var(--af-yellow-soft)",color:"var(--af-yellow)",borderRadius:99,fontSize:10,padding:"1px 7px",fontWeight:700,border:"1px solid var(--af-yellow-soft)"}}>{draftCount}</span>}
     </button>
   }
+
+  // Product nav — top-level cross-product switcher.
+  // - Active product (Forge): renders like the regular nav item, no click action
+  // - External product (Split): opens adsplit.io in a new tab if unlocked, else upsells
+  // - Locked product: greyed + lock icon, click triggers upsell modal
+  const productNavItem=({slug,label,Icon,active,unlocked,externalUrl,onClickIfUnlocked}:{
+    slug:ProductSlug,label:string,Icon:any,active:boolean,unlocked:boolean,externalUrl?:string,onClickIfUnlocked?:()=>void
+  })=>{
+    const handleClick=()=>{
+      if(!unlocked){setUpsellFor(slug);return}
+      if(externalUrl){window.open(externalUrl,"_blank","noopener");return}
+      onClickIfUnlocked?.()
+    }
+    return <button
+      key={"product-"+slug}
+      onClick={handleClick}
+      title={unlocked?(active?label+" (current)":label):"Unlock "+label}
+      style={{
+        display:"flex",alignItems:"center",gap:11,
+        padding:"9px 12px",margin:"1px 10px",
+        borderRadius:9999,
+        border:"1px solid "+(active?"var(--af-border)":"transparent"),
+        background:active?"var(--af-sidebar-active)":"transparent",
+        color:!unlocked?"var(--af-muted)":(active?"var(--af-sidebar-text-active)":"var(--af-sidebar-text)"),
+        fontWeight:active?700:500,
+        fontSize:13.5,cursor:"pointer",
+        width:"calc(100% - 20px)",
+        textAlign:"left" as const,fontFamily:"inherit",
+        transition:"all 0.15s ease",letterSpacing:"-0.01em",
+        opacity:unlocked?1:0.6,
+      }}
+      onMouseEnter={e=>{if(!active)(e.currentTarget as any).style.background="var(--af-sidebar-hover)"}}
+      onMouseLeave={e=>{if(!active)(e.currentTarget as any).style.background="transparent"}}
+    >
+      <Icon size={16} strokeWidth={active?2.4:1.8} style={{flexShrink:0,opacity:active?1:(unlocked?0.85:0.5)}}/>
+      <span style={{flex:1}}>{label}</span>
+      {!unlocked&&<Lock size={11} strokeWidth={2.2} style={{opacity:0.55}}/>}
+      {externalUrl&&unlocked&&<span style={{fontSize:10,opacity:0.5}}>↗</span>}
+    </button>
+  }
   const navSection=(label:string)=><div style={{padding:"14px 22px 6px",fontSize:10.5,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--af-sidebar-section-label)"}}>{label}</div>
 
   return<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'Inter',system-ui,sans-serif",color:C.text,display:"flex"}}>
@@ -134,6 +180,12 @@ export default function AdForgeApp(){
       </div>
       {/* Nav */}
       <div style={{padding:"4px 0 16px",flex:1,display:"flex",flexDirection:"column",overflowY:"auto"}}>
+        {/* PRODUCTS — cross-product nav. The active product (Forge) routes to its
+            existing tabs; others are external links to adsplit.io / locked. */}
+        {navSection("Products")}
+        {productNavItem({slug:"forge",label:"Forge",Icon:Video,active:true,unlocked:access.hasForge||true})}
+        {productNavItem({slug:"split",label:"Split",Icon:Layers,active:false,unlocked:access.hasSplit,externalUrl:"https://adsplit.io"})}
+        {productNavItem({slug:"stash",label:"Stash",Icon:ImageIcon,active:false,unlocked:access.hasStash,onClickIfUnlocked:()=>{setTab("library");setLibView("grid")}})}
         {navSection("Content")}
         {navItem("library","Stash")}
         {navSection("Ads")}
@@ -173,5 +225,16 @@ export default function AdForgeApp(){
       {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts} workspaceId={activeWorkspace.id}/>}
       {tab==="winning"&&<WinningAdsTab brand={brand} setBrand={setBrand} products={products} items={items} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} workspaceId={activeWorkspace.id}/>}
     </div>
+    {/* Upsell modal — fired by clicking a locked product in the sidebar */}
+    <UpsellModal
+      open={!!upsellFor}
+      product={upsellFor}
+      onClose={()=>setUpsellFor(null)}
+      onUpgrade={(slug)=>{
+        // Stripe checkout wiring lands in Phase 4. For now: log + close.
+        console.log("[upsell] upgrade clicked:",slug)
+        setUpsellFor(null)
+      }}
+    />
   </div>
 }

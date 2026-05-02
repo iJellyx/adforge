@@ -1,15 +1,71 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useWorkspace, Workspace } from '@/lib/workspace-context'
-import { ChevronDown, Check, Plus } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { ChevronDown, Check, Plus, Pencil, Trash2, AlertTriangle } from 'lucide-react'
 
 export default function WorkspaceSwitcher() {
-  const { workspaces, activeWorkspace, switchWorkspace, createWorkspace } = useWorkspace()
+  const { workspaces, activeWorkspace, switchWorkspace, createWorkspace, refreshWorkspaces } = useWorkspace()
+  const supabase = createClient()
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [saving, setSaving] = useState(false)
+  // Inline edit + delete state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const [deleteCandidate, setDeleteCandidate] = useState<Workspace | null>(null)
+  const [deleteCounts, setDeleteCounts] = useState<{ assets: number; ads: number; folders: number } | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
+  // Rename a brand_card (the underlying table for the workspaces view).
+  async function commitRename(id: string) {
+    const trimmed = editingName.trim()
+    if (!trimmed) { setEditingId(null); return }
+    // Update brand_cards directly (the workspaces view is read-only for UPDATE).
+    const { error } = await supabase
+      .from('brand_cards')
+      .update({ name: trimmed, brand_name: trimmed })
+      .eq('id', id)
+    setEditingId(null)
+    if (error) { console.error('[ws] rename error', error.message); return }
+    await refreshWorkspaces()
+  }
+
+  // Open delete confirmation, fetching counts so we can show the user
+  // exactly what will be removed.
+  async function openDelete(ws: Workspace) {
+    setDeleteCandidate(ws)
+    setDeleteCounts(null)
+    const [assets, ads, folders] = await Promise.all([
+      supabase.from('items').select('id', { count: 'exact', head: true }).eq('workspace_id', ws.id),
+      supabase.from('forged_ads').select('id', { count: 'exact', head: true }).eq('workspace_id', ws.id),
+      supabase.from('folders').select('id', { count: 'exact', head: true }).eq('workspace_id', ws.id),
+    ])
+    setDeleteCounts({
+      assets: assets.count || 0,
+      ads: ads.count || 0,
+      folders: folders.count || 0,
+    })
+  }
+
+  async function confirmDelete() {
+    if (!deleteCandidate) return
+    setDeleting(true)
+    // Delete the brand_card — FK cascades remove items/ads/folders/concepts/etc.
+    const { error } = await supabase.from('brand_cards').delete().eq('id', deleteCandidate.id)
+    setDeleting(false)
+    if (error) { console.error('[ws] delete error', error.message); alert('Delete failed: ' + error.message); return }
+    setDeleteCandidate(null)
+    setDeleteCounts(null)
+    setOpen(false)
+    // If we just deleted the active workspace, the provider's refresh will
+    // pick the first remaining brand or bootstrap a fresh one.
+    await refreshWorkspaces()
+    // Force a soft reload so cached items/ads in tab state get cleared
+    window.location.reload()
+  }
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -128,23 +184,32 @@ export default function WorkspaceSwitcher() {
 
           {workspaces.map(ws => {
             const isActive = ws.id === activeWorkspace.id
-            const wsInitials = ws.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+            const isEditing = editingId === ws.id
+            const wsInitials = (ws.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
             return (
               <div
                 key={ws.id}
-                onClick={() => handleSwitch(ws)}
+                onClick={isEditing ? undefined : () => handleSwitch(ws)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 10,
                   padding: '8px 10px',
                   borderRadius: 9,
-                  cursor: 'pointer',
+                  cursor: isEditing ? 'default' : 'pointer',
                   background: isActive ? 'var(--af-accent-soft)' : 'transparent',
                   transition: 'background 0.1s',
+                  position: 'relative',
                 }}
-                onMouseOver={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'var(--af-surface)' }}
-                onMouseOut={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+                onMouseOver={e => {
+                  if (!isActive && !isEditing) (e.currentTarget as HTMLDivElement).style.background = 'var(--af-surface)'
+                  // reveal action icons via data attribute
+                  ;(e.currentTarget as HTMLDivElement).dataset.hover = '1'
+                }}
+                onMouseOut={e => {
+                  if (!isActive && !isEditing) (e.currentTarget as HTMLDivElement).style.background = 'transparent'
+                  ;(e.currentTarget as HTMLDivElement).dataset.hover = ''
+                }}
               >
                 <div style={{
                   width: 26,
@@ -159,19 +224,62 @@ export default function WorkspaceSwitcher() {
                   {wsInitials}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontWeight: 600,
-                    fontSize: 13,
-                    color: 'var(--af-text)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {ws.name}
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--af-muted)' }}>
-                    {ws.role}
-                  </div>
+                  {isEditing ? (
+                    <input
+                      autoFocus
+                      value={editingName}
+                      onChange={e => setEditingName(e.target.value)}
+                      onClick={e => e.stopPropagation()}
+                      onBlur={() => commitRename(ws.id)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') commitRename(ws.id)
+                        if (e.key === 'Escape') setEditingId(null)
+                      }}
+                      style={{
+                        width: '100%',
+                        background: 'var(--af-surface)',
+                        border: '1px solid var(--af-accent)',
+                        borderRadius: 6,
+                        padding: '3px 7px',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: 'var(--af-text)',
+                        outline: 'none',
+                        fontFamily: 'inherit',
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <div style={{
+                        fontWeight: 600,
+                        fontSize: 13,
+                        color: 'var(--af-text)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {ws.name || 'Untitled brand'}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--af-muted)' }}>
+                        {ws.role}
+                      </div>
+                    </>
+                  )}
                 </div>
-                {isActive && <Check size={14} color="var(--af-accent)" strokeWidth={3} />}
+                {!isEditing && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                    <IconBtn
+                      title="Rename"
+                      onClick={(e) => { e.stopPropagation(); setEditingId(ws.id); setEditingName(ws.name) }}
+                      icon={<Pencil size={12} />}
+                    />
+                    <IconBtn
+                      title="Delete"
+                      danger
+                      onClick={(e) => { e.stopPropagation(); openDelete(ws) }}
+                      icon={<Trash2 size={12} />}
+                    />
+                    {isActive && <Check size={14} color="var(--af-accent)" strokeWidth={3} style={{ marginLeft: 4 }} />}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -267,6 +375,124 @@ export default function WorkspaceSwitcher() {
           )}
         </div>
       )}
+
+      {/* Delete confirmation modal */}
+      {deleteCandidate && (
+        <div
+          onClick={() => !deleting && setDeleteCandidate(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 400,
+            background: 'rgba(0,0,0,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24, fontFamily: 'inherit',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 420,
+              background: 'var(--af-card)',
+              border: '1px solid var(--af-border)',
+              borderRadius: 14,
+              padding: 24,
+              color: 'var(--af-text)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{
+                width: 32, height: 32, borderRadius: 9999,
+                background: 'var(--af-red-soft)',
+                color: 'var(--af-red)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}><AlertTriangle size={16} /></span>
+              <h3 style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.01em', margin: 0 }}>
+                Delete brand?
+              </h3>
+            </div>
+            <p style={{ fontSize: 13.5, color: 'var(--af-text-secondary)', lineHeight: 1.55, marginBottom: 14 }}>
+              This permanently removes <strong style={{ color: 'var(--af-text)' }}>{deleteCandidate.name || 'Untitled brand'}</strong> and everything inside it.
+            </p>
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, marginBottom: 18, fontSize: 13, color: 'var(--af-text-secondary)' }}>
+              {deleteCounts ? (
+                <>
+                  <li style={{ padding: '4px 0' }}>· {deleteCounts.assets} {deleteCounts.assets === 1 ? 'asset' : 'assets'} (clips, videos, images)</li>
+                  <li style={{ padding: '4px 0' }}>· {deleteCounts.ads} {deleteCounts.ads === 1 ? 'ad' : 'ads'}</li>
+                  <li style={{ padding: '4px 0' }}>· {deleteCounts.folders} {deleteCounts.folders === 1 ? 'folder' : 'folders'}</li>
+                </>
+              ) : (
+                <li style={{ padding: '4px 0' }}>· Counting…</li>
+              )}
+            </ul>
+            <p style={{ fontSize: 12, color: 'var(--af-muted)', marginBottom: 16 }}>
+              This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                style={{
+                  flex: 1, padding: '11px 16px',
+                  background: 'var(--af-red)',
+                  color: '#FFFFFF',
+                  border: '1px solid var(--af-red)',
+                  borderRadius: 9999,
+                  fontSize: 13.5, fontWeight: 600,
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  opacity: deleting ? 0.6 : 1,
+                  fontFamily: 'inherit',
+                }}
+              >
+                {deleting ? 'Deleting…' : 'Yes, delete brand'}
+              </button>
+              <button
+                onClick={() => setDeleteCandidate(null)}
+                disabled={deleting}
+                style={{
+                  padding: '11px 18px',
+                  background: 'var(--af-card)',
+                  color: 'var(--af-text)',
+                  border: '1px solid var(--af-border)',
+                  borderRadius: 9999,
+                  fontSize: 13.5, fontWeight: 500,
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+/** Compact icon button used inline in workspace rows for rename / delete. */
+function IconBtn({ icon, onClick, title, danger }: { icon: React.ReactNode; onClick: (e: React.MouseEvent) => void; title: string; danger?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        color: danger ? 'var(--af-red)' : 'var(--af-muted)',
+        cursor: 'pointer',
+        padding: 5,
+        borderRadius: 6,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        opacity: 0.65,
+        transition: 'opacity 0.15s, background 0.15s',
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLButtonElement).style.opacity = '1'
+        ;(e.currentTarget as HTMLButtonElement).style.background = danger ? 'var(--af-red-soft)' : 'var(--af-surface)'
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLButtonElement).style.opacity = '0.65'
+        ;(e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+      }}
+    >
+      {icon}
+    </button>
   )
 }
