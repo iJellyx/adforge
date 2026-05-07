@@ -31,6 +31,16 @@
   --af-accent-muted: rgba(26, 26, 26, 0.03);
   --af-accent-text: #FFFFFF; /* text colour ON the accent button */
 
+  /* Per-product identity colours — used in the PRODUCTS sidebar section
+     so users always know which corner of the suite they're in.
+     Each product has a solid (icon/text) and soft (background tint). */
+  --af-forge: #EA580C;                       /* orange — video / motion / energy */
+  --af-forge-soft: rgba(234, 88, 12, 0.10);
+  --af-split: #7C3AED;                       /* violet — static / analytical */
+  --af-split-soft: rgba(124, 58, 237, 0.10);
+  --af-stash: #0D9488;                       /* teal — library / assets / calm */
+  --af-stash-soft: rgba(13, 148, 136, 0.10);
+
   /* Text */
   --af-text: #0F0F0F;
   --af-text-secondary: #4A4A4A;

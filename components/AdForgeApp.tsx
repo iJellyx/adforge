@@ -134,10 +134,10 @@ export default function AdForgeApp(){
     </button>
   }
 
-  // Product nav — top-level cross-product switcher.
-  // - Active product (Forge): renders like the regular nav item, no click action
-  // - External product (Split): opens adsplit.io in a new tab if unlocked, else upsells
-  // - Locked product: greyed + lock icon, click triggers upsell modal
+  // Product nav — top-level cross-product switcher with per-product colour
+  // identity (Forge orange, Split violet, Stash teal). Mirrors AYME's
+  // "you-are-here" pattern so users always know which corner of the suite
+  // they're in.
   const productNavItem=({slug,label,Icon,active,unlocked,externalUrl,onClickIfUnlocked}:{
     slug:ProductSlug,label:string,Icon:any,active:boolean,unlocked:boolean,externalUrl?:string,onClickIfUnlocked?:()=>void
   })=>{
@@ -146,17 +146,20 @@ export default function AdForgeApp(){
       if(externalUrl){window.open(externalUrl,"_blank","noopener");return}
       onClickIfUnlocked?.()
     }
+    const productColor=`var(--af-${slug})`
+    const productSoft=`var(--af-${slug}-soft)`
     return <button
       key={"product-"+slug}
       onClick={handleClick}
       title={unlocked?(active?label+" (current)":label):"Unlock "+label}
       style={{
-        display:"flex",alignItems:"center",gap:11,
+        display:"flex",alignItems:"center",gap:10,
         padding:"9px 12px",margin:"1px 10px",
         borderRadius:9999,
-        border:"1px solid "+(active?"var(--af-border)":"transparent"),
-        background:active?"var(--af-sidebar-active)":"transparent",
-        color:!unlocked?"var(--af-muted)":(active?"var(--af-sidebar-text-active)":"var(--af-sidebar-text)"),
+        // Active state: subtle product-coloured tint + thin product border
+        border:"1px solid "+(active?productColor:"transparent"),
+        background:active?productSoft:"transparent",
+        color:!unlocked?"var(--af-muted)":(active?productColor:"var(--af-sidebar-text)"),
         fontWeight:active?700:500,
         fontSize:13.5,cursor:"pointer",
         width:"calc(100% - 20px)",
@@ -167,7 +170,17 @@ export default function AdForgeApp(){
       onMouseEnter={e=>{if(!active)(e.currentTarget as any).style.background="var(--af-sidebar-hover)"}}
       onMouseLeave={e=>{if(!active)(e.currentTarget as any).style.background="transparent"}}
     >
-      <Icon size={16} strokeWidth={active?2.4:1.8} style={{flexShrink:0,opacity:active?1:(unlocked?0.85:0.5)}}/>
+      {/* Coloured icon chip — small rounded square with soft-tinted bg */}
+      <span style={{
+        display:"flex",alignItems:"center",justifyContent:"center",
+        width:22,height:22,borderRadius:6,
+        background:productSoft,
+        color:productColor,
+        flexShrink:0,
+        opacity:unlocked?1:0.6,
+      }}>
+        <Icon size={12} strokeWidth={2.4}/>
+      </span>
       <span style={{flex:1}}>{label}</span>
       {!unlocked&&<Lock size={11} strokeWidth={2.2} style={{opacity:0.55}}/>}
       {externalUrl&&unlocked&&<span style={{fontSize:10,opacity:0.5}}>↗</span>}
