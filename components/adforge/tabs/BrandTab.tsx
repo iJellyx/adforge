@@ -208,12 +208,35 @@ export function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
       {showAdvancedProduct&&[{k:"claims",l:"Claims & Results (optional)",ta:true,r:2},{k:"ingredients",l:"Key Ingredients (optional)",ta:true,r:2},{k:"differentiators",l:"What makes this different? (optional)",ta:true,r:2},{k:"reviews",l:"Product Reviews (optional)",ta:true,r:3},{k:"notes",l:"Script Notes (optional)",ta:true,r:2},{k:"target_customer",l:"Target Customer (optional)",ta:true,r:2}].map(f=><div key={f.k} style={{marginBottom:13}}><Label>{f.l}</Label><Input value={(editingProd as any)[f.k]||""} onChange={(e:any)=>setEditingProd({...editingProd,[f.k]:e.target.value} as Product)} placeholder={(f as any).ph||""} textarea={!!(f as any).ta} rows={(f as any).r}/></div>)}
       {editingProd.url&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"8px 12px",fontSize:12,color:C.accent,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <span>✨ Product URL detected — autofill fields from this page?</span>
-        <button onClick={async()=>{
+        <button onClick={async(e:any)=>{
+          const btn=e.currentTarget
+          btn.disabled=true
+          const originalText=btn.textContent
+          btn.textContent="⏳ Extracting…"
           try{
-            const res=await fetch("/api/brand/crawl",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:editingProd.url})})
+            // Calls the PRODUCT extractor (JSON-LD + OG + Claude fallback)
+            // not the BRAND crawler — which is what was causing brand info
+            // to leak into product fields.
+            const res=await fetch("/api/product/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:editingProd.url})})
             const d=await res.json()
-            if(d.profile){setEditingProd((prev:any)=>({...prev,name:prev.name||d.profile.name||prev.name,description:d.profile.description||prev.description,benefits:d.profile.additional_info||prev.benefits}))}
-          }catch(e){console.error(e)}
+            if(d.product){
+              const p=d.product
+              setEditingProd((prev:any)=>({
+                ...prev,
+                // Only fill empty fields — don't overwrite anything the user already typed
+                name: prev.name||p.name||prev.name,
+                description: prev.description||p.description||prev.description,
+                benefits: prev.benefits||p.benefits||prev.benefits,
+                price: prev.price||p.price||prev.price,
+                claims: prev.claims||p.claims||prev.claims,
+                ingredients: prev.ingredients||p.ingredients||prev.ingredients,
+              }))
+            }else if(d.error){
+              alert("Autofill failed: "+d.error)
+            }
+          }catch(err:any){console.error(err);alert("Autofill failed: "+(err?.message||"unknown error"))}
+          btn.disabled=false
+          btn.textContent=originalText
         }} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0}}>Autofill</button>
       </div>}
       <Btn onClick={()=>saveProd(editingProd)} disabled={!editingProd.name?.trim()} style={{background:C.accent,color:"#fff",width:"100%",padding:13,fontSize:15,borderRadius:12,marginTop:4}}>{(editingProd as any).id?"Save Changes":"Add Product"}</Btn>
