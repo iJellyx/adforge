@@ -61,21 +61,39 @@ export function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
     if(!brand.website?.trim()){setProductError("Add a website URL in your Brand Profile first.");return}
     setFindingProducts(true);setProductError("")
     try{
-      const res=await fetch("/api/brand/products",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:brand.website})})
+      const res=await fetch("/api/brand/products",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          url:brand.website,
+          // Pass brand's default currency so the extractor picks matching
+          // offers when a Shopify store has multi-locale pricing.
+          preferredCurrency:brand.default_currency||"USD",
+        }),
+      })
+      // Handle non-JSON / HTTP errors (Vercel timeout, 502, etc.)
+      if(!res.ok){
+        const txt=await res.text().catch(()=>"")
+        throw new Error("Server error ("+res.status+"). "+(txt.slice(0,140)||"Try again, or add products manually."))
+      }
       const d=await res.json()
-      if(d.error)throw new Error(d.error)
+      if(d.error){setProductError(d.error);setFindingProducts(false);return}
       if(d.products&&d.products.length>0){
-        // Save each product to Supabase (respect 3 product cap)
         const remaining=3-products.length
         const toAdd=d.products.slice(0,Math.max(0,remaining))
         const saved:Product[]=[]
         for(const prod of toAdd){
-          const{data}=await supabase.from("products").insert({...prod,workspace_id:workspaceId}).select().single()
+          // The extractor returns extra fields (benefits, claims, ingredients,
+          // primary_image_url) that the brand_products INSTEAD-OF trigger
+          // ignores cleanly — only the columns it knows about get written.
+          const{data,error:insertErr}=await supabase.from("products").insert({...prod,workspace_id:workspaceId}).select().single()
+          if(insertErr){console.error("[products] insert error",insertErr);continue}
           if(data)saved.push(data)
         }
+        if(saved.length===0){setProductError("Found products but couldn't save them. Check the console for details.")}
         setProducts([...products,...saved])
       }else{
-        setProductError("No products found on the website. Try adding them manually.")
+        setProductError("No products found on the website. The site may not be on Shopify or expose a sitemap. Try adding products manually.")
       }
     }catch(e:any){setProductError(e.message||"Failed to find products.")}
     setFindingProducts(false)
