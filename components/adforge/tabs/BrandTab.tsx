@@ -151,7 +151,31 @@ export function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
         {crawlError&&<div style={{background:"#ef444422",border:"1px solid #ef444433",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#ef4444",marginTop:8}}>{crawlError}</div>}
         <div style={{fontSize:11,color:C.muted,marginTop:6}}>AI visits your website and fills fields in first-person brand voice. Edit anything afterwards.</div>
       </div>
-      {[{k:"name",l:"Brand Name",req:true},{k:"description",l:"Brand Description",ta:true,r:3,req:true},{k:"voice",l:"Brand Voice & Tone",ta:true,r:3,req:true},{k:"target_customer",l:"Target Customer",ta:true,r:3},{k:"reviews",l:"Reviews / Social Proof",ta:true,r:4},{k:"additional_info",l:"Additional Info",ta:true,r:3}].map((f,i,arr)=><div key={f.k} style={{marginBottom:i===arr.length-1?20:16}}><Label>{f.l}{(f as any).req?<span style={{color:C.accent,fontWeight:700,marginLeft:4,fontSize:10}}>Required</span>:<span style={{color:C.muted,fontWeight:400,marginLeft:4,fontSize:10,opacity:0.7}}>(optional)</span>}</Label><Input value={brand[f.k]||""} onChange={(e:any)=>setBrand({...brand,[f.k]:e.target.value})} textarea={!!(f as any).ta} rows={(f as any).r}/></div>)}
+      {[{k:"name",l:"Brand Name",req:true},{k:"description",l:"Brand Description",ta:true,r:3,req:true},{k:"voice",l:"Brand Voice & Tone",ta:true,r:3,req:true},{k:"target_customer",l:"Target Customer",ta:true,r:3},{k:"reviews",l:"Reviews / Social Proof",ta:true,r:4},{k:"additional_info",l:"Additional Info",ta:true,r:3}].map((f,i,arr)=><div key={f.k} style={{marginBottom:16}}><Label>{f.l}{(f as any).req?<span style={{color:C.accent,fontWeight:700,marginLeft:4,fontSize:10}}>Required</span>:<span style={{color:C.muted,fontWeight:400,marginLeft:4,fontSize:10,opacity:0.7}}>(optional)</span>}</Label><Input value={brand[f.k]||""} onChange={(e:any)=>setBrand({...brand,[f.k]:e.target.value})} textarea={!!(f as any).ta} rows={(f as any).r}/></div>)}
+      {/* Default currency — used by product autofill to pick the right
+          price when JSON-LD exposes multiple offers, and as the implicit
+          currency for any price the user types. */}
+      <div style={{marginBottom:20}}>
+        <Label>Default Currency<span style={{color:C.muted,fontWeight:400,marginLeft:4,fontSize:10,opacity:0.7}}>(your primary market)</span></Label>
+        <select
+          value={brand.default_currency||"USD"}
+          onChange={(e:any)=>setBrand({...brand,default_currency:e.target.value})}
+          style={{width:"100%",background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",cursor:"pointer",fontFamily:"inherit"}}
+        >
+          <option value="USD">USD — US Dollar ($)</option>
+          <option value="EUR">EUR — Euro (€)</option>
+          <option value="GBP">GBP — British Pound (£)</option>
+          <option value="AUD">AUD — Australian Dollar (A$)</option>
+          <option value="CAD">CAD — Canadian Dollar (C$)</option>
+          <option value="NZD">NZD — New Zealand Dollar (NZ$)</option>
+          <option value="JPY">JPY — Japanese Yen (¥)</option>
+          <option value="CHF">CHF — Swiss Franc</option>
+          <option value="SEK">SEK — Swedish Krona</option>
+          <option value="NOK">NOK — Norwegian Krone</option>
+          <option value="DKK">DKK — Danish Krone</option>
+        </select>
+        <div style={{fontSize:11,color:C.muted,marginTop:6}}>Product autofill uses this when a page exposes multi-currency pricing. Individual products can override.</div>
+      </div>
       <Btn onClick={saveBrand} disabled={saving} style={{background:C.accent,color:"#fff"}}>{saving?"Saving…":"Save Brand Profile"}</Btn>
     </Card>}
 
@@ -202,7 +226,39 @@ export function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
     {section==="products"&&editingProd&&<Card>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><STitle size={16} mb={0}>{(editingProd as any).id?"Edit Product":"New Product"}</STitle><Btn onClick={()=>setEditingProd(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn></div>
       {/* Essential product fields */}
-      {[{k:"name",l:"Product Name *"},{k:"description",l:"Description",ta:true,r:3},{k:"benefits",l:"Key Benefits",ta:true,r:3},{k:"price",l:"Price",ph:"49.99"},{k:"url",l:"Product URL",ph:"https://"}].map(f=><div key={f.k} style={{marginBottom:13}}><Label>{f.l}</Label><Input value={(editingProd as any)[f.k]||""} onChange={(e:any)=>setEditingProd({...editingProd,[f.k]:e.target.value} as Product)} placeholder={(f as any).ph||""} textarea={!!(f as any).ta} rows={(f as any).r}/></div>)}
+      {[{k:"name",l:"Product Name *"},{k:"description",l:"Description",ta:true,r:3},{k:"benefits",l:"Key Benefits",ta:true,r:3}].map(f=><div key={f.k} style={{marginBottom:13}}><Label>{f.l}</Label><Input value={(editingProd as any)[f.k]||""} onChange={(e:any)=>setEditingProd({...editingProd,[f.k]:e.target.value} as Product)} placeholder={(f as any).ph||""} textarea={!!(f as any).ta} rows={(f as any).r}/></div>)}
+      {/* Price + currency — paired so the two values stay in sync.
+          Currency defaults to the brand's default_currency unless the
+          extractor returned an explicit one. */}
+      <div style={{marginBottom:13}}>
+        <Label>Price</Label>
+        <div style={{display:"flex",gap:8}}>
+          <Input
+            value={editingProd.price||""}
+            onChange={(e:any)=>setEditingProd({...editingProd,price:e.target.value} as Product)}
+            placeholder="49.99"
+            style={{flex:1}}
+          />
+          <select
+            value={(editingProd.currency||brand.default_currency||"USD")}
+            onChange={(e:any)=>setEditingProd({...editingProd,currency:e.target.value} as Product)}
+            style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",cursor:"pointer",fontFamily:"inherit",minWidth:90}}
+          >
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+            <option value="GBP">GBP</option>
+            <option value="AUD">AUD</option>
+            <option value="CAD">CAD</option>
+            <option value="NZD">NZD</option>
+            <option value="JPY">JPY</option>
+            <option value="CHF">CHF</option>
+            <option value="SEK">SEK</option>
+            <option value="NOK">NOK</option>
+            <option value="DKK">DKK</option>
+          </select>
+        </div>
+      </div>
+      <div style={{marginBottom:13}}><Label>Product URL</Label><Input value={editingProd.url||""} onChange={(e:any)=>setEditingProd({...editingProd,url:e.target.value} as Product)} placeholder="https://"/></div>
       {/* Advanced fields toggle */}
       <button onClick={()=>setShowAdvancedProduct(!showAdvancedProduct)} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,fontWeight:600,padding:0,marginBottom:showAdvancedProduct?12:16,fontFamily:"inherit"}}>{showAdvancedProduct?"▼ Hide advanced fields":"▶ Show advanced fields (claims, ingredients, differentiators...)"}</button>
       {showAdvancedProduct&&[{k:"claims",l:"Claims & Results (optional)",ta:true,r:2},{k:"ingredients",l:"Key Ingredients (optional)",ta:true,r:2},{k:"differentiators",l:"What makes this different? (optional)",ta:true,r:2},{k:"reviews",l:"Product Reviews (optional)",ta:true,r:3},{k:"notes",l:"Script Notes (optional)",ta:true,r:2},{k:"target_customer",l:"Target Customer (optional)",ta:true,r:2}].map(f=><div key={f.k} style={{marginBottom:13}}><Label>{f.l}</Label><Input value={(editingProd as any)[f.k]||""} onChange={(e:any)=>setEditingProd({...editingProd,[f.k]:e.target.value} as Product)} placeholder={(f as any).ph||""} textarea={!!(f as any).ta} rows={(f as any).r}/></div>)}
@@ -216,8 +272,17 @@ export function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
           try{
             // Calls the PRODUCT extractor (JSON-LD + OG + Claude fallback)
             // not the BRAND crawler — which is what was causing brand info
-            // to leak into product fields.
-            const res=await fetch("/api/product/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:editingProd.url})})
+            // to leak into product fields. Pass the brand's default currency
+            // so the extractor can pick the matching offer when JSON-LD has
+            // multiple (Shopify multi-locale stores commonly do).
+            const res=await fetch("/api/product/extract",{
+              method:"POST",
+              headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({
+                url:editingProd.url,
+                preferredCurrency: brand.default_currency || "USD",
+              }),
+            })
             const d=await res.json()
             if(d.product){
               const p=d.product
@@ -228,6 +293,8 @@ export function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
                 description: prev.description||p.description||prev.description,
                 benefits: prev.benefits||p.benefits||prev.benefits,
                 price: prev.price||p.price||prev.price,
+                // Currency: prefer explicit extractor result; else keep prev; else fall back to brand default
+                currency: prev.currency||p.currency||brand.default_currency||"USD",
                 claims: prev.claims||p.claims||prev.claims,
                 ingredients: prev.ingredients||p.ingredients||prev.ingredients,
               }))
