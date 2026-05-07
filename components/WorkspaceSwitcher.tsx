@@ -15,7 +15,10 @@ export default function WorkspaceSwitcher() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
   const [deleteCandidate, setDeleteCandidate] = useState<Workspace | null>(null)
-  const [deleteCounts, setDeleteCounts] = useState<{ assets: number; ads: number; folders: number } | null>(null)
+  const [deleteCounts, setDeleteCounts] = useState<{
+    assets: number; ads: number; folders: number;
+    projects: number; concepts: number; generations: number;
+  } | null>(null)
   const [deleting, setDeleting] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -38,15 +41,25 @@ export default function WorkspaceSwitcher() {
   async function openDelete(ws: Workspace) {
     setDeleteCandidate(ws)
     setDeleteCounts(null)
-    const [assets, ads, folders] = await Promise.all([
+    // Brands are shared with Split — count both sides so the user sees the
+    // full impact before they confirm. Forge tables (items/forged_ads/folders)
+    // key off workspace_id; Split tables (projects/concepts/generations) key
+    // off brand_card_id (same uuid, just different column name).
+    const [assets, ads, folders, projects, concepts, generations] = await Promise.all([
       supabase.from('items').select('id', { count: 'exact', head: true }).eq('workspace_id', ws.id),
       supabase.from('forged_ads').select('id', { count: 'exact', head: true }).eq('workspace_id', ws.id),
       supabase.from('folders').select('id', { count: 'exact', head: true }).eq('workspace_id', ws.id),
+      supabase.from('projects').select('id', { count: 'exact', head: true }).eq('brand_card_id', ws.id),
+      supabase.from('concepts').select('id', { count: 'exact', head: true }).eq('brand_card_id', ws.id),
+      supabase.from('generations').select('id', { count: 'exact', head: true }).eq('brand_card_id', ws.id),
     ])
     setDeleteCounts({
       assets: assets.count || 0,
       ads: ads.count || 0,
       folders: folders.count || 0,
+      projects: projects.count || 0,
+      concepts: concepts.count || 0,
+      generations: generations.count || 0,
     })
   }
 
@@ -410,19 +423,39 @@ export default function WorkspaceSwitcher() {
               </h3>
             </div>
             <p style={{ fontSize: 13.5, color: 'var(--af-text-secondary)', lineHeight: 1.55, marginBottom: 14 }}>
-              This permanently removes <strong style={{ color: 'var(--af-text)' }}>{deleteCandidate.name || 'Untitled brand'}</strong> and everything inside it.
+              This brand is shared between Forge and Split. Deleting it removes <strong style={{ color: 'var(--af-text)' }}>{deleteCandidate.name || 'Untitled brand'}</strong> from both products.
             </p>
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0, marginBottom: 18, fontSize: 13, color: 'var(--af-text-secondary)' }}>
-              {deleteCounts ? (
-                <>
-                  <li style={{ padding: '4px 0' }}>· {deleteCounts.assets} {deleteCounts.assets === 1 ? 'asset' : 'assets'} (clips, videos, images)</li>
-                  <li style={{ padding: '4px 0' }}>· {deleteCounts.ads} {deleteCounts.ads === 1 ? 'ad' : 'ads'}</li>
-                  <li style={{ padding: '4px 0' }}>· {deleteCounts.folders} {deleteCounts.folders === 1 ? 'folder' : 'folders'}</li>
-                </>
-              ) : (
-                <li style={{ padding: '4px 0' }}>· Counting…</li>
-              )}
-            </ul>
+            {deleteCounts ? (
+              <>
+                {(deleteCounts.assets + deleteCounts.ads + deleteCounts.folders) > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--af-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>In Forge</div>
+                    <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 13, color: 'var(--af-text-secondary)' }}>
+                      <li style={{ padding: '3px 0' }}>· {deleteCounts.assets} {deleteCounts.assets === 1 ? 'asset' : 'assets'} (clips, videos, images)</li>
+                      <li style={{ padding: '3px 0' }}>· {deleteCounts.ads} {deleteCounts.ads === 1 ? 'ad' : 'ads'}</li>
+                      <li style={{ padding: '3px 0' }}>· {deleteCounts.folders} {deleteCounts.folders === 1 ? 'folder' : 'folders'}</li>
+                    </ul>
+                  </div>
+                )}
+                {(deleteCounts.projects + deleteCounts.concepts + deleteCounts.generations) > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--af-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>In Split</div>
+                    <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 13, color: 'var(--af-text-secondary)' }}>
+                      <li style={{ padding: '3px 0' }}>· {deleteCounts.projects} {deleteCounts.projects === 1 ? 'project' : 'projects'}</li>
+                      <li style={{ padding: '3px 0' }}>· {deleteCounts.concepts} {deleteCounts.concepts === 1 ? 'concept' : 'concepts'}</li>
+                      <li style={{ padding: '3px 0' }}>· {deleteCounts.generations} {deleteCounts.generations === 1 ? 'generation' : 'generations'}</li>
+                    </ul>
+                  </div>
+                )}
+                {(deleteCounts.assets + deleteCounts.ads + deleteCounts.folders + deleteCounts.projects + deleteCounts.concepts + deleteCounts.generations) === 0 && (
+                  <p style={{ fontSize: 13, color: 'var(--af-text-secondary)', marginBottom: 12 }}>
+                    No assets or ads attached. Safe to delete.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p style={{ fontSize: 13, color: 'var(--af-muted)', marginBottom: 12 }}>Counting…</p>
+            )}
             <p style={{ fontSize: 12, color: 'var(--af-muted)', marginBottom: 16 }}>
               This cannot be undone.
             </p>
