@@ -16,9 +16,10 @@ import { ScriptsTab } from './adforge/tabs/ScriptsTab'
 import { ForgedAdsTab } from './adforge/tabs/ForgedAdsTab'
 import { BrandTab } from './adforge/tabs/BrandTab'
 import { WinningAdsTab } from './adforge/tabs/WinningAdsTab'
+import { MyAds } from './MyAds'
 
 // ── Root App ──────────────────────────────────────────────────────────────
-const NAV_ICONS: Record<string,any> = { library: Film, scripts: Wand2, forged: Zap, winning: Lightbulb, brand: Settings }
+const NAV_ICONS: Record<string,any> = { library: Film, scripts: Wand2, forged: Zap, winning: Lightbulb, brand: Settings, myads: Layers }
 
 export default function AdForgeApp(){
   const supabase=createClient()
@@ -83,7 +84,14 @@ export default function AdForgeApp(){
   if(!activeWorkspace)return null
   // Strip the placeholder id used by GenerationFlow before inserting
   const { id: _ignore, ...insertable } = ad as any
-  const{data,error}=await supabase.from("forged_ads").insert({...insertable,workspace_id:activeWorkspace.id,updated_at:new Date().toISOString()}).select().single()
+  // Auto-place new video ads under My Ads → Video. Calls the RPC that
+  // ensures both system folders exist and returns the Video folder id.
+  let videoFolderId:string|null=null
+  try{
+    const{data:roots}=await supabase.rpc("ensure_my_ads_roots",{p_workspace_id:activeWorkspace.id})
+    videoFolderId=(roots as any)?.[0]?.video_id||null
+  }catch(e){console.warn("[forged-ads] folder bootstrap failed",e)}
+  const{data,error}=await supabase.from("forged_ads").insert({...insertable,workspace_id:activeWorkspace.id,folder_id:videoFolderId,updated_at:new Date().toISOString()}).select().single()
   if(error){console.error("Save forged ad error:",error);return null}
   if(data){
     setForgedAds(prev=>[data,...prev])
@@ -190,7 +198,8 @@ export default function AdForgeApp(){
         {navItem("library","Stash")}
         {navSection("Ads")}
         {navItem("scripts","Create Ad")}
-        {navItem("forged","My Ads")}
+        {navItem("myads","My Ads")}
+        {navItem("forged","Forge drafts")}
         {navItem("winning","Inspiration")}
         <div style={{flex:1}}/>
         {navSection("Settings")}
@@ -222,6 +231,7 @@ export default function AdForgeApp(){
       {tab==="library"&&<LibraryTab items={items} onRefresh={loadData} view={libView} setView={setLibView} brand={brand} products={products} onGoToBrand={()=>setTab("brand")} workspaceId={activeWorkspace.id}/>}
       {tab==="scripts"&&<ScriptsTab scripts={scripts} items={items} brand={brand} products={products} onSaveScripts={setScripts} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} startAtChooseMode={scriptsStartMode} editingAd={editingAd} onEditingAdConsumed={()=>setEditingAd(null)} v2SourceAd={v2SourceAd} onV2Consumed={()=>setV2SourceAd(null)} forgedAds={forgedAds} workspaceId={activeWorkspace.id}/>}
       {tab==="forged"&&<ForgedAdsTab ads={forgedAds} items={items} brand={brand} setBrand={setBrand} onRefresh={loadData} onEditAd={(ad:ForgedAd)=>{setEditingAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}} onCreateV2={(ad:ForgedAd)=>{setV2SourceAd(ad);setScriptsStartMode(c=>c+1);setTab("scripts")}} workspaceId={activeWorkspace.id}/>}
+      {tab==="myads"&&<MyAds workspaceId={activeWorkspace.id}/>}
       {tab==="brand"&&<BrandTab brand={brand} setBrand={setBrand} products={products} setProducts={setProducts} workspaceId={activeWorkspace.id}/>}
       {tab==="winning"&&<WinningAdsTab brand={brand} setBrand={setBrand} products={products} items={items} onSaveForgedAd={handleSaveForgedAd} onGoToForged={()=>setTab("forged")} workspaceId={activeWorkspace.id}/>}
     </div>
