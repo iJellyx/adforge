@@ -176,7 +176,7 @@ export function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
       <div style={{marginBottom:20}}>
         <Label>Default Currency<span style={{color:C.muted,fontWeight:400,marginLeft:4,fontSize:10,opacity:0.7}}>(your primary market)</span></Label>
         <select
-          value={brand.default_currency||"USD"}
+          value={brand?.default_currency||"USD"}
           onChange={(e:any)=>setBrand({...brand,default_currency:e.target.value})}
           style={{width:"100%",background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",cursor:"pointer",fontFamily:"inherit"}}
         >
@@ -241,90 +241,131 @@ export function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
       </div>}
     </div>}
 
-    {section==="products"&&editingProd&&<Card>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><STitle size={16} mb={0}>{(editingProd as any).id?"Edit Product":"New Product"}</STitle><Btn onClick={()=>setEditingProd(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn></div>
-      {/* Essential product fields */}
-      {[{k:"name",l:"Product Name *"},{k:"description",l:"Description",ta:true,r:3},{k:"benefits",l:"Key Benefits",ta:true,r:3}].map(f=><div key={f.k} style={{marginBottom:13}}><Label>{f.l}</Label><Input value={(editingProd as any)[f.k]||""} onChange={(e:any)=>setEditingProd({...editingProd,[f.k]:e.target.value} as Product)} placeholder={(f as any).ph||""} textarea={!!(f as any).ta} rows={(f as any).r}/></div>)}
-      {/* Price + currency — paired so the two values stay in sync.
-          Currency defaults to the brand's default_currency unless the
-          extractor returned an explicit one. */}
-      <div style={{marginBottom:13}}>
-        <Label>Price</Label>
-        <div style={{display:"flex",gap:8}}>
-          <Input
-            value={editingProd.price||""}
-            onChange={(e:any)=>setEditingProd({...editingProd,price:e.target.value} as Product)}
-            placeholder="49.99"
-            style={{flex:1}}
-          />
-          <select
-            value={(editingProd.currency||brand.default_currency||"USD")}
-            onChange={(e:any)=>setEditingProd({...editingProd,currency:e.target.value} as Product)}
-            style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",cursor:"pointer",fontFamily:"inherit",minWidth:90}}
-          >
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-            <option value="GBP">GBP</option>
-            <option value="AUD">AUD</option>
-            <option value="CAD">CAD</option>
-            <option value="NZD">NZD</option>
-            <option value="JPY">JPY</option>
-            <option value="CHF">CHF</option>
-            <option value="SEK">SEK</option>
-            <option value="NOK">NOK</option>
-            <option value="DKK">DKK</option>
-          </select>
+    {section==="products"&&editingProd&&(()=>{
+      // Defensive: if `brand` somehow hasn't loaded yet, treat default_currency
+      // as undefined and fall through to USD. Earlier code accessed
+      // brand.default_currency directly which threw a client-side exception
+      // when brand was null mid-mount (the "Application error" page).
+      const brandDefaultCcy=(brand?.default_currency||"USD") as string
+      const productCcy=(editingProd.currency||brandDefaultCcy) as string
+      // Trigger autofill — extracted into a function so the URL field's
+      // onPaste / onBlur can call it AND the explicit Autofill button.
+      async function runAutofill(targetUrl:string){
+        if(!targetUrl||!/^https?:\/\//i.test(targetUrl))return
+        try{
+          const res=await fetch("/api/product/extract",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({url:targetUrl,preferredCurrency:brandDefaultCcy}),
+          })
+          const d=await res.json()
+          if(d.product){
+            const p=d.product
+            setEditingProd((prev:any)=>({
+              ...prev,
+              name:prev?.name||p.name||"",
+              description:prev?.description||p.description||"",
+              benefits:prev?.benefits||p.benefits||"",
+              price:prev?.price||p.price||"",
+              currency:prev?.currency||p.currency||brandDefaultCcy,
+              claims:prev?.claims||p.claims||"",
+              ingredients:prev?.ingredients||p.ingredients||"",
+            }))
+          }else if(d.error){alert("Autofill failed: "+d.error)}
+        }catch(err:any){console.error(err);alert("Autofill failed: "+(err?.message||"unknown error"))}
+      }
+      return <Card>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <STitle size={16} mb={0}>{(editingProd as any).id?"Edit Product":"New Product"}</STitle>
+          <Btn onClick={()=>setEditingProd(null)} style={{background:"none",border:"1px solid "+C.border,color:C.muted}}>Cancel</Btn>
         </div>
-      </div>
-      <div style={{marginBottom:13}}><Label>Product URL</Label><Input value={editingProd.url||""} onChange={(e:any)=>setEditingProd({...editingProd,url:e.target.value} as Product)} placeholder="https://"/></div>
-      {/* Advanced fields toggle */}
-      <button onClick={()=>setShowAdvancedProduct(!showAdvancedProduct)} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,fontWeight:600,padding:0,marginBottom:showAdvancedProduct?12:16,fontFamily:"inherit"}}>{showAdvancedProduct?"▼ Hide advanced fields":"▶ Show advanced fields (claims, ingredients, differentiators...)"}</button>
-      {showAdvancedProduct&&[{k:"claims",l:"Claims & Results (optional)",ta:true,r:2},{k:"ingredients",l:"Key Ingredients (optional)",ta:true,r:2},{k:"differentiators",l:"What makes this different? (optional)",ta:true,r:2},{k:"reviews",l:"Product Reviews (optional)",ta:true,r:3},{k:"notes",l:"Script Notes (optional)",ta:true,r:2},{k:"target_customer",l:"Target Customer (optional)",ta:true,r:2}].map(f=><div key={f.k} style={{marginBottom:13}}><Label>{f.l}</Label><Input value={(editingProd as any)[f.k]||""} onChange={(e:any)=>setEditingProd({...editingProd,[f.k]:e.target.value} as Product)} placeholder={(f as any).ph||""} textarea={!!(f as any).ta} rows={(f as any).r}/></div>)}
-      {editingProd.url&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"8px 12px",fontSize:12,color:C.accent,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <span>✨ Product URL detected — autofill fields from this page?</span>
-        <button onClick={async(e:any)=>{
-          const btn=e.currentTarget
-          btn.disabled=true
-          const originalText=btn.textContent
-          btn.textContent="⏳ Extracting…"
-          try{
-            // Calls the PRODUCT extractor (JSON-LD + OG + Claude fallback)
-            // not the BRAND crawler — which is what was causing brand info
-            // to leak into product fields. Pass the brand's default currency
-            // so the extractor can pick the matching offer when JSON-LD has
-            // multiple (Shopify multi-locale stores commonly do).
-            const res=await fetch("/api/product/extract",{
-              method:"POST",
-              headers:{"Content-Type":"application/json"},
-              body:JSON.stringify({
-                url:editingProd.url,
-                preferredCurrency: brand.default_currency || "USD",
-              }),
-            })
-            const d=await res.json()
-            if(d.product){
-              const p=d.product
-              setEditingProd((prev:any)=>({
-                ...prev,
-                // Only fill empty fields — don't overwrite anything the user already typed
-                name: prev.name||p.name||prev.name,
-                description: prev.description||p.description||prev.description,
-                benefits: prev.benefits||p.benefits||prev.benefits,
-                price: prev.price||p.price||prev.price,
-                // Currency: prefer explicit extractor result; else keep prev; else fall back to brand default
-                currency: prev.currency||p.currency||brand.default_currency||"USD",
-                claims: prev.claims||p.claims||prev.claims,
-                ingredients: prev.ingredients||p.ingredients||prev.ingredients,
-              }))
-            }else if(d.error){
-              alert("Autofill failed: "+d.error)
-            }
-          }catch(err:any){console.error(err);alert("Autofill failed: "+(err?.message||"unknown error"))}
-          btn.disabled=false
-          btn.textContent=originalText
-        }} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0}}>Autofill</button>
-      </div>}
-      <Btn onClick={()=>saveProd(editingProd)} disabled={!editingProd.name?.trim()} style={{background:C.accent,color:"#fff",width:"100%",padding:13,fontSize:15,borderRadius:12,marginTop:4}}>{(editingProd as any).id?"Save Changes":"Add Product"}</Btn>
-    </Card>}
+
+        {/* ── PRODUCT URL FIRST ──────────────────────────────────────────
+            Top of the form so a brand can paste their URL and trigger
+            autofill without scrolling. */}
+        <div style={{marginBottom:13}}>
+          <Label>Product URL <span style={{color:C.muted,fontWeight:400,marginLeft:4,fontSize:10,opacity:0.7}}>(paste to autofill)</span></Label>
+          <Input
+            value={editingProd.url||""}
+            onChange={(e:any)=>setEditingProd({...editingProd,url:e.target.value} as Product)}
+            placeholder="https://yourbrand.com/products/your-product"
+          />
+        </div>
+        {editingProd.url&&/^https?:\/\//i.test(editingProd.url)&&<div style={{background:"#6c63ff11",border:"1px solid #6c63ff33",borderRadius:8,padding:"8px 12px",fontSize:12,color:C.accent,marginBottom:13,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span>✨ Product URL detected — autofill name, price, description?</span>
+          <button onClick={async(e:any)=>{
+            const btn=e.currentTarget
+            btn.disabled=true
+            const originalText=btn.textContent
+            btn.textContent="⏳ Extracting…"
+            await runAutofill(editingProd.url||"")
+            btn.disabled=false
+            btn.textContent=originalText
+          }} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0}}>Autofill</button>
+        </div>}
+
+        {/* ── Essential fields ────────────────────────────────────────── */}
+        {[{k:"name",l:"Product Name *"},{k:"description",l:"Description",ta:true,r:3},{k:"benefits",l:"Key Benefits",ta:true,r:3}].map(f=>(
+          <div key={f.k} style={{marginBottom:13}}>
+            <Label>{f.l}</Label>
+            <Input
+              value={((editingProd as any)?.[f.k])||""}
+              onChange={(e:any)=>setEditingProd({...editingProd,[f.k]:e.target.value} as Product)}
+              textarea={!!(f as any).ta}
+              rows={(f as any).r}
+            />
+          </div>
+        ))}
+
+        {/* ── Price + currency ────────────────────────────────────────── */}
+        <div style={{marginBottom:13}}>
+          <Label>Price</Label>
+          <div style={{display:"flex",gap:8}}>
+            <Input
+              value={editingProd.price||""}
+              onChange={(e:any)=>setEditingProd({...editingProd,price:e.target.value} as Product)}
+              placeholder="49.99"
+              style={{flex:1}}
+            />
+            <select
+              value={productCcy}
+              onChange={(e:any)=>setEditingProd({...editingProd,currency:e.target.value} as Product)}
+              style={{background:C.surface,border:"1px solid "+C.border,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none",cursor:"pointer",fontFamily:"inherit",minWidth:90}}
+            >
+              {["USD","EUR","GBP","AUD","CAD","NZD","JPY","CHF","SEK","NOK","DKK"].map(c=>(
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* ── Advanced toggle ────────────────────────────────────────── */}
+        <button
+          onClick={()=>setShowAdvancedProduct(!showAdvancedProduct)}
+          style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,fontWeight:600,padding:0,marginBottom:showAdvancedProduct?12:16,fontFamily:"inherit"}}
+        >
+          {showAdvancedProduct?"▼ Hide advanced fields":"▶ Show advanced fields (claims, ingredients, differentiators…)"}
+        </button>
+        {showAdvancedProduct&&[{k:"claims",l:"Claims & Results (optional)",ta:true,r:2},{k:"ingredients",l:"Key Ingredients (optional)",ta:true,r:2},{k:"differentiators",l:"What makes this different? (optional)",ta:true,r:2},{k:"reviews",l:"Product Reviews (optional)",ta:true,r:3},{k:"notes",l:"Script Notes (optional)",ta:true,r:2},{k:"target_customer",l:"Target Customer (optional)",ta:true,r:2}].map(f=>(
+          <div key={f.k} style={{marginBottom:13}}>
+            <Label>{f.l}</Label>
+            <Input
+              value={((editingProd as any)?.[f.k])||""}
+              onChange={(e:any)=>setEditingProd({...editingProd,[f.k]:e.target.value} as Product)}
+              textarea={!!(f as any).ta}
+              rows={(f as any).r}
+            />
+          </div>
+        ))}
+
+        <Btn
+          onClick={()=>saveProd(editingProd)}
+          disabled={!editingProd.name?.trim()}
+          style={{background:C.accent,color:"#fff",width:"100%",padding:13,fontSize:15,borderRadius:12,marginTop:4}}
+        >
+          {(editingProd as any).id?"Save Changes":"Add Product"}
+        </Btn>
+      </Card>
+    })()}
   </div>
 }
