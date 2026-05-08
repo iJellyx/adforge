@@ -28,6 +28,11 @@ export function ClipReviewModal({
   const [index, setIndex] = useState(startIndex)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{type:'success'|'error',msg:string}|null>(null)
+  // Local set of clip IDs the user has acted on in this session. The `clips`
+  // prop won't reflect a status change until the parent re-renders after
+  // onRefresh(), so we track here to avoid bouncing back to a clip we just
+  // approved during rapid triage.
+  const [handledIds, setHandledIds] = useState<Set<string>>(() => new Set())
 
   const clip = clips[index]
   const total = clips.length
@@ -117,8 +122,34 @@ export function ClipReviewModal({
       }
       return
     }
+    // Mark locally-handled before scanning so we don't bounce back to the
+    // just-acted clip via the still-stale `clips` prop.
+    const newHandled = new Set(handledIds)
+    if (clip?.id) newHandled.add(clip.id)
+    setHandledIds(newHandled)
     onRefresh()
-    goNext()
+    // After approve/reject, jump to the next clip that's still pending so
+    // the triage flow doesn't dump the user into already-handled clips. If
+    // no pending clips remain, surface a "you're done" toast and close.
+    advanceToNextPending(newHandled)
+  }
+
+  function advanceToNextPending(handled: Set<string>) {
+    // Find next clip whose status is pending (or unset) AND we haven't
+    // already acted on this session. Scan from index+1 wrapping back to 0.
+    const isPending = (c?: Item) => !c?.clip_status || c.clip_status === 'pending'
+    const n = clips.length
+    if (n === 0) { onClose(); return }
+    for (let off = 1; off <= n; off++) {
+      const i = (index + off) % n
+      const candidate = clips[i]
+      if (!candidate) continue
+      if (handled.has(candidate.id)) continue
+      if (isPending(candidate)) { setIndex(i); return }
+    }
+    // No pending clips left — celebrate and close.
+    showToast('success', '🎉 All clips reviewed!')
+    setTimeout(() => onClose(), 1100)
   }
 
   async function saveTrim() {

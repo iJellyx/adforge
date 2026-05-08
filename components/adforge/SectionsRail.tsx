@@ -68,7 +68,12 @@ export function SectionsRail({
     <div style={{
       borderTop: '1px solid var(--af-border)',
       background: 'transparent',
-      padding: '12px 4px',
+      padding: '12px 12px 16px',
+      // Prevent the rail from being squashed when the canvas column runs
+      // out of vertical space — without flexShrink:0 the rail collapses
+      // into nothing and the cards clip.
+      flexShrink: 0,
+      minHeight: 138,
       overflowX: 'auto',
       overflowY: 'hidden',
       display: 'flex',

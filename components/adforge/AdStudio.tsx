@@ -385,8 +385,10 @@ export function AdStudio({
 
         {/* ── Canvas area ── */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {/* Preview */}
-          <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+          {/* Preview — minHeight:0 lets it shrink so the SectionsRail below
+              always has room (without it, the rail's flexShrink:0 still
+              wins but the preview overflows the column). */}
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '20px 24px', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
             <StitchedPreview
               sections={sections}
               libraryItems={items}
