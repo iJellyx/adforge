@@ -159,35 +159,39 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
   function updateQueue(idx:number,update:any){setUploadQueue(prev=>prev.map((e,i)=>i===idx?{...e,...update}:e))}
   function removeFromQueue(idx:number){setUploadQueue(prev=>prev.filter((_,i)=>i!==idx))}
 
-  async function uploadSingle(idx:number){
+  async function uploadSingle(idx:number,opts?:{force?:boolean}){
     const entry=uploadQueue[idx]
     if(!entry||!entry.title?.trim())return
-    updateQueue(idx,{status:"uploading",progress:2,msg:"Checking for duplicates…"})
+    const force=opts?.force===true
+    updateQueue(idx,{status:"uploading",progress:2,msg:force?"Uploading…":"Checking for duplicates…"})
 
-    // Duplicate detection — check duration + file size against existing items
-    try{
-      const fileSizeMB=entry.file.size/1024/1024
-      // Get video duration from file
-      const videoDuration=await new Promise<number>((resolve)=>{
-        const vid=document.createElement("video")
-        vid.preload="metadata"
-        vid.onloadedmetadata=()=>{URL.revokeObjectURL(vid.src);resolve(vid.duration)}
-        vid.onerror=()=>resolve(0)
-        vid.src=URL.createObjectURL(entry.file)
-      })
-      if(videoDuration>0){
-        const possibleDupes=items.filter((item:Item)=>{
-          if(!item.duration_seconds)return false
-          const durDiff=Math.abs(item.duration_seconds-videoDuration)
-          return durDiff<1.5 // within 1.5 seconds = likely same video
+    // Duplicate detection — check duration + file size against existing items.
+    // Skipped when `force` is set (user clicked "Upload anyway") so we don't
+    // loop the user back to the warning forever.
+    if(!force){
+      try{
+        // Get video duration from file
+        const videoDuration=await new Promise<number>((resolve)=>{
+          const vid=document.createElement("video")
+          vid.preload="metadata"
+          vid.onloadedmetadata=()=>{URL.revokeObjectURL(vid.src);resolve(vid.duration)}
+          vid.onerror=()=>resolve(0)
+          vid.src=URL.createObjectURL(entry.file)
         })
-        if(possibleDupes.length>0){
-          const dupeTitle=possibleDupes[0].title
-          updateQueue(idx,{status:"duplicate_warning",progress:0,msg:`Possible duplicate of "${dupeTitle}" (${videoDuration.toFixed(1)}s). Upload anyway?`})
-          return
+        if(videoDuration>0){
+          const possibleDupes=items.filter((item:Item)=>{
+            if(!item.duration_seconds)return false
+            const durDiff=Math.abs(item.duration_seconds-videoDuration)
+            return durDiff<1.5 // within 1.5 seconds = likely same video
+          })
+          if(possibleDupes.length>0){
+            const dupeTitle=possibleDupes[0].title
+            updateQueue(idx,{status:"duplicate_warning",progress:0,msg:`Possible duplicate of "${dupeTitle}" (${videoDuration.toFixed(1)}s). Upload anyway?`})
+            return
+          }
         }
-      }
-    }catch(e){/* continue with upload if check fails */}
+      }catch(e){/* continue with upload if check fails */}
+    }
 
     updateQueue(idx,{status:"uploading",progress:5,msg:"Creating record…"})
 
@@ -388,7 +392,7 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
             return<div key={entry.id} style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
               <div style={{flex:1,minWidth:200}}><div style={{fontSize:12,fontWeight:700,color:"#92400E",marginBottom:2}}>⚠️ Possible duplicate</div><div style={{fontSize:11,color:"#92400E"}}>{entry.msg}</div></div>
               <div style={{display:"flex",gap:8}}>
-                <Btn onClick={()=>updateQueue(realIdx,{status:"pending",progress:0,msg:""})} style={{background:C.accent,color:"#fff",fontSize:11,padding:"5px 12px"}}>Upload anyway</Btn>
+                <Btn onClick={()=>uploadSingle(realIdx,{force:true})} style={{background:C.accent,color:"#fff",fontSize:11,padding:"5px 12px"}}>Upload anyway</Btn>
                 <Btn onClick={()=>updateQueue(realIdx,{status:"duplicate",progress:0,msg:"Skipped"})} style={{background:"none",border:"1px solid "+C.border,color:C.muted,fontSize:11,padding:"5px 12px"}}>Skip</Btn>
               </div>
             </div>
