@@ -503,7 +503,11 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
           <div>
             {clips.length===0?<>
               <div style={{fontWeight:700,fontSize:13,color:C.yellow,marginBottom:2}}>⚠️ No clips generated</div>
-              <div style={{fontSize:11,color:C.muted}}>This may have happened due to low AI credits. Re-analyse to generate clips.</div>
+              {/* Show the actual reason if the analysis pipeline left one. Falls
+                  back to a generic hint when no skip_reason was set (= old data). */}
+              <div style={{fontSize:11,color:C.muted,maxWidth:560,lineHeight:1.5}}>
+                {(a as any)?.skip_reason || "This may have happened due to low AI credits. Re-analyse to generate clips."}
+              </div>
             </>:<>
               <div style={{fontWeight:700,fontSize:13,color:C.accent,marginBottom:2}}>🔄 Re-analyse Video</div>
               <div style={{fontSize:11,color:C.muted}}>Re-run AI analysis to benefit from improved tagging & clip detection. Existing clips will be replaced.</div>

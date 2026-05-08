@@ -357,27 +357,49 @@ Return ONLY valid JSON:
 }` }]
     })
 
+    // ── Parse Claude's response defensively ─────────────────────────────
     const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
-    const analysis = JSON.parse(text.replace(/```json|```/g, '').trim())
+    let analysis: any = null
+    try {
+      analysis = JSON.parse(text.replace(/```json|```/g, '').trim())
+    } catch (parseErr: any) {
+      console.error('[reanalyse] Claude JSON parse FAILED:', parseErr.message)
+      console.error('[reanalyse] Claude raw response (first 500):', text.slice(0, 500))
+      // Persist a minimal analysis so the UI knows we tried — surfaces in the
+      // status pill instead of looking like the upload silently disappeared.
+      analysis = {
+        confidence: 'Low',
+        skip_reason: 'AI response was malformed — re-run analysis to retry',
+        clip_segments: [],
+      }
+    }
 
     // ── Step 3: Post-process segments ────────────────────────────────────
-    // (a) Drop quality === Low
-    // (b) Snap start/end to sentence/scene boundaries
+    // Wrapped in try so a single bad segment doesn't kill the whole batch.
+    // (a) Drop quality === Low + obviously broken shapes
+    // (b) Snap start/end to sentence/scene boundaries (per-segment try/catch)
     // (c) Clamp to role-specific duration window
     // (d) Re-validate min duration; drop if still bad
-    let segments: any[] = (analysis.clip_segments || []).filter((s: any) =>
+    const rawSegments: any[] = Array.isArray(analysis.clip_segments) ? analysis.clip_segments : []
+    let segments: any[] = rawSegments.filter((s: any) =>
+      s &&
       typeof s.start_seconds === 'number' &&
       typeof s.end_seconds === 'number' &&
       (s.end_seconds - s.start_seconds) >= 1.0 &&
       s.quality_score !== 'Low'
     )
 
-    segments = segments.map((seg: any) => {
-      const snappedStart = snapStart(seg.start_seconds, wordTimestamps, sceneChanges)
-      const snappedEnd = snapEnd(seg.end_seconds, wordTimestamps, sceneChanges)
-      seg.start_seconds = Math.max(0, snappedStart)
-      seg.end_seconds = Math.min(duration, snappedEnd)
-      return clampToRole(seg, wordTimestamps, sceneChanges)
+    segments = segments.flatMap((seg: any) => {
+      try {
+        const snappedStart = snapStart(seg.start_seconds, wordTimestamps, sceneChanges)
+        const snappedEnd = snapEnd(seg.end_seconds, wordTimestamps, sceneChanges)
+        seg.start_seconds = Math.max(0, snappedStart)
+        seg.end_seconds = Math.min(duration, snappedEnd)
+        return [clampToRole(seg, wordTimestamps, sceneChanges)]
+      } catch (segErr: any) {
+        console.error('[reanalyse] Segment processing failed for', seg?.label, '—', segErr.message)
+        return []  // drop the bad segment, keep going
+      }
     })
 
     // Drop anything that ended up too short post-snap, or with start >= end
@@ -387,7 +409,18 @@ Return ONLY valid JSON:
       return dur >= rules.min && dur <= rules.max + 0.5  // small tolerance over max
     })
 
-    console.log(`[reanalyse] Claude returned ${analysis.clip_segments?.length || 0} → ${segments.length} after Low-filter → ${validSegments.length} after snap+role validation`)
+    console.log(`[reanalyse] Claude returned ${rawSegments.length} → ${segments.length} after Low-filter → ${validSegments.length} after snap+role validation`)
+
+    // If everything got filtered out, attach a skip_reason so the UI can
+    // explain to the user *why* there are no clips — rather than just
+    // showing an empty list.
+    if (validSegments.length === 0) {
+      analysis.skip_reason = analysis.skip_reason || (
+        rawSegments.length === 0
+          ? 'AI did not identify any usable clips. Video may be too short, off-topic, or low quality.'
+          : `${rawSegments.length} segments found but none passed the editorial filters (Low quality or wrong duration). Try a longer / clearer video.`
+      )
+    }
 
     // ── Step 4: Replace old clips with new ones ──────────────────────────
     const oldClipIds = item.clip_ids || []
@@ -441,6 +474,9 @@ Return ONLY valid JSON:
       const insertResult = await supabase.from('items').insert(clipInserts).select()
       if (insertResult.error) {
         console.error('[reanalyse] Clip insert FAILED:', insertResult.error.message, insertResult.error.code)
+        // Surface the DB error to the UI via skip_reason so the user can
+        // see *why* clips didn't materialise even though Claude found segments.
+        analysis.skip_reason = `Database insert failed: ${insertResult.error.message}. The AI found clips but we couldn't save them.`
       }
       clips = insertResult.data
     }
@@ -451,10 +487,21 @@ Return ONLY valid JSON:
     if (finalUpdate.error) {
       console.error('[reanalyse] Final update FAILED:', finalUpdate.error.message)
     }
-    console.log(`[reanalyse] Done: ${clipIds.length} clips for ${item.title} (segments: ${analysis.clip_segments?.length || 0} → valid: ${validSegments.length} → inserted: ${clipIds.length})`)
+    console.log(`[reanalyse] Done: ${clipIds.length} clips for ${item.title} (segments: ${rawSegments?.length ?? 0} → valid: ${validSegments.length} → inserted: ${clipIds.length})`)
   } catch (err: any) {
     console.error('[reanalyse] failed:', err.message, err.stack)
-    await supabase.from('items').update({ mux_status: 'ready' }).eq('id', itemId)
+    // Persist whatever skip_reason we can — even on hard fail. Means the UI
+    // can show the user "Re-analysis failed: <reason>" instead of a blank
+    // un-clipped item that looks like nothing happened.
+    await supabase.from('items').update({
+      mux_status: 'ready',
+      analysis: {
+        confidence: 'Low',
+        skip_reason: 'Re-analysis failed: ' + (err?.message || 'unknown error') + '. Click Re-analyse to retry.',
+        clip_segments: [],
+        ai_potential: 'Low',
+      },
+    }).eq('id', itemId)
   }
 
   return NextResponse.json({ ok: true })
