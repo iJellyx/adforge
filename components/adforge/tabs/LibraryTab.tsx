@@ -380,6 +380,22 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
           </div>
           {/* Show individual errors only */}
           {uploadQueue.filter((e:any)=>e.status==="error").map((entry:any)=><div key={entry.id} style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:12,color:C.red}}>❌ {entry.title} — {entry.msg}</div>)}
+          {/* In-flight queue entries — covers the gap between "user clicked Upload"
+              and "DB row exists with mux_status". Without this row, clicking
+              "Upload anyway" or "Upload" looks like nothing happens for 5–30s. */}
+          {uploadQueue.filter((e:any)=>e.status==="uploading"||e.status==="processing").map((entry:any)=>{
+            const pct=Math.max(2,Math.min(100,entry.progress||0))
+            return <div key={entry.id} style={{background:C.card,border:"1.5px solid "+C.border,borderRadius:10,padding:"8px 14px",marginBottom:6}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:600,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{entry.title||entry.file.name}</div>
+                <div style={{fontSize:11,color:C.muted,flexShrink:0}}>{entry.msg||"Uploading…"}</div>
+                <div style={{fontSize:11,color:C.accent,fontWeight:600,flexShrink:0,minWidth:32,textAlign:"right" as const}}>{pct}%</div>
+              </div>
+              <div style={{height:4,background:C.surface,borderRadius:2,overflow:"hidden"}}>
+                <div style={{height:"100%",width:pct+"%",background:C.accent,transition:"width 0.2s"}}/>
+              </div>
+            </div>
+          })}
           {/* Upload pipeline for items currently processing */}
           {items.filter(it=>it.mux_status&&it.mux_status!=="ready"&&it.mux_status!=="errored"&&it.mux_status!=="duplicate").slice(0,5).map(it=><div key={it.id} style={{background:C.card,border:"1.5px solid "+C.border,borderRadius:10,padding:"6px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
             <div style={{flex:1,minWidth:0}}>
