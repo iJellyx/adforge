@@ -856,6 +856,9 @@ export function AdStudio({
                     <VoiceoverGenerator
                       sections={sections}
                       allHookSections={selectedHooks.length > 1 ? selectedHooks.map(hi => hookVariations[hi] || sections) : null}
+                      // Pre-select the voice the user picked in the brief
+                      // modal so they don't get a wrong-voice surprise.
+                      defaultVoiceId={genMeta?.voiceId || null}
                       onSave={(updatedSections: any[], voice: string, combinedUrl: string, allUpdatedHooks?: any[][]) => {
                         setSections(updatedSections)
                         setVoiceoverVoice(voice)

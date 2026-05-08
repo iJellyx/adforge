@@ -71,53 +71,38 @@ export function GenerationFlow({ brief, brand, products, items, workspaceId, voi
   }, [])
 
   async function run() {
+    // STEPWISE PIPELINE — only Script + Clips run automatically. Voiceover
+    // and music are now explicit user actions in the AdStudio Audio tab.
+    // Doing everything at once meant a TTS call burned credits before the
+    // user had even seen the script, and VO failures (or wrong-voice
+    // overrides) silently corrupted the ad. The new flow is:
+    //   1. Generate script   → user sees and can edit
+    //   2. Match clips       → user sees and can swap
+    //   3. (User clicks "Generate Voiceover" themselves with the voice they
+    //      pre-selected in the brief modal — no surprises)
+    //   4. (User clicks "Pick music" themselves)
+    // The brief's voice choice is captured in metadata.voiceId so the
+    // Audio tab can pre-select it.
+
     // ── 1. Script ─────────────────────────────────────────────────────────
     set('script', 'active')
     setSubstatus('')
     const sections = await generateScript()
     set('script', 'done')
 
-    // ── 2. Voiceover ──────────────────────────────────────────────────────
-    set('voiceover', 'active')
-    let voiceoverUrl: string | null = null
-    let perSectionAudios: Record<number, { url: string; durationSec: number }> = {}
-    try {
-      perSectionAudios = await generateVoiceover(sections)
-      voiceoverUrl = await stitchVoiceover(perSectionAudios, sections.length)
-      set('voiceover', 'done')
-    } catch (e: any) {
-      warn('Voiceover step failed — you can re-voice from the Audio tab. (' + (e?.message || 'unknown') + ')')
-      set('voiceover', 'skipped')
-    }
+    // ── 2. Voiceover — SKIPPED (user runs it explicitly from Audio tab) ──
+    set('voiceover', 'skipped')
 
-    // Adjust section timings if VO succeeded — using actual audio durations
-    if (Object.keys(perSectionAudios).length) {
-      sections.forEach((s, i) => {
-        const a = perSectionAudios[i]
-        if (a) (s as any).actualVoDurationSec = a.durationSec
-      })
-    }
-
-    // ── 3. Music ──────────────────────────────────────────────────────────
-    set('music', 'active')
-    let musicUrl: string | null = null
-    let musicName: string | null = null
-    try {
-      const mood = guessMood(sections)
-      const mus = await pickMusic(mood)
-      musicUrl = mus.url
-      musicName = mus.name
-      set('music', 'done')
-    } catch (e: any) {
-      warn('Music step failed — pick music from the Audio tab. (' + (e?.message || 'unknown') + ')')
-      set('music', 'skipped')
-    }
+    // ── 3. Music — SKIPPED (user picks from Audio tab) ───────────────────
+    set('music', 'skipped')
 
     // ── 4. Clips ──────────────────────────────────────────────────────────
     set('clips', 'active')
     let clipMatchedSections = sections
     try {
-      const matched = await matchClips(sections, !!voiceoverUrl)
+      // hasVO=false because we deferred VO. matchClips will optimise for
+      // mixed/talking-head clips since there's no narration yet.
+      const matched = await matchClips(sections, false)
       clipMatchedSections = matched
       const unmatched = matched.filter(s => !s.selectedClipId).length
       if (unmatched > 0) warn(`AI couldn't match clips for ${unmatched} of ${matched.length} sections — pick them from the Clips tab.`)
@@ -129,7 +114,7 @@ export function GenerationFlow({ brief, brand, products, items, workspaceId, voi
 
     // ── 5. Save ───────────────────────────────────────────────────────────
     set('save', 'active')
-    const ad = buildAd(clipMatchedSections, voiceoverUrl, musicUrl, musicName)
+    const ad = buildAd(clipMatchedSections, null, null, null)
     set('save', 'done')
 
     // Brief settle so the user sees "all green" before navigating

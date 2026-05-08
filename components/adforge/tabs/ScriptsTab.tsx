@@ -37,7 +37,9 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
     setAspectRatio(final.metadata?.aspectRatio||"9:16")
     setCaptionSettings(final.metadata?.captionSettings||{...DEFAULT_CAPTIONS})
     setEndCard(final.metadata?.endCard||null)
-    setGenMeta({form:final.metadata?.brief||{},productName:final.metadata?.brief?.productName||""})
+    // voiceId carries forward the brief's voice choice so the Audio tab can
+    // pre-select it when the user explicitly generates VO.
+    setGenMeta({form:final.metadata?.brief||{},productName:final.metadata?.brief?.productName||"",voiceId:final.metadata?.voiceId||null})
     setNewAdOpen(false)
     setView("review")
     setStep("clips")
@@ -55,7 +57,7 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
     setAspectRatio(editingAd.metadata?.aspectRatio||"9:16")
     setCaptionSettings(editingAd.metadata?.captionSettings||{...DEFAULT_CAPTIONS})
     setEndCard(editingAd.metadata?.endCard||null)
-    setGenMeta({form:{contentType:editingAd.metadata?.contentType,adLength:editingAd.metadata?.adLength,awarenessStage:editingAd.metadata?.awarenessStage},productName:editingAd.metadata?.productName})
+    setGenMeta({form:{contentType:editingAd.metadata?.contentType,adLength:editingAd.metadata?.adLength,awarenessStage:editingAd.metadata?.awarenessStage},productName:editingAd.metadata?.productName,voiceId:editingAd.metadata?.voiceId||null})
     setView("review");setStep("clips")
     onEditingAdConsumed?.()
   },[editingAd])

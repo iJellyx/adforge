@@ -4,7 +4,18 @@ import { C } from './constants'
 import { secColor } from './utils'
 import { Btn, Label } from './ui-primitives'
 
-export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any){
+/**
+ * VoiceoverGenerator — inline component shown when an ad has no VO yet.
+ *
+ * Voice pre-selection priority (highest first):
+ *   1. defaultVoiceId — the voice the user picked in the brief modal (passed
+ *      down from AdStudio via metadata.voiceId).
+ *   2. localStorage adforge.lastVoiceId — last-generated voice for this user.
+ *   3. First voice in the ElevenLabs catalogue — universal fallback.
+ *
+ * Auto-generation is intentionally OFF. Stepwise > magic.
+ */
+export function VoiceoverGenerator({sections,allHookSections,defaultVoiceId,onSave,onSkip}:any){
   const [voices,setVoices]=useState<any[]>([])
   const [selectedVoice,setSelectedVoice]=useState("")
   const [loading,setLoading]=useState(false)
@@ -32,15 +43,19 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
     fetch("/api/elevenlabs/voices").then(r=>r.json()).then(d=>{
       if(d.voices&&d.voices.length>0){
         setVoices(d.voices)
-        // Pre-select the user's last-used voice if it still exists in the
-        // catalogue, else fall back to the first voice. Persistence is local
-        // (per-browser) which matches single-user accounts; a real "default
-        // voice" field on the brand is a future migration.
+        // Pre-select priority: brief-supplied default → localStorage → first.
+        // The brief default wins so the voice the user picked at ad-creation
+        // time is what the inline generator shows — not whatever the user
+        // generated with last week.
         let initial=d.voices[0].id
-        try{
-          const stored=typeof window!=="undefined"?window.localStorage.getItem("adforge.lastVoiceId"):null
-          if(stored&&d.voices.some((v:any)=>v.id===stored))initial=stored
-        }catch{/* private mode etc. */}
+        if(defaultVoiceId&&d.voices.some((v:any)=>v.id===defaultVoiceId)){
+          initial=defaultVoiceId
+        }else{
+          try{
+            const stored=typeof window!=="undefined"?window.localStorage.getItem("adforge.lastVoiceId"):null
+            if(stored&&d.voices.some((v:any)=>v.id===stored))initial=stored
+          }catch{/* private mode etc. */}
+        }
         setSelectedVoice(initial)
       }
       else setError(d.error||"Check your ELEVENLABS_API_KEY in Vercel Settings")
@@ -54,21 +69,12 @@ export function VoiceoverGenerator({sections,allHookSections,onSave,onSkip}:any)
     try{ if(selectedVoice) window.localStorage.setItem("adforge.lastVoiceId", selectedVoice) }catch{/* ignore */}
   }
 
-  // Auto-generate as soon as voices load AND there's a script — saves the user
-  // a click on the most-used path. They can interrupt by hitting "Stop" or
-  // changing the voice; we only fire once per mount and never if VO is
-  // already in flight or has been generated this session.
-  const autoGenFiredRef=useState({fired:false})[0]
-  useEffect(()=>{
-    if(loading||generating||error)return
-    if(!selectedVoice||sectionsWithWords.length===0)return
-    if(Object.keys(sectionAudios).length>0)return
-    if(autoGenFiredRef.fired)return
-    autoGenFiredRef.fired=true
-    const t=setTimeout(()=>{ generateAll() }, 800) // small delay so user can change voice
-    return ()=>clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[loading,selectedVoice,sectionsWithWords.length])
+  // Auto-generate is intentionally OFF. Users were getting voiceovers in
+  // the wrong voice because the auto-gen here reads localStorage's
+  // last-used voice and would fire on top of (or in place of) the voice
+  // chosen up-front in the brief modal. Stepwise is safer: user picks a
+  // voice, hits Generate, hears the result. If they want to swap, they
+  // change voice and click Regenerate. Less magic, fewer surprises.
   const selectedVoiceObj=voices.find(v=>v.id===selectedVoice)
   const allGenerated=sectionsWithWords.length>0&&sectionsWithWords.every((_:any,i:number)=>sectionAudios[i])
 
