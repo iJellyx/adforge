@@ -109,23 +109,42 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
   const activeVoUrl = perSectionVo || voiceoverUrl || null
   const usingPerSectionVo = !!perSectionVo
 
-  // When the active section's VO source changes, re-anchor the audio element
-  // to the right position. With per-section VO each section's audio file
-  // starts at 0, so we map globalTime → (globalTime - sectionStart). With
-  // the stitched fallback the audio is in the global timeline so use
-  // globalTime directly.
+  // When the active section's VO source changes, swap the audio src
+  // imperatively (NOT via React key) so the element survives across
+  // section transitions and the original user gesture remains valid.
+  // With per-section VO each section's audio file starts at 0, so we map
+  // globalTime → (globalTime - sectionStart). With the stitched fallback
+  // the audio is in the global timeline so use globalTime directly.
   useEffect(() => {
     const a = voiceRef.current
     if (!a || !activeVoUrl) return
+    // Avoid a needless reload when the src already matches.
+    if (a.src !== activeVoUrl) {
+      a.src = activeVoUrl
+      a.load()
+    }
     const sectionStart = usingPerSectionVo ? (sectionGlobalStarts[activeSectionIdx] || 0) : 0
     const targetLocal = Math.max(0, globalTime - sectionStart)
-    const seek = () => {
+    let cancelled = false
+    const seekAndMaybePlay = () => {
+      if (cancelled) return
       try { a.currentTime = targetLocal } catch {}
-      if (playing) a.play().catch(() => {})
+      if (playing) {
+        const p = a.play()
+        // Re-try once if the autoplay policy blocked us — happens rarely
+        // when the audio element is loading at the same moment as the
+        // section transition fires.
+        if (p && typeof p.then === 'function') {
+          p.catch(() => { setTimeout(() => { try { a.play().catch(() => {}) } catch {} }, 60) })
+        }
+      }
     }
-    if (a.readyState >= 1) seek()
-    else a.addEventListener('loadedmetadata', seek, { once: true })
-    return () => a.removeEventListener('loadedmetadata', seek)
+    if (a.readyState >= 1) seekAndMaybePlay()
+    else a.addEventListener('loadedmetadata', seekAndMaybePlay, { once: true })
+    return () => {
+      cancelled = true
+      a.removeEventListener('loadedmetadata', seekAndMaybePlay)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeVoUrl])
 
@@ -306,10 +325,13 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
   const clipDur=Math.max(1,nextClipStart-clipGlobalStart)
 
   return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
-    {/* When per-section VO is available, swap audio element per section
-        (key on URL forces React to replace it). Otherwise fall back to a
-        single stitched audio. */}
-    {activeVoUrl&&<audio ref={voiceRef} key={activeVoUrl} src={activeVoUrl} style={{display:"none"}}/>}
+    {/* Single persistent audio element. We do NOT swap via React key
+        (that recreates the element and Chromium's autoplay policy then
+        blocks play() on the fresh element, killing all but the first
+        section). Instead the src is mutated imperatively in an effect
+        below, which preserves the user-gesture context from the initial
+        Play click. */}
+    {activeVoUrl && <audio ref={voiceRef} style={{display:"none"}}/>}
     {/* No `loop` — music is bounded by ad duration and paused when it reaches the end. */}
     {musicUrl&&<audio ref={musicRef} src={musicUrl} style={{display:"none"}}/>}
 
