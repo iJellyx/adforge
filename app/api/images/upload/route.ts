@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getUserId } from '@/lib/auth'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -117,6 +118,15 @@ export async function POST(req: NextRequest) {
         continue
       }
       items.push(row)
+
+      // Fire-and-forget AI tagging — keeps the upload response snappy.
+      // Failures here don't surface to the user; image still uploads fine,
+      // it just won't have searchable tags. Tags get filled in async.
+      if (process.env.GOOGLE_AI_API_KEY && row.id) {
+        tagImageInBackground(row.id, buf, file.type).catch(e => {
+          console.error('[images/upload] background tag failed for', row.id, ':', e?.message)
+        })
+      }
     } catch (e: any) {
       console.error('[images/upload] unexpected error:', e?.message)
       errors.push(`${file.name}: ${e?.message || 'unknown error'}`)
@@ -124,4 +134,65 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ items, errors })
+}
+
+/**
+ * Background helper — runs Gemini Vision on the uploaded image and writes
+ * the result to items.analysis. Best-effort: any error is logged and
+ * swallowed so the upload itself isn't held up.
+ *
+ * Output schema written to items.analysis:
+ *   {
+ *     subject_type: 'logo' | 'product' | 'lifestyle' | 'graphic' | 'portrait' | 'other',
+ *     summary: string,                  // 1 sentence
+ *     scene_tags: string[],             // 5-8 specific visual tags for search
+ *     dominant_colors: string[],        // 3-5 hex codes
+ *     has_text: boolean,
+ *     text_content: string,             // OCR'd text if has_text
+ *     mood: string,                     // 'energetic' | 'calm' | 'premium' | etc.
+ *   }
+ */
+async function tagImageInBackground(itemId: string, buffer: Buffer, contentType: string) {
+  const supabase = createServiceClient()
+  const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!)
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+  const base64 = buffer.toString('base64')
+  const mimeType = contentType.startsWith('image/') ? contentType : 'image/jpeg'
+
+  try {
+    const result = await model.generateContent([
+      { inlineData: { mimeType, data: base64 } },
+      `Analyse this brand asset image. Return ONLY valid JSON, no markdown:
+{
+  "subject_type": "logo|product|lifestyle|graphic|portrait|other",
+  "summary": "one specific sentence describing what this image is",
+  "scene_tags": ["5-8 specific search tags — what's literally shown, e.g. 'green bottle on white background', 'minimalist sans-serif logo', 'female model holding skincare jar'"],
+  "dominant_colors": ["3-5 hex codes representing the most prominent colours"],
+  "has_text": true,
+  "text_content": "exact text visible in the image, or empty string",
+  "mood": "energetic|calm|premium|playful|clinical|minimal|bold|soft|warm|cool"
+}
+
+Be ruthlessly specific in scene_tags — vague tags like 'product' or 'photo' are useless. Tags should let someone search for this specific image among hundreds.`,
+    ])
+    const raw = result.response.text()
+    let parsed: any = null
+    try {
+      parsed = JSON.parse(raw.replace(/```json|```/g, '').trim())
+    } catch {
+      console.warn('[tag-image] non-JSON Gemini response for', itemId)
+      return
+    }
+    // Persist
+    await supabase.from('items').update({
+      analysis: {
+        ...parsed,
+        tagged_at: new Date().toISOString(),
+        tagged_by: 'gemini-2.0-flash',
+      },
+    }).eq('id', itemId)
+  } catch (e: any) {
+    console.error('[tag-image] gemini call failed for', itemId, ':', e?.message)
+  }
 }

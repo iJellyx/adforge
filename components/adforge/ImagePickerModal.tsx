@@ -56,7 +56,20 @@ export function ImagePickerModal({ open, onClose, workspaceId, selectedId, onPic
 
   const q = search.trim().toLowerCase()
   const filtered = q
-    ? images.filter(i => i.title.toLowerCase().includes(q))
+    ? images.filter(i => {
+        // Title match
+        if (i.title.toLowerCase().includes(q)) return true
+        // AI scene_tags match (e.g. searching "logo" matches images Gemini tagged as logos)
+        const tags: string[] = i.analysis?.scene_tags || []
+        if (tags.some(t => t.toLowerCase().includes(q))) return true
+        // Subject type match
+        if ((i.analysis?.subject_type || '').toLowerCase().includes(q)) return true
+        // Mood match
+        if ((i.analysis?.mood || '').toLowerCase().includes(q)) return true
+        // OCR text match
+        if ((i.analysis?.text_content || '').toLowerCase().includes(q)) return true
+        return false
+      })
     : images
 
   return (
@@ -92,10 +105,10 @@ export function ImagePickerModal({ open, onClose, workspaceId, selectedId, onPic
             </div>
           </div>
           <input
-            placeholder="Search by name…"
+            placeholder="Search name, tags, mood…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ background: 'var(--af-surface)', border: '1px solid var(--af-border)', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: 'var(--af-text)', outline: 'none', width: 200, fontFamily: 'inherit' }}
+            style={{ background: 'var(--af-surface)', border: '1px solid var(--af-border)', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: 'var(--af-text)', outline: 'none', width: 220, fontFamily: 'inherit' }}
           />
           <button
             onClick={onClose}

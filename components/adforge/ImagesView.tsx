@@ -225,8 +225,13 @@ export function ImagesView({ items, workspaceId, onRefresh, selectMode, selected
                     <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {img.title}
                     </div>
-                    <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
-                      {img.width && img.height ? `${img.width}×${img.height}` : 'Image'}
+                    <div style={{ fontSize: 10, color: C.muted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {img.analysis?.subject_type && (
+                        <span style={{ background: 'var(--af-accent-soft)', color: 'var(--af-accent)', padding: '1px 6px', borderRadius: 99, fontWeight: 600, fontSize: 9, textTransform: 'capitalize' as const }}>
+                          {img.analysis.subject_type}
+                        </span>
+                      )}
+                      <span>{img.width && img.height ? `${img.width}×${img.height}` : 'Image'}</span>
                     </div>
                   </div>
                 </div>
@@ -247,12 +252,39 @@ export function ImagesView({ items, workspaceId, onRefresh, selectMode, selected
             padding: 24,
           }}
         >
-          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', gap: 12 }}>
             <img
               src={previewItem.src_url}
               alt={previewItem.title}
-              style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}
+              style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}
             />
+            {/* AI-detected metadata panel */}
+            {previewItem.analysis && (
+              <div style={{
+                background: 'rgba(0,0,0,0.55)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 10,
+                padding: '10px 14px',
+                color: '#fff',
+                fontSize: 12,
+                lineHeight: 1.55,
+                maxWidth: 600,
+              }}>
+                {previewItem.analysis.summary && <div style={{ marginBottom: 8 }}>{previewItem.analysis.summary}</div>}
+                {previewItem.analysis.scene_tags?.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: previewItem.analysis.text_content ? 8 : 0 }}>
+                    {previewItem.analysis.scene_tags.map((t: string, i: number) => (
+                      <span key={i} style={{ background: 'rgba(255,255,255,0.12)', padding: '2px 8px', borderRadius: 99, fontSize: 10.5 }}>{t}</span>
+                    ))}
+                  </div>
+                )}
+                {previewItem.analysis.text_content && (
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>
+                    <strong>Text in image:</strong> "{previewItem.analysis.text_content}"
+                  </div>
+                )}
+              </div>
+            )}
             <div style={{
               position: 'absolute', top: -44, left: 0, right: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
