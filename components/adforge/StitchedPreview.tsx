@@ -69,6 +69,29 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     adDurationRef.current=acc
   },[clipsHash])
 
+  // Per-section VO map: maps each section index to its individual VO url
+  // (stored on each section by VoiceoverGenerator after generation). We
+  // play these sequentially instead of relying on the single stitched MP3
+  // — raw byte concat of MP3s is fragile (ID3 boundaries, embedded EOFs)
+  // and was the cause of "only the first section plays".
+  const sectionVoUrls = useMemo(() => {
+    const out: Record<number, string | null> = {}
+    ;(sections || []).forEach((s: any, i: number) => {
+      out[i] = s.voiceover_url || null
+    })
+    return out
+  }, [sections])
+
+  // Map sectionIdx → globalTime offset where that section starts (the start
+  // of its first clip in the global timeline).
+  const sectionGlobalStarts = useMemo(() => {
+    const out: Record<number, number> = {}
+    clips.forEach((c: any, i: number) => {
+      if (out[c.sectionIdx] == null) out[c.sectionIdx] = globalStartTimesRef.current[i] || 0
+    })
+    return out
+  }, [clipsHash])
+
   const getCurrentClipIdx=()=>{
     for(let i=clips.length-1;i>=0;i--){
       if(globalTime>=globalStartTimesRef.current[i])return i
@@ -78,6 +101,33 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
 
   const cur=clips[getCurrentClipIdx()]
   const clipIdx=getCurrentClipIdx()
+  // Active section's VO url. If sections have per-section URLs, use those.
+  // Otherwise fall back to the stitched URL passed in (`voiceoverUrl`) so
+  // legacy ads keep working.
+  const activeSectionIdx = cur?.sectionIdx ?? 0
+  const perSectionVo = sectionVoUrls[activeSectionIdx] || null
+  const activeVoUrl = perSectionVo || voiceoverUrl || null
+  const usingPerSectionVo = !!perSectionVo
+
+  // When the active section's VO source changes, re-anchor the audio element
+  // to the right position. With per-section VO each section's audio file
+  // starts at 0, so we map globalTime → (globalTime - sectionStart). With
+  // the stitched fallback the audio is in the global timeline so use
+  // globalTime directly.
+  useEffect(() => {
+    const a = voiceRef.current
+    if (!a || !activeVoUrl) return
+    const sectionStart = usingPerSectionVo ? (sectionGlobalStarts[activeSectionIdx] || 0) : 0
+    const targetLocal = Math.max(0, globalTime - sectionStart)
+    const seek = () => {
+      try { a.currentTime = targetLocal } catch {}
+      if (playing) a.play().catch(() => {})
+    }
+    if (a.readyState >= 1) seek()
+    else a.addEventListener('loadedmetadata', seek, { once: true })
+    return () => a.removeEventListener('loadedmetadata', seek)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeVoUrl])
 
   // Prevents onTimeUpdate from reading currentTime during the transient
   // "just-changed-src" window where v.currentTime is 0 before seek lands.
@@ -135,9 +185,13 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     //   DO NOT jump audio back — that was the audible skip bug. Let audio keep
     //   playing; video will catch up naturally once the new clip loads.
     // Threshold raised to 1.0s so only real desyncs trigger correction.
-    if(voiceRef.current&&voiceoverUrl&&!voiceRef.current.paused){
-      const drift=voiceRef.current.currentTime-newGlobalTime
-      if(drift<-1.0)voiceRef.current.currentTime=newGlobalTime  // audio way behind video → catch up
+    if(voiceRef.current&&activeVoUrl&&!voiceRef.current.paused){
+      // Per-section audio is local-time (0..section-dur); stitched fallback
+      // is global-time. Map our reference accordingly.
+      const sectionStart=usingPerSectionVo?(sectionGlobalStarts[activeSectionIdx]||0):0
+      const expectedAudioTime=Math.max(0,newGlobalTime-sectionStart)
+      const drift=voiceRef.current.currentTime-expectedAudioTime
+      if(drift<-1.0)voiceRef.current.currentTime=expectedAudioTime  // audio way behind video → catch up
     }
     if(musicRef.current&&musicUrl&&!musicRef.current.paused){
       const drift=musicRef.current.currentTime-newGlobalTime
@@ -166,7 +220,11 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
     if(playing){v.pause();voiceRef.current?.pause();musicRef.current?.pause();setPlaying(false)}
     else{
       v.play().catch(()=>{})
-      if(voiceRef.current&&voiceoverUrl){voiceRef.current.currentTime=globalTime;voiceRef.current.play().catch(()=>{})}
+      if(voiceRef.current&&activeVoUrl){
+        const sectionStart=usingPerSectionVo?(sectionGlobalStarts[activeSectionIdx]||0):0
+        voiceRef.current.currentTime=Math.max(0,globalTime-sectionStart)
+        voiceRef.current.play().catch(()=>{})
+      }
       if(musicRef.current&&musicUrl){musicRef.current.currentTime=globalTime;musicRef.current.volume=0.2;musicRef.current.play().catch(()=>{})}
       setPlaying(true)
     }
@@ -201,7 +259,15 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
         // Different clip — src will change via useEffect; seek happens in loadedmetadata
       }
     }
-    if(voiceRef.current){ voiceRef.current.currentTime = clamped }
+    if(voiceRef.current){
+      // Per-section audio: seek into the section-local timeline. Stitched
+      // fallback: global timeline. (When the section has its own VO, the
+      // src may also need to swap — useEffect on activeVoUrl handles the
+      // re-seek post-load.)
+      const targetSectionIdx = targetClip?.sectionIdx ?? 0
+      const sectionStart = usingPerSectionVo ? (sectionGlobalStarts[targetSectionIdx] || 0) : 0
+      voiceRef.current.currentTime = Math.max(0, clamped - sectionStart)
+    }
     if(musicRef.current){ musicRef.current.currentTime = clamped }
     if(!keepPlaying){
       vidRef.current?.pause()
@@ -240,7 +306,10 @@ export function StitchedPreview({sections,libraryItems,voiceoverUrl,musicUrl,cap
   const clipDur=Math.max(1,nextClipStart-clipGlobalStart)
 
   return<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:14,overflow:"hidden"}}>
-    {voiceoverUrl&&<audio ref={voiceRef} key={voiceoverUrl} src={voiceoverUrl} style={{display:"none"}}/>}
+    {/* When per-section VO is available, swap audio element per section
+        (key on URL forces React to replace it). Otherwise fall back to a
+        single stitched audio. */}
+    {activeVoUrl&&<audio ref={voiceRef} key={activeVoUrl} src={activeVoUrl} style={{display:"none"}}/>}
     {/* No `loop` — music is bounded by ad duration and paused when it reaches the end. */}
     {musicUrl&&<audio ref={musicRef} src={musicUrl} style={{display:"none"}}/>}
 
