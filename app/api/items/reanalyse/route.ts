@@ -173,11 +173,26 @@ export async function POST(req: NextRequest) {
             autoTranscript = tData.results?.channels?.[0]?.alternatives?.[0]?.transcript || ''
             wordTimestamps = tData.results?.channels?.[0]?.alternatives?.[0]?.words || []
             console.log(`[reanalyse] Deepgram: ${autoTranscript.length} chars, ${wordTimestamps.length} words`)
-            // Persist so we don't re-run on subsequent re-analyses
-            await supabase.from('items').update({
+            // Persist so we don't re-run on subsequent re-analyses. We
+            // explicitly check the Supabase error — earlier this update was
+            // silently failing because `word_timestamps` column didn't exist
+            // (lost during the unification migration), which then nuked the
+            // transcript field too because Postgres rejected the whole row.
+            const persistErr = (await supabase.from('items').update({
               transcript: autoTranscript,
               word_timestamps: wordTimestamps,
-            }).eq('id', itemId)
+            }).eq('id', itemId)).error
+            if (persistErr) {
+              console.error('[reanalyse] Failed to persist transcript+timestamps:', persistErr.message)
+              // Fallback: try saving just the transcript so we at least get
+              // partial persistence even if word_timestamps still has issues.
+              const txOnly = (await supabase.from('items').update({
+                transcript: autoTranscript,
+              }).eq('id', itemId)).error
+              if (txOnly) console.error('[reanalyse] Transcript-only fallback also failed:', txOnly.message)
+            }
+          } else {
+            console.error('[reanalyse] Deepgram non-OK:', tRes.status, await tRes.text().catch(() => ''))
           }
         }
       } catch (e: any) { console.log('[reanalyse] Deepgram failed:', e.message) }
@@ -421,14 +436,24 @@ Return ONLY valid JSON:
       }
     })
 
-    const { data: clips } = clipInserts.length > 0
-      ? await supabase.from('items').insert(clipInserts).select()
-      : { data: [] as any[] }
+    let clips: any[] | null = null
+    if (clipInserts.length > 0) {
+      const insertResult = await supabase.from('items').insert(clipInserts).select()
+      if (insertResult.error) {
+        console.error('[reanalyse] Clip insert FAILED:', insertResult.error.message, insertResult.error.code)
+      }
+      clips = insertResult.data
+    }
     const clipIds = (clips || []).map((c: any) => c.id)
-    await supabase.from('items').update({ analysis, clip_ids: clipIds, mux_status: 'ready' }).eq('id', itemId)
-    console.log(`[reanalyse] Done: ${clipIds.length} clips for ${item.title}`)
+    const finalUpdate = await supabase.from('items')
+      .update({ analysis, clip_ids: clipIds, mux_status: 'ready' })
+      .eq('id', itemId)
+    if (finalUpdate.error) {
+      console.error('[reanalyse] Final update FAILED:', finalUpdate.error.message)
+    }
+    console.log(`[reanalyse] Done: ${clipIds.length} clips for ${item.title} (segments: ${analysis.clip_segments?.length || 0} → valid: ${validSegments.length} → inserted: ${clipIds.length})`)
   } catch (err: any) {
-    console.error('[reanalyse] failed:', err.message)
+    console.error('[reanalyse] failed:', err.message, err.stack)
     await supabase.from('items').update({ mux_status: 'ready' }).eq('id', itemId)
   }
 
