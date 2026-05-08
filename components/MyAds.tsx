@@ -1,6 +1,9 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { Folder, Film, Image as ImageIcon, ChevronRight, ExternalLink } from 'lucide-react'
+import { CrossPromoCard } from '@/components/CrossPromoCard'
+import { UpsellModal } from '@/components/UpsellModal'
+import type { ProductSlug } from '@/lib/access-types'
 
 type Ad = {
   kind: 'video' | 'static'
@@ -43,6 +46,7 @@ export function MyAds({ workspaceId }: Props) {
   const [activeFolderId, setActiveFolderId] = useState<string | 'all'>('all')
   const [kindFilter, setKindFilter] = useState<'all' | 'video' | 'static'>('all')
   const [loading, setLoading] = useState(true)
+  const [upsellFor, setUpsellFor] = useState<ProductSlug | null>(null)
 
   useEffect(() => {
     if (!workspaceId) return
@@ -136,6 +140,10 @@ export function MyAds({ workspaceId }: Props) {
           </a>
         </div>
 
+        {/* Cross-promo: Forge users see a 'add Split' card if they don't have it.
+            Auto-hides when has_split is true, and dismissable per-session. */}
+        <CrossPromoCard surface="myads-forge" promote="split" onUpsellClick={setUpsellFor} />
+
         <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
           {(['all', 'video', 'static'] as const).map(k => {
             const active = kindFilter === k
@@ -170,6 +178,12 @@ export function MyAds({ workspaceId }: Props) {
           </div>
         )}
       </main>
+      <UpsellModal
+        open={!!upsellFor}
+        product={upsellFor}
+        onClose={() => setUpsellFor(null)}
+        onUpgrade={(slug) => { console.log('[upsell] from cross-promo:', slug); setUpsellFor(null) }}
+      />
     </div>
   )
 }
