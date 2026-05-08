@@ -11,10 +11,11 @@ import { ExportVideo } from './ExportVideo'
 import { ClipPickerModal } from './ClipPickerModal'
 import { TrimEditorModal } from './TrimEditorModal'
 import { SectionsRail } from './SectionsRail'
+import { ImagePickerModal } from './ImagePickerModal'
 import {
   ChevronLeft, ChevronDown, Scissors, Wand2, Mic, Music,
   Settings, Zap, Check, Play, Save, ChevronRight, Type,
-  Film, Volume2, Palette, Eye
+  Film, Volume2, Palette, Eye, Image as ImageIcon, X
 } from 'lucide-react'
 
 type TabId = 'script' | 'clips' | 'audio' | 'style'
@@ -51,6 +52,7 @@ export function AdStudio({
   musicUrl, setMusicUrl,
   musicName, setMusicName,
   captionSettings, setCaptionSettings,
+  endCard, setEndCard,
   adTitle, setAdTitle,
   aspectRatio, setAspectRatio,
   suggestedMood,
@@ -78,6 +80,8 @@ export function AdStudio({
   setMusicName: (n: string | null) => void
   captionSettings: CaptionSettings
   setCaptionSettings: (s: CaptionSettings) => void
+  endCard: { itemId: string; duration: number } | null
+  setEndCard: (e: { itemId: string; duration: number } | null) => void
   adTitle: string
   setAdTitle: (t: string) => void
   aspectRatio: string
@@ -107,6 +111,7 @@ export function AdStudio({
   const [clipPickerOpen, setClipPickerOpen] = useState(false)
   const [trimModalOpen, setTrimModalOpen] = useState(false)
   const [rewriting, setRewriting] = useState(false)
+  const [endCardPickerOpen, setEndCardPickerOpen] = useState(false)
 
   // ── Derived values ──
   const assignedCount = sections.filter((s: any) => s.selectedClipId || (s.clipSegments || []).some((seg: any) => seg.clipId)).length
@@ -947,6 +952,80 @@ export function AdStudio({
                   )}
                 </div>
 
+                {/* End card — pick a Stash image to play as the closing 1-3s frame */}
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--af-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'block' }}>
+                    End card
+                  </label>
+                  {endCard ? (() => {
+                    const ec = items.find(i => i.id === endCard.itemId)
+                    return (
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', background: 'var(--af-card)', border: '1px solid var(--af-border)', borderRadius: 10, padding: 10 }}>
+                        <div style={{ width: 56, height: 56, borderRadius: 8, overflow: 'hidden', background: '#f3f0e8', flexShrink: 0 }}>
+                          {ec?.src_url ? (
+                            <img src={ec.src_url} alt={ec.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--af-muted)' }}>
+                              <ImageIcon size={20} />
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--af-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {ec?.title || 'Image not found'}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--af-muted)', marginTop: 2 }}>
+                            Plays for {endCard.duration}s at the end
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                          <button
+                            onClick={() => setEndCardPickerOpen(true)}
+                            style={{ background: 'var(--af-card)', border: '1px solid var(--af-border)', borderRadius: 9999, padding: '5px 10px', fontSize: 11, fontWeight: 600, color: 'var(--af-text)', cursor: 'pointer', fontFamily: 'inherit' }}
+                          >Change</button>
+                          <button
+                            onClick={() => setEndCard(null)}
+                            title="Remove end card"
+                            style={{ background: 'transparent', border: '1px solid var(--af-border)', borderRadius: 9999, padding: 5, color: 'var(--af-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          ><X size={13} /></button>
+                        </div>
+                      </div>
+                    )
+                  })() : (
+                    <button
+                      onClick={() => setEndCardPickerOpen(true)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        background: 'var(--af-card)', border: '1.5px dashed var(--af-border)', borderRadius: 10,
+                        padding: '14px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+                        color: 'var(--af-text-secondary)',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--af-accent)'; e.currentTarget.style.color = 'var(--af-text)' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--af-border)'; e.currentTarget.style.color = 'var(--af-text-secondary)' }}
+                    >
+                      <ImageIcon size={15} /> Add end card from Stash
+                    </button>
+                  )}
+                  {endCard && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                      <span style={{ fontSize: 11, color: 'var(--af-muted)', minWidth: 60 }}>Duration</span>
+                      <input
+                        type="range"
+                        min={1} max={5} step={0.5}
+                        value={endCard.duration}
+                        onChange={e => setEndCard({ ...endCard, duration: Number(e.target.value) })}
+                        style={{ flex: 1 }}
+                      />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--af-text)', minWidth: 32, textAlign: 'right' as const }}>
+                        {endCard.duration}s
+                      </span>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: 'var(--af-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                    Picks a Stash image (logo, "20% OFF" graphic, etc.) and plays it as the final frame. Add images in <strong>Stash → Images</strong>.
+                  </div>
+                </div>
+
                 {/* Ad title */}
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--af-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'block' }}>
@@ -995,6 +1074,18 @@ export function AdStudio({
           </div>
         </aside>
       </div>
+      {/* Stash image picker for end-card selection */}
+      <ImagePickerModal
+        open={endCardPickerOpen}
+        onClose={() => setEndCardPickerOpen(false)}
+        workspaceId={workspaceId}
+        selectedId={endCard?.itemId || null}
+        title="Pick an end-card image"
+        onPick={(item) => {
+          if (item) setEndCard({ itemId: item.id, duration: endCard?.duration || 2 })
+          else setEndCard(null)
+        }}
+      />
     </div>
   )
 }

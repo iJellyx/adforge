@@ -448,10 +448,39 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── End-card image (if any) ──────────────────────────────────────
+    // The user picked a Stash image to play as the closing frame for `duration`
+    // seconds. Append it as a final video-track clip and extend voiceover/music
+    // to match (silence is fine — the image itself has no audio of its own).
+    let endCardClip: any = null
+    let endCardDuration = 0
+    const endCardMeta = ad.metadata?.endCard as { itemId?: string; duration?: number } | undefined
+    if (endCardMeta?.itemId) {
+      endCardDuration = Math.max(0.5, Math.min(10, Number(endCardMeta.duration) || 2))
+      const { data: imgRow } = await supabase
+        .from('items')
+        .select('id,src_url,workspace_id,type')
+        .eq('id', endCardMeta.itemId)
+        .maybeSingle()
+      // Defensive: validate the image belongs to this brand and is actually an image
+      if (imgRow?.src_url && imgRow.workspace_id === ad.workspace_id && imgRow.type === 'image') {
+        endCardClip = {
+          asset: { type: 'image', src: imgRow.src_url },
+          start: totalDuration,
+          length: endCardDuration,
+          fit: 'contain',
+          transition: { in: 'fade' },
+        }
+      } else {
+        console.warn('[render] endCard image not found or not authorised:', endCardMeta.itemId)
+      }
+    }
+
+    const finalDuration = totalDuration + endCardDuration
     const audioClips = buildAudioClips(
       ad.voiceover_url || null,
       ad.music_url || null,
-      totalDuration
+      finalDuration  // music/VO extend through end-card so audio doesn't cut early
     )
 
     // Captions now use section timings derived from actual video/voiceover durations
@@ -461,7 +490,8 @@ export async function POST(req: NextRequest) {
       : []
 
     // 4. Assemble Shotstack timeline
-    const tracks: any[] = [{ clips: videoClips }]
+    const videoTrackClips = endCardClip ? [...videoClips, endCardClip] : videoClips
+    const tracks: any[] = [{ clips: videoTrackClips }]
 
     if (captionClips.length) {
       tracks.unshift({ clips: captionClips }) // captions on top

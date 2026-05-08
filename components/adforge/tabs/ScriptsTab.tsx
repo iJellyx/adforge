@@ -36,6 +36,7 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
     setAdTitle(final.title||"")
     setAspectRatio(final.metadata?.aspectRatio||"9:16")
     setCaptionSettings(final.metadata?.captionSettings||{...DEFAULT_CAPTIONS})
+    setEndCard(final.metadata?.endCard||null)
     setGenMeta({form:final.metadata?.brief||{},productName:final.metadata?.brief?.productName||""})
     setNewAdOpen(false)
     setView("review")
@@ -51,6 +52,9 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
     setMusicUrl(editingAd.music_url||null)
     setMusicName(editingAd.music_name||null)
     setAdTitle(editingAd.title||"")
+    setAspectRatio(editingAd.metadata?.aspectRatio||"9:16")
+    setCaptionSettings(editingAd.metadata?.captionSettings||{...DEFAULT_CAPTIONS})
+    setEndCard(editingAd.metadata?.endCard||null)
     setGenMeta({form:{contentType:editingAd.metadata?.contentType,adLength:editingAd.metadata?.adLength,awarenessStage:editingAd.metadata?.awarenessStage},productName:editingAd.metadata?.productName})
     setView("review");setStep("clips")
     onEditingAdConsumed?.()
@@ -78,6 +82,9 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
   const [adTitle,setAdTitle]=useState("")
   const [aspectRatio,setAspectRatio]=useState("9:16")
   const [captionSettings,setCaptionSettings]=useState<CaptionSettings>({...DEFAULT_CAPTIONS})
+  // End-card image — picked from Stash, plays for `duration` seconds at the
+  // end of the video. Persisted in forged_ads.metadata.endCard.
+  const [endCard,setEndCard]=useState<{itemId:string,duration:number}|null>(null)
   const [hookVariations,setHookVariations]=useState<any[][]>([])
   const [hookError,setHookError]=useState("")
   const [selectedHooks,setSelectedHooks]=useState<number[]>([0])
@@ -273,7 +280,7 @@ export function ScriptsTab({scripts,items,brand,products,onSaveScripts,onSaveFor
         if(d.url)finalVoiceoverUrl=d.url
       }catch(e){console.error("Voiceover upload failed:",e)}
     }
-    const adData={title,status,mode:"script" as const,sections:secs,voiceover_url:finalVoiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName,hookVariation:hookNum!=null?hookNum+1:null,aspectRatio}}
+    const adData={title,status,mode:"script" as const,sections:secs,voiceover_url:finalVoiceoverUrl,voiceover_voice:voiceoverVoice,music_url:musicUrl,music_name:musicName,metadata:{...genMeta?.form,productName:genMeta?.productName,hookVariation:hookNum!=null?hookNum+1:null,aspectRatio,captionSettings,endCard}}
     const savedAd=await onSaveForgedAd(adData)
     if(savedAd?.id){
       fetch("/api/export/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({adId:savedAd.id})}).catch(e=>console.error("Background render error:",e))
@@ -459,6 +466,8 @@ Return ONLY valid JSON:
         setMusicName={setMusicName}
         captionSettings={captionSettings}
         setCaptionSettings={setCaptionSettings}
+        endCard={endCard}
+        setEndCard={setEndCard}
         adTitle={adTitle}
         setAdTitle={setAdTitle}
         aspectRatio={aspectRatio}
