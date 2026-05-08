@@ -15,6 +15,7 @@ import { ClipReviewModal } from '../ClipReviewModal'
 import { ManualClipModal } from '../ManualClipModal'
 import { UploadPipeline } from '../UploadPipeline'
 import { FolderTree } from '../FolderTree'
+import { ImagesView } from '../ImagesView'
 
 export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products,onGoToBrand,workspaceId}:{items:Item[],onRefresh:()=>void,view:string,setView:(v:string)=>void,brand:BrandProfile,products:Product[],onGoToBrand:()=>void,workspaceId:string}){
   const supabase=createClient()
@@ -36,7 +37,7 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
   const [dragOver,setDragOver]=useState(false)
   const [uploadQueue,setUploadQueue]=useState<any[]>([])
   const [autoClipEnabled,setAutoClipEnabled]=useState(true)
-  const [subView,setSubView]=useState<"clips"|"originals"|"upload">("clips")
+  const [subView,setSubView]=useState<"clips"|"originals"|"images"|"upload">("clips")
   const [clipDetailItem,setClipDetailItem]=useState<Item|null>(null)
   const [manualClipFor,setManualClipFor]=useState<Item|null>(null)
   // Folders: null = all, '__root' = unfiled, else = specific folder id
@@ -250,6 +251,7 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
     // "originals" view → only originals. "clips" view → only clips.
     if(subView==="originals"&&item.type!=="original")return false
     if(subView==="clips"&&item.type!=="clip")return false
+    if(subView==="images"&&item.type!=="image")return false
     if(filter==="Originals"&&item.type!=="original")return false
     if(filter==="Clips"&&item.type!=="clip")return false
     if(filterCtypes.length>0){const ct=item.analysis?.content_type;if(!filterCtypes.some(f=>f===ct||(f==="Clip"&&item.type==="clip")))return false}
@@ -552,6 +554,43 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
     </div>
   }
 
+  // ── Sub-view: Images ──
+  // Brand-asset image library. Reuses the same FolderTree (kind='library')
+  // so clips and images share an organisation tree.
+  if(subView==="images"&&view==="grid"){
+    return<div style={{display:"flex",alignItems:"stretch",minHeight:"calc(100vh - 56px)"}} key={folderRefreshTick}>
+      <div style={{width:240,flexShrink:0}}>
+        <FolderTree
+          workspaceId={workspaceId}
+          kind="library"
+          activeFolderId={activeFolderId}
+          onSelect={setActiveFolderId}
+          counts={folderCounts}
+          totalCount={totalOriginals}
+          unfiledCount={unfiledOriginals}
+          onChange={onRefresh}
+          onDropItem={(itemId,folderId)=>moveItemToFolder(itemId,folderId)}
+        />
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        {/* Sub-view toggle bar (matches clips/originals views) */}
+        <div style={{padding:"16px 24px 0",display:"flex",alignItems:"center",gap:16,borderBottom:"1px solid "+C.border,background:C.card}}>
+          <div style={{display:"flex",gap:4}}>
+            {(["clips","originals","images","upload"] as const).map(sv=>{
+              const labels={clips:"✂️ Clips",originals:"🎬 Originals",images:"🖼️ Images",upload:"⬆️ Upload"}
+              const active=subView===sv
+              return<button key={sv} onClick={()=>{if(sv==="upload"){setView("add");setSubView("upload")}else setSubView(sv)}} style={{padding:"10px 18px",background:"none",border:"none",borderBottom:"2px solid "+(active?C.accent:"transparent"),color:active?C.text:C.muted,fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",whiteSpace:"nowrap",fontFamily:"inherit"}}>{labels[sv]}</button>
+            })}
+          </div>
+          <div style={{marginLeft:"auto",fontSize:12,color:C.muted}}>
+            {items.filter(i=>i.type==="image").length} images
+          </div>
+        </div>
+        <ImagesView items={filtered} workspaceId={workspaceId} onRefresh={onRefresh} selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={(id)=>setSelectedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])}/>
+      </div>
+    </div>
+  }
+
   // ── Sub-view: Clips (default) ──
   if(subView==="clips"&&view==="grid"){
     return<div style={{display:"flex",alignItems:"stretch",minHeight:"calc(100vh - 56px)"}} key={folderRefreshTick}>
@@ -572,8 +611,8 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
       {/* Sub-view toggle bar */}
       <div style={{padding:"16px 24px 0",display:"flex",alignItems:"center",gap:16,borderBottom:"1px solid "+C.border,background:C.card}}>
         <div style={{display:"flex",gap:4}}>
-          {(["clips","originals","upload"] as const).map(sv=>{
-            const labels={clips:"✂️ Clips",originals:"🎬 Originals",upload:"⬆️ Upload"}
+          {(["clips","originals","images","upload"] as const).map(sv=>{
+            const labels={clips:"✂️ Clips",originals:"🎬 Originals",images:"🖼️ Images",upload:"⬆️ Upload"}
             const active=subView===sv
             return<button key={sv} onClick={()=>{if(sv==="upload"){setView("add");setSubView("upload")}else setSubView(sv)}} style={{padding:"10px 18px",background:"none",border:"none",borderBottom:"2px solid "+(active?C.accent:"transparent"),color:active?C.text:C.muted,fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",whiteSpace:"nowrap",fontFamily:"inherit"}}>{labels[sv]}</button>
           })}
@@ -631,8 +670,8 @@ export function LibraryTab({items:rawItems,onRefresh,view,setView,brand,products
     <div style={{flex:1,padding:20,minWidth:0,overflowX:"hidden"}}>
     {/* Sub-view toggle bar for originals */}
     <div style={{display:"flex",gap:4,marginBottom:20}}>
-      {(["clips","originals","upload"] as const).map(sv=>{
-        const labels={clips:"✂️ Clips",originals:"🎬 Originals",upload:"⬆️ Upload"}
+      {(["clips","originals","images","upload"] as const).map(sv=>{
+        const labels={clips:"✂️ Clips",originals:"🎬 Originals",images:"🖼️ Images",upload:"⬆️ Upload"}
         const active=subView===sv
         return<button key={sv} onClick={()=>{if(sv==="upload"){setView("add");setSubView("upload")}else setSubView(sv)}} style={{padding:"8px 16px",background:active?C.accentSoft:"none",border:"1px solid "+(active?C.accent:C.border),borderRadius:99,color:active?C.accent:C.muted,fontWeight:active?700:500,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{labels[sv]}</button>
       })}
