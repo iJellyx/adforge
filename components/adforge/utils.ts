@@ -1,6 +1,21 @@
 import { C } from './constants'
 
 export function muxThumb(playbackId: string, time = 0) { return `https://image.mux.com/${playbackId}/thumbnail.jpg?time=${time}&width=400` }
+/**
+ * Animated GIF preview from Mux — used for hover-previews without spinning
+ * up a video element. `start`/`end` clip the preview to the clip's trim
+ * range; `fps` 8 keeps file size small. Mux generates these on demand.
+ */
+export function muxGif(playbackId: string, opts?: {start?: number; end?: number; fps?: number; width?: number}) {
+  const {start = 0, end, fps = 8, width = 320} = opts ?? {}
+  const params = new URLSearchParams({
+    width: String(width),
+    fps: String(fps),
+    start: String(Math.max(0, start)),
+  })
+  if (end != null && end > start) params.set('end', String(end))
+  return `https://image.mux.com/${playbackId}/animated.gif?${params.toString()}`
+}
 export function gradeColor(grade:string):{bg:string,text:string}{
   const g=(grade||"").charAt(0).toUpperCase()
   if(g==="A")return{bg:"#22c55e22",text:"#22c55e"}

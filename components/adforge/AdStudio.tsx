@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react'
 import type { Item, CaptionSettings, CaptionStyle } from './types'
 import { C, SEC_TYPES, DEFAULT_CAPTIONS } from './constants'
-import { secColor, callClaude, muxThumb, fmt } from './utils'
+import { secColor, callClaude, muxThumb, muxGif, fmt } from './utils'
 import { Btn, Label, Input } from './ui-primitives'
 import { StitchedPreview } from './StitchedPreview'
 import { VoiceoverGenerator } from './VoiceoverGenerator'
@@ -635,32 +635,7 @@ export function AdStudio({
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                       {alternatives.map((item: any) => (
-                        <div
-                          key={item.id}
-                          onClick={() => swapClip(item.id)}
-                          style={{
-                            cursor: 'pointer', borderRadius: 8, overflow: 'hidden',
-                            border: '1px solid var(--af-border)', background: 'var(--af-card)',
-                            transition: 'border-color 0.15s',
-                          }}
-                          onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--af-accent)')}
-                          onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--af-border)')}
-                        >
-                          <div style={{
-                            width: '100%', height: 80,
-                            background: item.mux_playback_id
-                              ? `url(${muxThumb(item.mux_playback_id, item.thumbnail_time ?? item.start_seconds ?? 0)}) center/cover no-repeat`
-                              : 'var(--af-surface)',
-                          }} />
-                          <div style={{ padding: '5px 8px' }}>
-                            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--af-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {item.title || 'Untitled'}
-                            </div>
-                            <div style={{ fontSize: 9, color: 'var(--af-muted)' }}>
-                              {item.duration_seconds ? fmt(item.duration_seconds) : ''}
-                            </div>
-                          </div>
-                        </div>
+                        <AlternativeClipCard key={item.id} item={item} onPick={() => swapClip(item.id)} />
                       ))}
                     </div>
                   </div>
@@ -1088,6 +1063,72 @@ export function AdStudio({
           else setEndCard(null)
         }}
       />
+    </div>
+  )
+}
+
+/**
+ * Hover-to-preview thumbnail for the alternatives grid in the Clips tab.
+ * On idle: static Mux thumbnail. On hover: animated Mux GIF clipped to the
+ * item's trim range so the user sees what they're swapping in. Click to
+ * apply.
+ *
+ * GIF URLs are lazy — Mux generates them on first request and caches; the
+ * first hover may take ~500ms but subsequent ones are instant.
+ */
+function AlternativeClipCard({ item, onPick }: { item: any; onPick: () => void }) {
+  const [hover, setHover] = useState(false)
+  const thumbStart = item.thumbnail_time ?? item.start_seconds ?? 0
+  const showGif = hover && item.mux_playback_id
+  const bgUrl = item.mux_playback_id
+    ? (showGif
+        ? muxGif(item.mux_playback_id, {
+            start: item.start_seconds ?? 0,
+            end: item.end_seconds ?? undefined,
+            fps: 8,
+            width: 280,
+          })
+        : muxThumb(item.mux_playback_id, thumbStart))
+    : null
+  return (
+    <div
+      onClick={onPick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        cursor: 'pointer', borderRadius: 8, overflow: 'hidden',
+        border: `1px solid ${hover ? 'var(--af-accent)' : 'var(--af-border)'}`,
+        background: 'var(--af-card)',
+        transition: 'border-color 0.15s',
+      }}
+    >
+      <div style={{
+        position: 'relative',
+        width: '100%', height: 80,
+        background: bgUrl
+          ? `url(${bgUrl}) center/cover no-repeat`
+          : 'var(--af-surface)',
+      }}>
+        {/* Subtle "preview" hint when hovering */}
+        {hover && item.mux_playback_id && (
+          <span style={{
+            position: 'absolute', top: 4, right: 4,
+            background: 'rgba(0,0,0,0.65)', color: '#fff',
+            fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+            padding: '2px 5px', borderRadius: 3, textTransform: 'uppercase',
+          }}>
+            Preview
+          </span>
+        )}
+      </div>
+      <div style={{ padding: '5px 8px' }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--af-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {item.title || 'Untitled'}
+        </div>
+        <div style={{ fontSize: 9, color: 'var(--af-muted)' }}>
+          {item.duration_seconds ? fmt(item.duration_seconds) : ''}
+        </div>
+      </div>
     </div>
   )
 }
