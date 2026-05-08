@@ -307,44 +307,83 @@ export function GenerationFlow({ brief, brand, products, items, workspaceId, voi
       return `Section ${i} [${s.type}]: spoken="${(s.spokenWords || '').substring(0, 120)}" required_duration=${reqDur.toFixed(1)}s`
     }).join('\n')
 
-    const prompt = `Match ONE clip to each script section. Each clip's duration must be >= the section's required_duration.\n\nSCRIPT:\n${sectionDesc}\n\nLIBRARY (${pool.length}):\n${libSummary}\n\nRules: 1 clip per section, no reuse, prefer BROLL when voiceover present, give 2 alternates.\nReturn ONLY JSON: [{"section":0,"best_id":"uuid","alt_ids":["a","b"]}]`
+    // Multi-clip matching: ask Claude to fill each section's required_duration
+    // with 1–3 clips. Single clip is still preferred when it can hold the full
+    // section, but for sections that need 8s+ across short auto-clipped
+    // sources, chaining 2–3 matters more than picking the "best" single.
+    const prompt = `Fill each script section with 1–3 clips that together visually narrate the spoken words. Match the section's vibe and the clip's content.
 
-    const raw = await callClaude([{ role: 'user', content: prompt }], 1500)
+SCRIPT:
+${sectionDesc}
+
+LIBRARY (${pool.length}):
+${libSummary}
+
+Rules:
+- Prefer ONE long-enough clip per section if possible (cleaner cut). Use 2–3 only when no single clip is long enough OR the script flow benefits from a hard visual change.
+- No clip reuse across sections.
+- When voiceover is present, prefer BROLL over TALKING_HEAD.
+- For each section also list 2 ALTERNATE single-clip swaps (for the user to pick from in the editor).
+
+Return ONLY JSON in this exact shape:
+[{"section":0,"clips":["uuid1","uuid2"],"alt_ids":["altA","altB"]}]
+Where "clips" is the ordered list of clip ids that visually fill that section, in playback order.`
+
+    const raw = await callClaude([{ role: 'user', content: prompt }], 2000)
     const matches = JSON.parse(raw.replace(/```json|```/g, '').trim())
     const validIds = new Set(items.map(i => i.id))
     const usedIds = new Set<string>()
 
+    // Helper: build clipSegments[] for a section by walking the picked clip
+    // ids in order and accumulating their natural durations until reqDur is
+    // hit. Last segment gets trimmed mid-clip to land exactly on reqDur.
+    function buildSegmentsForSection(pickedIds: string[], reqDur: number, sectionIdx: number) {
+      const segs: { id: string; clipId: string; trimStart: number; trimEnd: number }[] = []
+      let acc = 0
+      for (let k = 0; k < pickedIds.length && acc < reqDur - 0.05; k++) {
+        const cid = pickedIds[k]
+        const item = items.find(x => x.id === cid) as any
+        if (!item) continue
+        const naturalStart = item.start_seconds || 0
+        const naturalDur = item.duration_seconds || 0
+        const naturalEnd = naturalStart + naturalDur
+        const remaining = reqDur - acc
+        const wantDur = Math.min(naturalDur || remaining, remaining)
+        const trimStart = naturalStart
+        const trimEnd = Math.min(naturalEnd, trimStart + wantDur)
+        const playableDur = Math.max(0.5, trimEnd - trimStart)
+        segs.push({ id: `seg-${sectionIdx}-${k}`, clipId: cid, trimStart, trimEnd })
+        acc += playableDur
+        usedIds.add(cid)
+      }
+      return segs
+    }
+
     return sections.map((s: any, i: number) => {
       const m = matches.find((x: any) => x.section === i)
-      if (!m) return { ...s, matchedClipIds: [], selectedClipId: null }
+      if (!m) return { ...s, matchedClipIds: [], selectedClipId: null, clipSegments: [] }
       const reqDur = s.actualVoDurationSec || s.targetDurationSec || 3
-      const candidates = [m.best_id, ...(m.alt_ids || [])].filter((id: string) => id && validIds.has(id) && !usedIds.has(id))
-      const longEnough = candidates.filter((id: string) => {
-        const it = items.find(x => x.id === id)
-        return it && (it.duration_seconds || 0) >= reqDur
-      })
-      const final = longEnough.length ? longEnough : candidates
-      const clipId = final[0] || null
-      if (clipId) usedIds.add(clipId)
-      const item = clipId ? items.find(x => x.id === clipId) : null
-      // Try to make this clip play for `reqDur` seconds. Anchor on the
-      // clip's existing in-point, then extend forward up to the underlying
-      // video's natural end. If the clip is genuinely too short we still
-      // play whatever's there — preview will show the gap and the user can
-      // pick an alternative or (eventually) chain a second clip in.
-      const naturalEnd = (item as any)?.duration_seconds
-        ? Math.min(((item as any).start_seconds || 0) + ((item as any).duration_seconds || 0), Number.MAX_SAFE_INTEGER)
-        : Number.MAX_SAFE_INTEGER
-      const trimStart = item?.start_seconds || 0
-      const desiredEnd = trimStart + reqDur
-      const trimEnd = Math.min(desiredEnd, naturalEnd)
+      // Filter to valid + unused clips, preserving Claude's order.
+      const orderedClips: string[] = (m.clips || (m.best_id ? [m.best_id] : []))
+        .filter((id: string) => id && validIds.has(id) && !usedIds.has(id))
+      // If Claude returned no usable picks, fall back to any candidate
+      // (even reused) so the section isn't empty — user can swap later.
+      const fallbackPool: string[] = orderedClips.length > 0
+        ? orderedClips
+        : (m.alt_ids || []).filter((id: string) => id && validIds.has(id))
+      const segments = buildSegmentsForSection(fallbackPool, reqDur, i)
+      const selectedClipId = segments[0]?.clipId || null
+      const matchedClipIds = [...orderedClips, ...((m.alt_ids || []).filter((a: string) => a && validIds.has(a)))]
+      // Legacy single-clip fields (kept so older preview/render paths still work).
+      const trimStart = segments[0]?.trimStart ?? 0
+      const trimEnd = segments[segments.length - 1]?.trimEnd ?? trimStart + reqDur
       return {
         ...s,
-        matchedClipIds: candidates,
-        selectedClipId: clipId,
+        matchedClipIds,
+        selectedClipId,
         trimStart,
         trimEnd,
-        clipSegments: clipId ? [{ id: 'seg-' + i + '-0', clipId, trimStart, trimEnd }] : [],
+        clipSegments: segments,
       }
     })
   }

@@ -109,6 +109,9 @@ export function AdStudio({
   const [currentlyPlayingIdx, setCurrentlyPlayingIdx] = useState<number | undefined>(undefined)
   const [hookPickerOpen, setHookPickerOpen] = useState(false)
   const [clipPickerOpen, setClipPickerOpen] = useState(false)
+  // 'swap' replaces the section's primary clip; 'append' chains a new
+  // segment onto the end. Same picker modal, different commit handler.
+  const [clipPickerMode, setClipPickerMode] = useState<'swap' | 'append'>('swap')
   const [trimModalOpen, setTrimModalOpen] = useState(false)
   const [rewriting, setRewriting] = useState(false)
   const [endCardPickerOpen, setEndCardPickerOpen] = useState(false)
@@ -135,16 +138,49 @@ export function AdStudio({
     setHookSections(prev => ({ ...prev, [activeHookIdx]: next }))
   }
 
-  // ── Clip swap helper ──
+  // ── Clip helpers ──
+  // swapClip replaces the FIRST segment in the active section. Used by
+  // the Browse modal and the alternatives grid when the user wants the
+  // section's primary clip swapped wholesale.
   function swapClip(clipId: string) {
     const currentSegs = activeSection.clipSegments && activeSection.clipSegments.length > 0
       ? activeSection.clipSegments
       : [{ id: `seg-${activeSectionIdx}-0`, clipId: activeSection.selectedClipId || null }]
     const newSegs = currentSegs.map((seg: any, si: number) =>
-      si === 0 ? { ...seg, clipId } : seg
+      si === 0 ? { ...seg, clipId, trimStart: undefined, trimEnd: undefined } : seg
     )
     const next = sections.map((s: any, i: number) =>
       i === activeSectionIdx ? { ...s, clipSegments: newSegs, selectedClipId: clipId, autoSelected: false } : s
+    )
+    setSections(next)
+    setHookSections(prev => ({ ...prev, [activeHookIdx]: next }))
+  }
+
+  // appendClipToSection adds a new segment after the existing ones — for
+  // chaining 2nd / 3rd clips into a section that needs more screen time.
+  function appendClipToSection(clipId: string) {
+    const currentSegs = activeSection.clipSegments && activeSection.clipSegments.length > 0
+      ? [...activeSection.clipSegments]
+      : (activeSection.selectedClipId ? [{ id: `seg-${activeSectionIdx}-0`, clipId: activeSection.selectedClipId }] : [])
+    const newIdx = currentSegs.length
+    const newSeg = { id: `seg-${activeSectionIdx}-${newIdx}-${Date.now()}`, clipId }
+    const newSegs = [...currentSegs, newSeg]
+    const next = sections.map((s: any, i: number) =>
+      i === activeSectionIdx ? { ...s, clipSegments: newSegs, selectedClipId: newSegs[0]?.clipId || clipId } : s
+    )
+    setSections(next)
+    setHookSections(prev => ({ ...prev, [activeHookIdx]: next }))
+  }
+
+  // removeSegmentAt drops a segment from the active section. If the user
+  // removes the first segment, selectedClipId becomes the new first.
+  function removeSegmentAt(segIdx: number) {
+    const currentSegs = activeSection.clipSegments || []
+    if (currentSegs.length === 0) return
+    const newSegs = currentSegs.filter((_: any, i: number) => i !== segIdx)
+    const newSelected = newSegs[0]?.clipId || null
+    const next = sections.map((s: any, i: number) =>
+      i === activeSectionIdx ? { ...s, clipSegments: newSegs, selectedClipId: newSelected } : s
     )
     setSections(next)
     setHookSections(prev => ({ ...prev, [activeHookIdx]: next }))
@@ -580,51 +616,109 @@ export function AdStudio({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* Current clip */}
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--af-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'block' }}>
-                    Current clip — {activeSection.type}
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--af-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>Section clips — {activeSection.type}</span>
+                    {(activeSection?.clipSegments?.length || 0) > 1 && (
+                      <span style={{ color: 'var(--af-accent)', fontSize: 10 }}>
+                        {activeSection.clipSegments.length} chained
+                      </span>
+                    )}
                   </label>
-                  {currentClip ? (
-                    <div style={{
-                      position: 'relative', borderRadius: 10, overflow: 'hidden',
-                      border: '1px solid var(--af-border)', background: 'var(--af-card)',
-                    }}>
-                      <div style={{
-                        width: '100%', height: 160,
-                        background: currentClip.mux_playback_id
-                          ? `url(${muxThumb(currentClip.mux_playback_id, currentClip.thumbnail_time ?? currentClip.start_seconds ?? 0)}) center/cover no-repeat`
-                          : 'var(--af-surface)',
-                      }} />
-                      <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--af-text)', marginBottom: 2 }}>
-                            {currentClip.title || 'Untitled clip'}
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--af-muted)' }}>
-                            {currentClip.creator || ''} {currentClip.duration_seconds ? `\u00B7 ${fmt(currentClip.duration_seconds)}` : ''}
-                          </div>
+                  {(() => {
+                    const segs = (activeSection?.clipSegments && activeSection.clipSegments.length > 0)
+                      ? activeSection.clipSegments
+                      : (activeSection?.selectedClipId
+                          ? [{ id: 'seg-' + activeSectionIdx + '-0', clipId: activeSection.selectedClipId }]
+                          : [])
+                    if (segs.length === 0) {
+                      return (
+                        <div style={{
+                          padding: '32px 16px', textAlign: 'center', background: 'var(--af-card)',
+                          borderRadius: 10, border: '1px solid var(--af-border)', color: 'var(--af-muted)',
+                          fontSize: 13,
+                        }}>
+                          No clip assigned
                         </div>
-                        <button
-                          onClick={() => setTrimModalOpen(true)}
-                          style={{
-                            background: 'var(--af-accent-soft)', color: 'var(--af-accent)',
-                            border: '1px solid rgba(139,127,255,0.25)', borderRadius: 7,
-                            padding: '6px 12px', cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                            fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4,
-                          }}
-                        >
-                          <Scissors size={12} /> Trim
-                        </button>
+                      )
+                    }
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {segs.map((seg: any, segIdx: number) => {
+                          const segItem = items.find((it: any) => it.id === seg.clipId)
+                          if (!segItem) return null
+                          const segDur = (seg.trimEnd != null && seg.trimStart != null)
+                            ? Math.max(0, seg.trimEnd - seg.trimStart)
+                            : ((segItem as any).duration_seconds || 0)
+                          return (
+                            <div
+                              key={seg.id || segIdx}
+                              style={{
+                                position: 'relative', borderRadius: 10, overflow: 'hidden',
+                                border: '1px solid var(--af-border)', background: 'var(--af-card)',
+                                display: 'flex', alignItems: 'stretch',
+                              }}
+                            >
+                              <div style={{
+                                width: 90, flexShrink: 0,
+                                background: (segItem as any).mux_playback_id
+                                  ? 'url(' + muxThumb((segItem as any).mux_playback_id, (segItem as any).thumbnail_time ?? (segItem as any).start_seconds ?? 0) + ') center/cover no-repeat'
+                                  : 'var(--af-surface)',
+                              }} />
+                              <div style={{ flex: 1, minWidth: 0, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{
+                                    background: 'var(--af-surface)', color: 'var(--af-muted)',
+                                    border: '1px solid var(--af-border)', borderRadius: 4,
+                                    fontSize: 9, fontWeight: 700, padding: '1px 5px',
+                                  }}>
+                                    {segIdx + 1}
+                                  </span>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--af-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {(segItem as any).title || 'Untitled clip'}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: 10, color: 'var(--af-muted)' }}>
+                                  {segDur ? fmt(segDur) : ''}
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingRight: 8 }}>
+                                {segIdx === 0 && (
+                                  <button
+                                    onClick={() => setTrimModalOpen(true)}
+                                    title="Trim primary clip"
+                                    style={{
+                                      background: 'var(--af-accent-soft)', color: 'var(--af-accent)',
+                                      border: '1px solid rgba(139,127,255,0.25)', borderRadius: 7,
+                                      padding: '5px 9px', cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                                      fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 3,
+                                    }}
+                                  >
+                                    <Scissors size={11} />
+                                  </button>
+                                )}
+                                {segs.length > 1 && (
+                                  <button
+                                    onClick={() => removeSegmentAt(segIdx)}
+                                    title="Remove this clip from the section"
+                                    style={{
+                                      background: 'transparent', color: 'var(--af-muted)',
+                                      border: '1px solid var(--af-border)', borderRadius: 7,
+                                      padding: '5px 8px', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                                      fontFamily: 'inherit',
+                                    }}
+                                    onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--af-red)')}
+                                    onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--af-muted)')}
+                                  >
+                                    \u00D7
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
-                    </div>
-                  ) : (
-                    <div style={{
-                      padding: '32px 16px', textAlign: 'center', background: 'var(--af-card)',
-                      borderRadius: 10, border: '1px solid var(--af-border)', color: 'var(--af-muted)',
-                      fontSize: 13,
-                    }}>
-                      No clip assigned
-                    </div>
-                  )}
+                    )
+                  })()}
                 </div>
 
                 {/* Alternatives */}
@@ -643,8 +737,25 @@ export function AdStudio({
 
                 {/* Re-match + Browse */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(activeSection?.clipSegments?.length || 0) > 0 && (
+                    <button
+                      onClick={() => { setClipPickerMode('append'); setClipPickerOpen(true) }}
+                      style={{
+                        background: 'var(--af-card)', color: 'var(--af-text)',
+                        border: '1px dashed var(--af-border)', borderRadius: 8,
+                        padding: '10px 14px', cursor: 'pointer', fontSize: 12,
+                        fontWeight: 600, fontFamily: 'inherit', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', gap: 6,
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--af-accent)')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--af-border)')}
+                      title="Chain another clip after the current ones to fill the section"
+                    >
+                      + Add another clip
+                    </button>
+                  )}
                   <button
-                    onClick={() => setClipPickerOpen(true)}
+                    onClick={() => { setClipPickerMode('swap'); setClipPickerOpen(true) }}
                     style={{
                       background: 'var(--af-card)', color: 'var(--af-text)',
                       border: '1px solid var(--af-border)', borderRadius: 8,
@@ -681,9 +792,13 @@ export function AdStudio({
                     currentId={currentClipId}
                     matchedIds={activeSection.matchedClipIds || []}
                     libraryItems={items}
-                    sectionLabel={activeSection.type}
-                    onSelect={(id: string) => swapClip(id)}
-                    onClose={() => setClipPickerOpen(false)}
+                    sectionLabel={activeSection.type + (clipPickerMode === 'append' ? ' (add clip)' : '')}
+                    onSelect={(id: string) => {
+                      if (clipPickerMode === 'append') appendClipToSection(id)
+                      else swapClip(id)
+                      setClipPickerMode('swap')
+                    }}
+                    onClose={() => { setClipPickerOpen(false); setClipPickerMode('swap') }}
                   />
                 )}
                 {trimModalOpen && trimItem && (
