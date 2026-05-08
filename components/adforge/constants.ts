@@ -3,7 +3,11 @@ import type { BrandProfile, Product, CaptionSettings } from './types'
 export const C = { bg:"var(--af-bg)",surface:"var(--af-surface)",card:"var(--af-card)",border:"var(--af-border)",accent:"var(--af-accent)",accentSoft:"var(--af-accent-soft)",text:"var(--af-text)",muted:"var(--af-muted)",green:"var(--af-green)",yellow:"var(--af-yellow)",red:"var(--af-red)" }
 export const GENDERS = ["Male","Female","Non-binary","Other"]
 export const AGE_RANGES = ["Under 18","18-24","25-34","35-44","45+"]
-export const SEC_TYPES = ["HOOK","PROBLEM","AGITATE","SOLUTION","SOCIAL PROOF","BODY","CTA"]
+// Section types — the script generator now writes 4P-structured ads
+// (Problem → Product → Promise → Proof). Older types (AGITATE, SOLUTION,
+// SOCIAL PROOF, BODY) are kept for backward compatibility with existing
+// drafts in the database.
+export const SEC_TYPES = ["HOOK","PROBLEM","AGITATE","PRODUCT","SOLUTION","PROMISE","PROOF","SOCIAL PROOF","BODY","CTA"]
 export const STAGES = [
   {value:"unaware",label:"Unaware",desc:"Don't know they have a problem"},
   {value:"problem_aware",label:"Problem Aware",desc:"Know the problem, not the solution"},

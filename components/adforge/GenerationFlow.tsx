@@ -152,9 +152,22 @@ export function GenerationFlow({ brief, brand, products, items, workspaceId, voi
     const basePrompt = ctx +
       `SCRIPT REQ:\nContent type: ${brief.contentType}\nTarget duration: ${brief.targetLengthSec} seconds\nSTRICT WORD COUNT: ${wordBudget} words total (must be between ${minWords} and ${maxWords})\nStage: ${stage.label} -- ${stage.desc}\nCustomer: ${brief.customerAvatar || brand.target_customer || ''}\nPains: ${brief.painPoints || ''}\nDesires: ${brief.desires || ''}\nObjections: ${brief.objections || ''}\nRequest: ${brief.request || ''}\n` +
       `Voice persona: ${voice.name} (${[voice.gender, voice.accent].filter(Boolean).join(', ') || 'general'}). Write words this voice would say naturally.\n\n` +
-      `Write a direct response video ad script. The TOTAL SPOKEN WORDS across all sections combined MUST land between ${minWords} and ${maxWords} words (target: ${wordBudget}). Use specific brand/product details. Return ONLY valid JSON:\n` +
+      `Write a direct response video ad script following the **4P narrative structure**:\n` +
+      `  1. **HOOK** (1 section, ~5-12 words) — stop the scroll. Question, bold claim, or pattern interrupt.\n` +
+      `  2. **PROBLEM** (1 section) — the specific pain the customer feels right now. Name it concretely.\n` +
+      `  3. **PRODUCT** (1 section) — introduce the product as the answer. Tie it directly to the problem.\n` +
+      `  4. **PROMISE** (1 section) — paint the outcome. What life looks like once they have it. Be vivid and specific.\n` +
+      `  5. **PROOF** (1 section) — reasoning + social proof. Cite reviews, results, ingredients, founder story, or specific numbers. NEVER skip this — it's the conversion driver.\n` +
+      `  6. **CTA** (1 section, ~5-15 words) — one clear action. "Tap the link", "Get yours", etc.\n\n` +
+      `Rules:\n` +
+      `- The TOTAL SPOKEN WORDS across all sections combined MUST land between ${minWords} and ${maxWords} (target: ${wordBudget}).\n` +
+      `- Distribute words ROUGHLY: HOOK ~8%, PROBLEM ~18%, PRODUCT ~22%, PROMISE ~18%, PROOF ~24%, CTA ~10%.\n` +
+      `- Use specific brand/product details from the context. NEVER invent generic claims when real ones exist (reviews, ingredients, differentiators).\n` +
+      `- For PROOF, prefer concrete reviewer quotes or numbered claims over vague "thousands love it" filler.\n` +
+      `- visualDirection should describe a real shot (close-up, before/after, lifestyle, demo) — not vague mood words.\n\n` +
+      `Return ONLY valid JSON:\n` +
       `{"sections":[{"id":1,"type":"HOOK","spokenWords":"exact words","visualDirection":"what is on screen","hookType":"Question"}],"suggested_music_mood":"Uplifting"}\n` +
-      `Section types: HOOK, PROBLEM, AGITATE, SOLUTION, SOCIAL PROOF, CTA.`
+      `Use these exact section types in this order: HOOK, PROBLEM, PRODUCT, PROMISE, PROOF, CTA.`
 
     let sections: ScriptSection[] = []
     let lastWords = 0
@@ -177,6 +190,16 @@ export function GenerationFlow({ brief, brand, products, items, workspaceId, voi
       lastWords = sections.reduce((sum: number, s: any) => sum + (s.spokenWords || '').trim().split(/\s+/).filter(Boolean).length, 0)
       if (lastWords >= minWords && lastWords <= maxWords) break
     }
+    // Set targetDurationSec on each section based on its actual word count
+    // and the speaking rate. This is what clip matching falls back to when
+    // VO generation hasn't run yet — without it, every section defaulted
+    // to 3s and a 30s ad rendered as a 12s ad. Floor at 2s so very short
+    // sections (CTA, HOOK) still pick a usable clip.
+    sections = sections.map((s: any) => {
+      const words = (s.spokenWords || '').trim().split(/\s+/).filter(Boolean).length
+      const targetDurationSec = Math.max(2, words / WORDS_PER_SECOND)
+      return { ...s, targetDurationSec }
+    })
     return sections
   }
 
@@ -304,8 +327,17 @@ export function GenerationFlow({ brief, brand, products, items, workspaceId, voi
       const clipId = final[0] || null
       if (clipId) usedIds.add(clipId)
       const item = clipId ? items.find(x => x.id === clipId) : null
+      // Try to make this clip play for `reqDur` seconds. Anchor on the
+      // clip's existing in-point, then extend forward up to the underlying
+      // video's natural end. If the clip is genuinely too short we still
+      // play whatever's there — preview will show the gap and the user can
+      // pick an alternative or (eventually) chain a second clip in.
+      const naturalEnd = (item as any)?.duration_seconds
+        ? Math.min(((item as any).start_seconds || 0) + ((item as any).duration_seconds || 0), Number.MAX_SAFE_INTEGER)
+        : Number.MAX_SAFE_INTEGER
       const trimStart = item?.start_seconds || 0
-      const trimEnd = trimStart + reqDur
+      const desiredEnd = trimStart + reqDur
+      const trimEnd = Math.min(desiredEnd, naturalEnd)
       return {
         ...s,
         matchedClipIds: candidates,

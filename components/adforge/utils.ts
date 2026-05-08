@@ -47,7 +47,19 @@ export function typeColor(t?: string) {
   return m[t||""]||{bg:"#EDE8FF",color:"#5B49FF"}
 }
 export function secColor(t?: string) {
-  const m: Record<string,any> = { "HOOK":{bg:"#FEF2F2",color:"#DC2626",bd:"#FECACA"},"PROBLEM":{bg:"#FFFBEB",color:"#D97706",bd:"#FCD34D"},"AGITATE":{bg:"#FFF7ED",color:"#C2410C",bd:"#FED7AA"},"SOLUTION":{bg:"#F0FDF4",color:"#16A34A",bd:"#86EFAC"},"SOCIAL PROOF":{bg:"#EFF6FF",color:"#2563EB",bd:"#BFDBFE"},"CTA":{bg:"#EDE8FF",color:"#5B49FF",bd:"#C4B5FD"},"BODY":{bg:"#F9FAFB",color:"#6B7280",bd:"#E5E7EB"} }
+  const m: Record<string,any> = {
+    "HOOK":{bg:"#FEF2F2",color:"#DC2626",bd:"#FECACA"},
+    "PROBLEM":{bg:"#FFFBEB",color:"#D97706",bd:"#FCD34D"},
+    "AGITATE":{bg:"#FFF7ED",color:"#C2410C",bd:"#FED7AA"},
+    // 4P additions — distinct hues so the rail reads at a glance.
+    "PRODUCT":{bg:"#F0FDF4",color:"#16A34A",bd:"#86EFAC"},   // green — same as legacy SOLUTION
+    "SOLUTION":{bg:"#F0FDF4",color:"#16A34A",bd:"#86EFAC"},
+    "PROMISE":{bg:"#ECFEFF",color:"#0891B2",bd:"#A5F3FC"},   // cyan
+    "PROOF":{bg:"#EFF6FF",color:"#2563EB",bd:"#BFDBFE"},     // blue — same as legacy SOCIAL PROOF
+    "SOCIAL PROOF":{bg:"#EFF6FF",color:"#2563EB",bd:"#BFDBFE"},
+    "CTA":{bg:"#EDE8FF",color:"#5B49FF",bd:"#C4B5FD"},
+    "BODY":{bg:"#F9FAFB",color:"#6B7280",bd:"#E5E7EB"},
+  }
   return m[t||""]||{bg:"#EDE8FF",color:C.muted,bd:C.border}
 }
 export function getDurationRange(secs?: number){if(!secs)return"";if(secs<5)return"Under 5s";if(secs<15)return"5–15s";if(secs<30)return"15–30s";if(secs<60)return"30–60s";return"Over 60s"}
