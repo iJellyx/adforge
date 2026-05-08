@@ -169,13 +169,15 @@ export function AdPipeline({
   // Compute step statuses for progress bar
   const stepStatuses = useMemo(() => {
     const s = state
+    // Gate order matches STEPS in pipeline-types.ts:
+    // brief → script → voiceover → clips → music → review
     const statuses: Record<StepId, 'locked' | 'pending' | 'active' | 'complete' | 'dirty'> = {
       brief:     s.brief ? 'complete' : 'active',
       script:    s.script.approved ? 'complete' : (s.brief ? 'pending' : 'locked'),
       voiceover: s.voiceover.status === 'approved' ? 'complete' : (s.script.approved ? 'pending' : 'locked'),
-      music:     s.music.decision !== 'pending' ? 'complete' : (s.voiceover.status === 'approved' ? 'pending' : 'locked'),
-      clips:     s.clips.approved ? 'complete' : (s.music.decision !== 'pending' ? 'pending' : 'locked'),
-      review:    s.export.renderStatus === 'ready' ? 'complete' : (s.clips.approved ? 'pending' : 'locked'),
+      clips:     s.clips.approved ? 'complete' : (s.voiceover.status === 'approved' ? 'pending' : 'locked'),
+      music:     s.music.decision !== 'pending' ? 'complete' : (s.clips.approved ? 'pending' : 'locked'),
+      review:    s.export.renderStatus === 'ready' ? 'complete' : (s.music.decision !== 'pending' ? 'pending' : 'locked'),
     }
     // Active step override
     statuses[s.currentStep] = statuses[s.currentStep] === 'complete' ? 'complete' : 'active'
@@ -273,7 +275,7 @@ export function AdPipeline({
           actualVoDurationSec: sectionDurations[i] || sec.targetDurationSec || 0,
         })),
       },
-      currentStep: 'music',
+      currentStep: 'clips',
     }))
   }
 
@@ -304,7 +306,9 @@ export function AdPipeline({
     setState(prev => ({
       ...prev,
       music: { decision, url: decision === 'yes' ? (url || null) : null, name: decision === 'yes' ? (name || null) : null },
-      currentStep: 'clips',
+      // Clips → Music → Review (Music is now the last creative decision
+      // before final review).
+      currentStep: 'review',
     }))
   }
 
@@ -324,7 +328,8 @@ export function AdPipeline({
           status: s.selectedClipId ? 'ok' : 'missing',
         })),
       },
-      currentStep: 'review',
+      // After clips → music (was → review in the old order).
+      currentStep: 'music',
     }))
   }
 

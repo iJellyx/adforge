@@ -4,12 +4,16 @@ export type StepId = 'brief' | 'script' | 'voiceover' | 'music' | 'clips' | 'rev
 
 export type StepStatus = 'locked' | 'pending' | 'active' | 'complete' | 'dirty'
 
+// Order: Brief → Script → Voiceover → Clips → Music → Review.
+// Clips comes BEFORE music because clip selection benefits from knowing the
+// VO's actual section durations (timing-driven matching), and music is the
+// last cosmetic layer before final review.
 export const STEPS: {id:StepId; label:string; shortLabel:string}[] = [
   { id: 'brief',     label: 'Brief',      shortLabel: '1. Brief' },
   { id: 'script',    label: 'Script',     shortLabel: '2. Script' },
   { id: 'voiceover', label: 'Voiceover',  shortLabel: '3. Voiceover' },
-  { id: 'music',     label: 'Music',      shortLabel: '4. Music' },
-  { id: 'clips',     label: 'Clips',      shortLabel: '5. Clips' },
+  { id: 'clips',     label: 'Clips',      shortLabel: '4. Clips' },
+  { id: 'music',     label: 'Music',      shortLabel: '5. Music' },
   { id: 'review',    label: 'Review',     shortLabel: '6. Review' },
 ]
 
