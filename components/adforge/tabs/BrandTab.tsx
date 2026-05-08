@@ -194,6 +194,78 @@ export function BrandTab({brand,setBrand,products,setProducts,workspaceId}:any){
         </select>
         <div style={{fontSize:11,color:C.muted,marginTop:6}}>Product autofill uses this when a page exposes multi-currency pricing. Individual products can override.</div>
       </div>
+
+      {/* ── VISUAL IDENTITY ──────────────────────────────────────────
+          Same row in brand_cards as Split edits — colours, typography,
+          USPs, category. Editing here mirrors to Split, and vice versa.
+      */}
+      <div style={{marginBottom:20,paddingTop:20,borderTop:"1px solid "+C.border}}>
+        <Label>Visual Identity <span style={{color:C.muted,fontWeight:400,marginLeft:4,fontSize:10,opacity:0.7}}>(shared with Split)</span></Label>
+
+        {/* Palette — 5 colour swatches */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:6}}>Brand Palette</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
+            {(["primary","secondary","accent","neutral_dark","neutral_light"] as const).map(slot=>(
+              <div key={slot} style={{textAlign:"center" as const}}>
+                <input
+                  type="color"
+                  value={(brand.palette as any)?.[slot]||"#000000"}
+                  onChange={(e:any)=>setBrand({...brand,palette:{...(brand.palette||{}),[slot]:e.target.value}})}
+                  style={{width:"100%",height:42,border:"1px solid "+C.border,borderRadius:8,cursor:"pointer",padding:2,background:"transparent"}}
+                />
+                <div style={{fontSize:9,color:C.muted,marginTop:3,textTransform:"capitalize" as const}}>{slot.replace("_"," ")}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Typography */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:6}}>Typography</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <Input
+              value={(brand.typography as any)?.heading_font||""}
+              onChange={(e:any)=>setBrand({...brand,typography:{...(brand.typography||{}),heading_font:e.target.value}})}
+              placeholder="Heading font (e.g. Inter)"
+            />
+            <Input
+              value={(brand.typography as any)?.body_font||""}
+              onChange={(e:any)=>setBrand({...brand,typography:{...(brand.typography||{}),body_font:e.target.value}})}
+              placeholder="Body font (e.g. Söhne)"
+            />
+          </div>
+          <Input
+            value={(brand.typography as any)?.style_descriptor||""}
+            onChange={(e:any)=>setBrand({...brand,typography:{...(brand.typography||{}),style_descriptor:e.target.value}})}
+            placeholder="Style descriptor (e.g. modern geometric sans-serif)"
+            style={{marginTop:8}}
+          />
+        </div>
+
+        {/* USPs */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:6}}>Unique Selling Points <span style={{fontWeight:400,opacity:0.7}}>(one per line)</span></div>
+          <Input
+            textarea
+            rows={3}
+            value={Array.isArray(brand.usps)?brand.usps.join("\n"):""}
+            onChange={(e:any)=>setBrand({...brand,usps:e.target.value.split("\n").map((s:string)=>s.trim()).filter(Boolean)})}
+            placeholder={"Hand-blended in Ireland\nClinically tested for 28 days\n100% recyclable packaging"}
+          />
+        </div>
+
+        {/* Category */}
+        <div>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:6}}>Category</div>
+          <Input
+            value={brand.category||""}
+            onChange={(e:any)=>setBrand({...brand,category:e.target.value})}
+            placeholder="e.g. Skincare, SaaS, Fashion"
+          />
+        </div>
+      </div>
+
       <Btn onClick={saveBrand} disabled={saving} style={{background:C.accent,color:"#fff"}}>{saving?"Saving…":"Save Brand Profile"}</Btn>
     </Card>}
 

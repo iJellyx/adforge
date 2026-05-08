@@ -35,7 +35,27 @@ export type Item = {
   height?: number
 }
 export type Script = { id: string; product_name?: string; metadata?: any; sections?: any[]; created_at?: string }
-export type BrandProfile = { id?: string; name: string; website: string; description: string; voice: string; target_customer: string; reviews: string; additional_info: string; customer_avatars: CustomerAvatar[]; brand_intelligence?: any; winning_patterns?: any[]; default_currency?: string }
+export type BrandProfile = {
+  id?: string
+  name: string
+  website: string
+  description: string
+  voice: string
+  target_customer: string
+  reviews: string
+  additional_info: string
+  customer_avatars: CustomerAvatar[]
+  brand_intelligence?: any
+  winning_patterns?: any[]
+  default_currency?: string
+  // Visual identity — edited in Split's brand page; mirrored here in Forge.
+  palette?: { primary?: string; secondary?: string; accent?: string; neutral_dark?: string; neutral_light?: string }
+  typography?: { heading_font?: string; body_font?: string; style_descriptor?: string }
+  tone?: any
+  usps?: string[]
+  visual_style?: any
+  category?: string
+}
 export type CustomerAvatar = { id: string; name: string; age: string; gender: string; description: string; pains: string; desires: string; objections: string }
 export type Product = { id?: string; name: string; description: string; benefits: string; target_customer: string; claims: string; ingredients: string; differentiators: string; reviews: string; notes: string; price: string; url: string; currency?: string }
 export type ForgedAd = { id: string; title: string; status: 'draft'|'complete'; mode?: 'script'|'broll'; script_id?: string; sections?: any[]; voiceover_url?: string; voiceover_voice?: string; music_url?: string; music_name?: string; render_id?: string; render_url?: string; render_status?: string; notes?: string; star_rating?: number; metadata?: any; created_at?: string; updated_at?: string; folder_id?: string | null }
